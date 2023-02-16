@@ -1,0 +1,16 @@
+* What is this?
+
+[[file:./hoot.png]]
+
+This repo is for updates to "Hoot" (or "Guile Hoot"), the codename for
+the [[https://spritely.institute/news/guile-on-web-assembly-project-underway.html][Guile->WebAssembly project]] launched by the [[https://spritely.institute/][Spritely Institute]].
+As work on Hoot progresses, updates will be posted here!
+
+* But... why the name "Hoot"?
+
+We thought this project deserved a cute project name and mascot, and
+everyone at the time agreed an owl was nice, and Christine
+Lemmer-Webber had recently just drawn up this owl pixel art, and
+so it became the mascot.
+
+* Updates

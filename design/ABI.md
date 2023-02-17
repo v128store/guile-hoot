@@ -18,12 +18,12 @@ nullability in this type.
 ### Immediates
 
 All immediates (fixnums, chars, bools, etc) are encoded as `(ref i31)`
-values.  The 2<sup>31</sup possible values are partitioned by tagging.
+values.  The 2<sup>31</sup> possible values are partitioned by tagging.
 The partition is the same as [what native Guile
 does](http://git.savannah.gnu.org/cgit/guile.git/tree/module/system/base/types/internal.scm?h=wip-tailify#n101),
 except that the bottom 0 bit is left off.  The fixnum range is therefore
-the same as in native Guile for a 32-bit target: `[-2<sup>29</sup>,
-2<sup>29</sup>-1]`.
+the same as in native Guile for a 32-bit target: \[-2<sup>29</sup>,
+2<sup>29</sup>-1\].
 
 Note that there is a risk here, that [`i31ref` gets punted to
 post-MVP](https://github.com/WebAssembly/gc/issues/320), but this

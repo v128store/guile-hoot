@@ -1,6 +1,6 @@
 # Guile on WebAssembly: ABI
 
-## Data types
+## Data representation
 
 ### `SCM` unitype
 
@@ -60,23 +60,113 @@ Guile-on-WebAssembly effort.)
 
 We do make a few deviations from what native Guile does, for example to
 use `(ref string)` instead of having Guile-like representations of
-strings.
+strings.  As long as these types are not equivalent with any of the
+heap-tagged types, and not equivalent to each other, we can use the MVP
+run-time casts to tell them apart.
+
+## Calling convention
+
+In order to support lightweight concurrency via delimited continuations
+and variable argument counts, Guile-on-WebAssembly uses the standard
+WebAssembly function call mechanism in a strange way.
+
+On the side of continuations, the basic idea is that the compiler from
+Guile to WebAssembly will transform the program so that all calls are
+tail calls.  Non-tail calls within a function are transformed so that
+the caller pushs the live values flowing to the return point onto an
+explicit stack, pushes the return continuation then tail-calls the
+callee.  Returning from a function is transforms so that the callee pops
+the return continuation from the stack and tail-calls it.  For full
+details, see [`tailify.scm` from the `wip-tailify` Guile
+branch](http://git.savannah.gnu.org/cgit/guile.git/tree/module/language/cps/tailify.scm?h=wip-tailify#n19).
+
+The advantage of this approach is that with an explicit stack
+representation, we can capture and reinstate delimited continuations,
+and write debuggers in terms of continuations whose structure can be
+inspected by Guile instead of the host WebAssembly system.  The
+transformation is minimal, so that e.g. inner loops without calls are
+still as fast as direct-style compilation.
+
+(This calling convention may be obviated by either the [typed
+continuations or the fiber-based stack switching
+proposal](https://github.com/WebAssembly/stack-switching), but we don't
+see either of these features reaching consensus and shipping before 2025
+or so.)
+
+Additionally, Guile functions can accept a variable number of arguments,
+whereas WebAssembly functions have a fixed type.  In the general case we
+pass arguments via a global argument-passing array, and only pass the
+number of arguments as a function parameter.  Since all calls are tail
+calls, this convention applies to returning values as well.
+
+### Dynamic stack
+
+The dynamic stack associates stack frames with `dynamic-wind` winders,
+prompts, individual fluid bindings, and dynamic states (whole sets of
+fluid bindings).  Not yet specified.  Really upstream Guile should be
+using continuation marks here, but we don't do this yet.
+
+### Dynamic state
+
+See below for more on fluids and threads, but basically Guile should
+keep a cache of the current values of some dynamically-scoped variables.
+Not yet specified.
+
+### Return stack
+
+The return stack is for stack-allocated continuations: basically those
+that correspond to the return points of non-tail calls in the source
+program.  There will be separate stacks for `SCM` values, raw `i64` and
+`f64` values, and `(ref func)` return continuations, but the concrete
+representation remains to be specified.
+
+## Type definitions
+
+### Utility data types
 
 ```wat
-; TODO add immutable variants
+(type $raw-immutable-bitvector (array i32))
+(type $raw-immutable-bytevector (array i8))
+
 (type $raw-bitvector (array mut i32))
 (type $raw-bytevector (array mut i8))
 (type $raw-scmvector (array mut (ref eq)))
+```
 
-; A continuation that takes a variable number of values receives its
-; arguments from a global array.  The number of values to take is passed
-; to the function.  Since we tailify everything, all calls are tail calls,
-; so there are no return values.
+### Continuation types
+
+The functions residualized by the tailify transform take a variable
+number of arguments from a global array.  The number of values to take
+is passed to the function as an argument.  Since we tailify everything,
+all calls are tail calls, so there are no return values.
+
+```wat
 (type $kvarargs (func (param $nargs i32) (result)))
+```
 
-; TODO: immutable pairs?
-(type $pair (struct (field $car mut (ref eq)) (field $cdr mut (ref eq))))
+### Oddball heap types
 
+#### Pairs
+
+```wat
+(type $pair
+  (struct (field $car mut (ref eq)) (field $cdr mut (ref eq))))
+```
+
+It may make sense to have an immutable pair type:
+
+```wat
+(type $immutable-pair
+  (struct (field $car (ref eq)) (field $cdr (ref eq))))
+```
+
+If I understand the WebAssembly type system correctly, we can specify
+the `car` accessor in terms of `$immutable-pair`, and have it work for
+`$pair` also.  `set-car!` would require the mutable `$pair`.
+
+#### Structs
+
+```wat
 (rec
   (type $struct (struct (field $vtable (ref $vtable))))
   (type $vtable
@@ -84,30 +174,93 @@ strings.
       (struct
         (field $layout (ref eq))
         (field $flags i32)
-        (field $finalize (ref null func))
-        (field $print (ref null func))
+        (field $finalize (ref null eq))
+        (field $print (ref null eq))
         (field $name (ref eq))
         (field $size i32)
         (field $unboxed-fields (ref $raw-bitvector))))))
+```
 
-; No need for type $string; just use (ref string).  Strings not mutable!
-; No stringbufs either.
+We may want to instead increase the set of fields in `$vtable` to be
+like [record type
+descriptors](http://git.savannah.gnu.org/cgit/guile.git/tree/module/ice-9/boot-9.scm?h=wip-tailify#n937).
 
+#### Strings
+
+There's no need for an explicit `$string` type; we just use [`(ref
+string)`](https://github.com/WebAssembly/stringref/blob/main/proposals/stringref/Overview.md),
+in order to minimize the run-time size and to ease host
+interoperability.  Note that unlike in native Guile, this implies that
+strings are not mutable!
+
+#### Bytevectors
+
+We can just use `$raw-bytevector` and `$raw-immutable-bytevector`: no
+other tags.
+
+### Tagged heap types
+
+All tagged heap types are subtypes of `$tagged`.
+
+```wat
 (type $tagged (struct (field $tag i32)))
+```
 
+Each of the following concrete subtypes corresponds to a heap object
+that native Guile represents using a specific heap tag (value of the low
+bits of the `$tag` field of `$tagged`).  We represent this below by
+`$tag`/*`n`* `=` *`tag`*, where *`n`* indicates the number of low bits
+to check, and *`tag`* is the value of those bits for the given data
+type.
+
+Note that unless `mut` is specified on a field's type, that field is
+immutable.
+
+#### Symbols and keywords
+
+```wat
 (type $symbol ; $tag/7 = #b0000101
-  (sub $tagged (struct (field $hash i32) (field $name (ref string)))))
+  (sub $tagged
+    (struct (field $hash i32)
+            (field $name (ref string)))))
 
-(type $variable ; $tag/7 = #b000111
+(type $keyword ; $tag/7 = #b0110101
+  (sub $tagged
+    (struct (field $name (ref $symbol)))))
+```
+
+How to compute the symbol's hash is not yet determined.
+
+#### Variables and atomic boxes
+
+```wat
+; $variable: $tag/7 = #b000111
+; $atomic-box: $tag/7 = #b0110111
+(type $box
   (sub $tagged (struct (field mut $val (ref eq)))))
+```
 
+These two types have the same representation so they end up using the
+same WebAssembly type.  WebAssembly does support multiple threads, but
+there is no multi-thread support for GC objects, so for the time being
+atomic boxes don't need to use atomic operations.
+
+#### Vectors
+
+```wat
 (type $vector ; $tag/7 = #b0001101
   (sub $tagged (struct (field $vals (ref $raw-scmvector)))))
 ; immutable-vector: $tag/8 = #b10001101
 ; mutable-vector: $tag/8 = #b00001101
+```
 
-; No weak vectors for the time being.
+You can get the length of the vector using `array.length` on the `$vals`
+field.  We could later switch to use an immutable `(array (ref eq))` for
+immutable vectors but that would be an optimization.
 
+#### Heap numbers
+
+```wat
 ; heap-number: $tag/7 = #b0010111
 (type $bignum ; $tag/12 = #b000100010111
   (sub $tagged (struct (field $val (ref extern))))) ; BigInt
@@ -117,29 +270,58 @@ strings.
   (sub $tagged (struct (field $real f64) (field $imag f64))))
 (type $fraction ; $tag/12 = #b010000010111
   (sub $tagged (struct (field $num (ref eq)) (field $denom (ref eq)))))
+```
 
-; TODO: Think about equal? tables.
+All of these numbers are heap-tagged.  We could use just a `(struct
+f64)` for flonums in the future, perhaps; the WebAssembly type system
+attaches its own tag, but perhaps this is something to think of when we
+get RTTs.
+
+Also note that e.g. `inexact-heap-number?` can be a bit test over the
+tags.
+
+#### Hash tables and weak tables
+
+Hash tables are annoying because we don't have a `hashq` facility in
+WebAssembly, so we need to call out to use JavaScript `Map` objects.  If
+this is a dealbreaker, the alternative would be to include a hash code
+in all objects.
+
+```wat
 (type $hash-table ; $tag/7 = #b0011101
   (sub $tagged (struct (field $map (ref extern)))))
+```
 
-; No pointer type.
+Unfortunately this strategy doesn't generalize to `equal?` hash tables.
+But, these can be built in Scheme, so no big ABI concerns there.
 
+For weak tables, we have the same, but with `$tag = #b1010111`, and the
+JS ref is to a `WeakMap` instead of a `Map`.
+
+#### Dynamic state
+
+```wat
 (type $fluid ; $tag/7 = #b0100101
   (sub $tagged (struct (field $hash i32) (field $init (ref eq)))))
 (type $dynamic-state $tag/7 = #b0101101; flags in tag
   (sub $tagged
     (struct
       (field $values (ref extern))
-      (field $cache (ref $raw-scmvector)))))
+```
 
-; No frame type for now?
+In native Guile, a fluid is essentially a key and a dynamic state is a
+weak hash table mapping all fluids to their values.  At run-time there
+is a per-thread cache for faster access to fluid values.  There will
+have to be some run-time support routines for fluids.
 
-(type $keyword ; $tag/7 = #b0110101
-  (sub $tagged (struct (field $name (ref $symbol)))))
+Note that the representation of a dynamic state above is therefore just
+a reference to a JavaScript, specifically to a `WeakMap`, but the shape
+of "tagged struct holding a `(ref extern)`" is the same as for
+`$hash-table`, only with a different tag.
 
-(type $atomic-box ; $tag/7 = #b0110111
-  (sub $tagged (struct (field $val mut (ref eq)))))
+#### Syntax and macros
 
+```wat
 (type $syntax ; $tag/7 = #b0111101
   (sub $tagged
     (struct
@@ -147,38 +329,66 @@ strings.
       (field $wrap (ref eq))
       (field $module (ref eq))
       (field $source (ref eq)))))
+```
 
+I dearly hope that we can avoid having `psyntax` compiled to WebAssembly
+for any module that doesn't include `eval`.  Still, `read-syntax` can
+produce syntax objects, which is a nice way of associating source info
+with objects; it's a type in native Guile, so I guess it makes sense to
+hollow out a space for it for Guile-on-WebAssembly.
+
+Note there is also a `scm_tc16_macro` for syntax transformers in native
+Guile, that we will also need to implement at some point.
+
+#### Procedures
+
+```wat
 ; Proper support for closures is a post-MVP feature.
 (type $proc ; $tag/7 = #b1000101
   (sub $tagged (struct (field $func (ref $kvarargs)))
 (type $closure
   (sub $proc (struct (field $free-vars (ref $raw-scmvector)))))
+```
 
-; vm-continuation is an internal object kind that is never seen
-; by scheme, no need to define it now
+A procedure is just another name for a function.  A `$proc` is a tagged
+function.  Some functions close over a set of free variables; for them,
+we use the subtype `$closure`.  Probably the free-vars array should be
+immutable.
 
-; use $raw-bytevector for bytevectors
+#### Multi-dimensional arrays
 
-; no scheme-visible weak sets
+In this first version, we'll punt on these.  We should check with Daniel
+Lloda about the state of his rewrite of arrays in Scheme.
 
-; use a record type for weak tables?  in any case it’s a JS WeakMap.
-; perhaps we need an “external” js value wrapper type visible to scheme
+#### Bitvectors
 
-; no arrays in this first version; check with lloda for state of rewrite
+We can't just use `$raw-bitvector`, as we need a length also which is
+generally smaller than the storage space in the raw `i32` array.
 
+```wat
 (type $bitvector ; $tag/7 = #b1011111
   (sub $tagged (struct (field $len i32) (field $bits (ref $raw-bitvector)))))
+```
 
-; TODO: think about promises / async / suspension; look at wasi
-; TODO: tighten types, recursive types
+#### Ports
+
+We take inspiration from how native Guile represents ports.  However for
+both WASI and Web environments, we can assume that I/O routines are all
+capable of returning a promise instead of blocking, so we don't need
+explicit support for e.g. read or write wait FDs; instead we can assume
+that we use the pure-Scheme [suspendable port
+implementation](http://git.savannah.gnu.org/cgit/guile.git/tree/module/ice-9/suspendable-ports.scm?h=wip-tailify),
+so delimited continuation suspend and resume will just work.
+
+We can also simplify and assume UTF-8 encoding for textual I/O on ports.
+
+```wat
 (type $port-type
   (struct
     (field $name (ref eq))
     ; in guile these are (port, bv, start, count) -> size_t
     (field $read (ref $closure)) ; could have a more refined type
     (field $write (ref $closure))
-    (field $get-read-promise (ref $closure)) ; ?
-    (field $get-write-promise (ref $closure)) ; ?
     (field $seek (ref $closure)) ; (port, offset, whence) -> offset
     (field $close (ref $closure)) ; (port) -> ()
     (field $get-natural-buffer-sizes (ref $closure)) ; port -> (rdsz, wrsz)
@@ -192,50 +402,63 @@ strings.
   (sub $tagged
     (struct
       (field $pt (ref $port-type))
-      (field $stream (ref eq))
-      (field $file_name (ref null string))
+      (field $stream mut (ref eq))
+      (field $file_name mut (ref eq))
       (field $position (ref $pair))
-      (field $read_buf (ref eq)) ; A 5-vector
-      (field $write_buf (ref eq)) ; A 5-vector
-      (field $write_buf_aux (ref eq)) ; A 5-vector
-      (field $read_buffering i32)
-      (field $refcount i32)
-      (field $rw_random i8)
-      (field $properties (ref eq)))))
-
-; TODO: useful smob types in guile to replace
-scm_tc16_locale_smob_type
-bytevector_output_port_procedure
-tc16_srcprops
-finalized_smob_tc16
-tc16_guardian
-scm_tc16_regex
-random state
-scm_tc16_promise
-scm_tc16_dir
-tc16_continuation
-scm_tc16_macro
-scm_tc16_port_with_ps
-scm_tc16_charset
-scm_tc16_charset_cursor
-scm_tc16_thread
-scm_tc16_mutex
-scm_tc16_condvar
+      (field $read_buf mut (ref eq)) ; A 5-vector
+      (field $write_buf mut (ref eq)) ; A 5-vector
+      (field $write_buf_aux mut (ref eq)) ; A 5-vector
+      (field $read_buffering mut i32)
+      (field $refcount mut i32)
+      (field $rw_random mut i8)
+      (field $properties mut (ref eq)))))
 ```
 
-### Open questions
+The meanings of these various fields are as in native Guile; you have to
+go spelunking a bit to find this information as the port representation
+isn't public API/ABI.  Also, there is quite a bit of run-time work
+needed here.
 
-hashq
+In native Guile there is also a "port-with-print-state" data type;
+unclear if we will need this eventually.  Probably not.
 
-threading model
+## Not-yet-supported types
 
-immutable pairs?
+Weak vectors are not yet supported.
 
-immutable strings
+Regular expressions: not yet supported.  Would be a JS callout.
 
-verify that pairs are disjoint from structs
+Random states.
 
-attempt to base more types on guile structs?
+Charsets.
+
+First-class threads, mutexes, and condition variables.
+
+The representation of first-class delimited and undelimited
+continuations is currently unspecified.  (It will be a slice of all
+stacks, though.)
+
+## Open questions
+
+How to deal with lack of `hashq`: just punt and do what we can with JS,
+or include a hash code in all objects?
+
+Should we take the opportunity to have `cons` make immutable pairs,
+perhaps adding `mcons` also?
+
+How much of a hassle will changing immutable strings be?  It's the
+correct change from a language design point of view, but change is
+always annoying.
+
+Need to verify that the pair type above is actually disjoint from
+structs, to WebAssembly's type system; otherwise we'd need a type code.
+
+Should we be annotating struct types with `final`?  The MVP document
+mentions it but binaryen does not seem to support it.
+
+Should the type tag be separated into an `i8` or two, perhaps with a
+user `i16` ?  Or just an `i8` and subtypes manage what to native Guile
+are the "upper" tag bits on their own, perhaps with an `i16` or `i32`?
 
 ## JS API
 

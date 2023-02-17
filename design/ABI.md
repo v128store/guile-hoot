@@ -1,5 +1,7 @@
 # Guile on WebAssembly: ABI
 
+[TOC]
+
 ## Data representation
 
 ### `SCM` unitype

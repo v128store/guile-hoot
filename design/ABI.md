@@ -21,11 +21,11 @@ nullability in this type.
 
 All immediates (fixnums, chars, bools, etc) are encoded as `(ref i31)`
 values.  The 2<sup>31</sup> possible values are partitioned by tagging.
-The partition is the same as [what native Guile
+The partition is the similar to [what native Guile
 does](http://git.savannah.gnu.org/cgit/guile.git/tree/module/system/base/types/internal.scm?h=wip-tailify#n101),
-except that the bottom 0 bit is left off.  The fixnum range is therefore
-the same as in native Guile for a 32-bit target: \[-2<sup>29</sup>,
-2<sup>29</sup>-1\].
+except that the bottom 0 bit is left off and we eliminate some
+intermediate 0 bits.  The fixnum range is therefore the same as in
+native Guile for a 32-bit target: \[-2<sup>29</sup>, 2<sup>29</sup>-1\].
 
 Note that there is a risk here, that [`i31ref` gets punted to
 post-MVP](https://github.com/WebAssembly/gc/issues/320), but this
@@ -43,7 +43,7 @@ We are mostly going to use the same strategy in Guile-on-Wasm: there
 will be a `(struct $tagged (field $tag i32))` abstract type with a few
 dozen subtypes.  We use the same heap-tagging strategy as Guile to allow
 run-time type checks by looking at the low bits of `$tag`.  We can even
-just use [the existing heap
+just use a similar numering to [the existing heap
 tags](http://git.savannah.gnu.org/cgit/guile.git/tree/module/system/base/types/internal.scm?h=wip-tailify#n124)
 from native Guile.
 
@@ -60,11 +60,11 @@ types, in order to be able to pass values between each other.  Anyway,
 sticking with explicit tags seems to be a good MVP measure for the
 Guile-on-WebAssembly effort.)
 
-We do make a few deviations from what native Guile does, for example to
-use `(ref string)` instead of having Guile-like representations of
-strings.  As long as these types are not equivalent with any of the
-heap-tagged types, and not equivalent to each other, we can use the MVP
-run-time casts to tell them apart.
+We do make a few deviations from what native Guile does, because of
+platform differences and because we don't have existing C API consumers
+that have assumptions about Guile's ABI.  So though we are inspired by
+Guile, the type definitions described below are the canonical
+documentation.
 
 ## Calling convention
 
@@ -123,6 +123,35 @@ program.  There will be separate stacks for `SCM` values, raw `i64` and
 representation remains to be specified.
 
 ## Type definitions
+
+### Immediate data types
+
+An immediate is a fixnum, a char, or an oddball.
+
+All immediate values are encoded as a `(ref i31)`.
+
+The `i32` payload is extracted from the `(ref i31)` via sign extension,
+using `i31.get_s`.
+
+If the low bit of the payload is `#b0`, the value is a fixnum, and its
+signed integer value is in the high bits of payload.
+
+If the low 2 bits of the payload are `#b11`, the value is a char, and
+its codepoint is in the high bits of the payload.  The sign bit will
+always be unset, because codepoints only go up to 2<sup>21</sup>.
+
+Otherwise, the possible payloads are:
+  - `#b000001`: `#f`
+  - `#b000101`: `nil`
+  - `#b001101`: `'()` (null)
+  - `#b010001`: `#t`
+  - `#b100001`: the unspecified value
+  - `#b101001`: EOF
+
+Some common oddball tests:
+  - `null?`: check for null or nil; `(= (logand payload #b110111) #b001001)`
+  - `false?`: check for false or nil; `(= (logand payload #b111011) #b000001)`
+  - `elisp-false?`: check for false or nil or null; `(= (logand payload #b110011) #b000001)`
 
 ### Utility data types
 

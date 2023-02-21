@@ -226,28 +226,55 @@ other tags.
 All tagged heap types are subtypes of `$tagged`.
 
 ```wat
-(type $tagged (struct (field $tag i32)))
+(type $tagged (struct (field $tag i8)))
 ```
 
 Each of the following concrete subtypes corresponds to a heap object
 that native Guile represents using a specific heap tag (value of the low
-bits of the `$tag` field of `$tagged`).  We represent this below by
-`$tag`/*`n`* `=` *`tag`*, where *`n`* indicates the number of low bits
-to check, and *`tag`* is the value of those bits for the given data
-type.
+bits of the `$tag` field).
 
-Note that unless `mut` is specified on a field's type, that field is
-immutable.
+Tag values:
+  - `#b00000000`:  `0`: procedure
+  - `#b00000001`:  `1`: string
+  - `#b00000010`:  `2`: symbol
+  - `#b00000011`:  `3`: keyword
+  - `#b00000100`:  `4`: variable (box)
+  - `#b00000101`:  `5`: atomic box
+  - `#b00000110`:  `6`: vector
+  - `#b00000111`:  `7`: hash-table
+  - `#b00001000`:  `8`: fluid
+  - `#b00001001`:  `9`: dynamic-state
+  - `#b00001010`: `10`: syntax
+  - `#b00001011`: `11`: bitvector
+  - `#b00001100`: `12`: port
+  - `#b00001111`: `15`: flonum
+  - `#b00011111`: `31`: bignum
+  - `#b00101111`: `47`: complex
+  - `#b00111111`: `63`: fraction
+
+The last four data types are heap numbers, and it's useful to be able to
+do some predicates via math on their tags:
+
+  - `heap-number?`: `(= 15 (logand $tag 15))`
+  - `inexact-number?`: `(= 0 (logand $tag 16))` (if already known to be a number)
+  - `exact-number?`: `(= 16 (logand $tag 16))` (if already known to be a number)
+
+Checking a tagged value's type at run-time is always possible by
+checking the tag.  Sometimes, though, types can be introspected by
+`ref.test` and related core WebAssembly type checks; this is the case
+for types which are structurally equivalent to no other type in the
+system.  In the future when WebAssembly gets run-time types (RTTs), tags
+will no longer be necessary.
 
 #### Strings
 
 ```wat
-(type $string ; $tag/7 = #b0010101
+(type $string
   (sub $tagged
     (struct (field $str (ref string)))))
 ```
 
-Gosh.  It would be nice to just have `(ref string)` be the string
+It would be nice to just have `(ref string)` be the string
 representation, but [`stringref` is not a subtype of
 `eqref`](https://github.com/WebAssembly/stringref/issues/20).  Therefore
 we have to wrap strings with a tagged struct.
@@ -258,12 +285,12 @@ Guile-to-Wasm compiler, all strings will be immutable.
 #### Symbols and keywords
 
 ```wat
-(type $symbol ; $tag/7 = #b0000101
+(type $symbol
   (sub $tagged
     (struct (field $hash i32)
             (field $name (ref string)))))
 
-(type $keyword ; $tag/7 = #b0110101
+(type $keyword
   (sub $tagged
     (struct (field $name (ref $symbol)))))
 ```
@@ -273,8 +300,6 @@ How to compute the symbol's hash is not yet determined.
 #### Variables and atomic boxes
 
 ```wat
-; $variable: $tag/7 = #b000111
-; $atomic-box: $tag/7 = #b0110111
 (type $box
   (sub $tagged (struct (field mut $val (ref eq)))))
 ```
@@ -287,27 +312,32 @@ atomic boxes don't need to use atomic operations.
 #### Vectors
 
 ```wat
-(type $vector ; $tag/7 = #b0001101
-  (sub $tagged (struct (field $vals (ref $raw-scmvector)))))
-; immutable-vector: $tag/8 = #b10001101
-; mutable-vector: $tag/8 = #b00001101
+(type $vector
+  (sub $tagged
+    (struct (field $vals (ref $raw-scmvector)))))
 ```
 
 You can get the length of the vector using `array.length` on the `$vals`
-field.  We could later switch to use an immutable `(array (ref eq))` for
-immutable vectors but that would be an optimization.
+field.
+
+We need to support the ability for a vector to be immutable.  I am not
+sure whether a separate mutable flag will be necessary, or if we can use
+an immutable `(array (ref eq))` value array, and rely on casts to tell
+them apart.  The issue would be to ensure that all needed initialization
+expressions for the vector are
+[constant](https://webassembly.github.io/spec/core/valid/instructions.html?highlight=constant#constant-expressions),
+in the sense of WebAssembly.
 
 #### Heap numbers
 
 ```wat
-; heap-number: $tag/7 = #b0010111
-(type $bignum ; $tag/12 = #b000100010111
+(type $bignum
   (sub $tagged (struct (field $val (ref extern))))) ; BigInt
-(type $flonum ; $tag/12 = #b001000010111
+(type $flonum
   (sub $tagged (struct (field $val f64))))
-(type $complex ; $tag/12 = #b001100010111
+(type $complex
   (sub $tagged (struct (field $real f64) (field $imag f64))))
-(type $fraction ; $tag/12 = #b010000010111
+(type $fraction
   (sub $tagged (struct (field $num (ref eq)) (field $denom (ref eq)))))
 ```
 
@@ -315,9 +345,6 @@ All of these numbers are heap-tagged.  We could use just a `(struct
 f64)` for flonums in the future, perhaps; the WebAssembly type system
 attaches its own tag, but perhaps this is something to think of when we
 get RTTs.
-
-Also note that e.g. `inexact-heap-number?` can be a bit test over the
-tags.
 
 #### Hash tables and weak tables
 
@@ -327,7 +354,7 @@ this is a dealbreaker, the alternative would be to include a hash code
 in all objects.
 
 ```wat
-(type $hash-table ; $tag/7 = #b0011101
+(type $hash-table
   (sub $tagged (struct (field $map (ref extern)))))
 ```
 
@@ -340,12 +367,12 @@ JS ref is to a `WeakMap` instead of a `Map`.
 #### Dynamic state
 
 ```wat
-(type $fluid ; $tag/7 = #b0100101
+(type $fluid
   (sub $tagged (struct (field $hash i32) (field $init (ref eq)))))
-(type $dynamic-state $tag/7 = #b0101101; flags in tag
+(type $dynamic-state
   (sub $tagged
     (struct
-      (field $values (ref extern))
+      (field $values (ref extern)))))
 ```
 
 In native Guile, a fluid is essentially a key and a dynamic state is a
@@ -361,7 +388,7 @@ of "tagged struct holding a `(ref extern)`" is the same as for
 #### Syntax and macros
 
 ```wat
-(type $syntax ; $tag/7 = #b0111101
+(type $syntax
   (sub $tagged
     (struct
       (field $expr (ref eq))
@@ -383,7 +410,7 @@ Guile, that we will also need to implement at some point.
 
 ```wat
 ; Proper support for closures is a post-MVP feature.
-(type $proc ; $tag/7 = #b1000101
+(type $proc
   (sub $tagged (struct (field $func (ref $kvarargs)))
 (type $closure
   (sub $proc (struct (field $free-vars (ref $raw-scmvector)))))
@@ -405,7 +432,7 @@ We can't just use `$raw-bitvector`, as we need a length also which is
 generally smaller than the storage space in the raw `i32` array.
 
 ```wat
-(type $bitvector ; $tag/7 = #b1011111
+(type $bitvector
   (sub $tagged (struct (field $len i32) (field $bits (ref $raw-bitvector)))))
 ```
 
@@ -437,7 +464,7 @@ We can also simplify and assume UTF-8 encoding for textual I/O on ports.
     (field $flags i32)
     ; Guile also has GOOPS classes here.
     ))
-(type $port ; $tag/7 = #b1111101
+(type $port
   (sub $tagged
     (struct
       (field $pt (ref $port-type))
@@ -490,10 +517,6 @@ structs, to WebAssembly's type system; otherwise we'd need a type code.
 
 Should we be annotating struct types with `final`?  The MVP document
 mentions it but binaryen does not seem to support it.
-
-Should the type tag be separated into an `i8` or two, perhaps with a
-user `i16` ?  Or just an `i8` and subtypes manage what to native Guile
-are the "upper" tag bits on their own, perhaps with an `i16` or `i32`?
 
 ## JS API
 

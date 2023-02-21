@@ -216,14 +216,6 @@ We may want to instead increase the set of fields in `$vtable` to be
 like [record type
 descriptors](http://git.savannah.gnu.org/cgit/guile.git/tree/module/ice-9/boot-9.scm?h=wip-tailify#n937).
 
-#### Strings
-
-There's no need for an explicit `$string` type; we just use [`(ref
-string)`](https://github.com/WebAssembly/stringref/blob/main/proposals/stringref/Overview.md),
-in order to minimize the run-time size and to ease host
-interoperability.  Note that unlike in native Guile, this implies that
-strings are not mutable!
-
 #### Bytevectors
 
 We can just use `$raw-bytevector` and `$raw-immutable-bytevector`: no
@@ -246,6 +238,22 @@ type.
 
 Note that unless `mut` is specified on a field's type, that field is
 immutable.
+
+#### Strings
+
+```wat
+(type $string ; $tag/7 = #b0010101
+  (sub $tagged
+    (struct (field $str (ref string)))))
+```
+
+Gosh.  It would be nice to just have `(ref string)` be the string
+representation, but [`stringref` is not a subtype of
+`eqref`](https://github.com/WebAssembly/stringref/issues/20).  Therefore
+we have to wrap strings with a tagged struct.
+
+We will need to have a mutable/immutable flag.  In the initial
+Guile-to-Wasm compiler, all strings will be immutable.
 
 #### Symbols and keywords
 
@@ -476,10 +484,6 @@ or include a hash code in all objects?
 
 Should we take the opportunity to have `cons` make immutable pairs,
 perhaps adding `mcons` also?
-
-How much of a hassle will changing immutable strings be?  It's the
-correct change from a language design point of view, but change is
-always annoying.
 
 Need to verify that the pair type above is actually disjoint from
 structs, to WebAssembly's type system; otherwise we'd need a type code.

@@ -92,7 +92,6 @@ class SCM {
             struct: () => new Struct(scm),
             procedure: () => new Procedure(scm),
         };
-        print(descr);
         let handler = handlers[descr];
         return handler ? handler() : scm;
     }

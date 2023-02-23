@@ -39,32 +39,11 @@ objects are `SCM` values that are pointers to the heap.  The type of the
 object is encoded in the first word of memory pointed to by the `SCM`
 value.
 
-We are mostly going to use the same strategy in Guile-on-Wasm: there
-will be a `(struct $tagged (field $tag i32))` abstract type with a few
-dozen subtypes.  We use the same heap-tagging strategy as Guile to allow
-run-time type checks by looking at the low bits of `$tag`.  We can even
-just use a similar numering to [the existing heap
-tags](http://git.savannah.gnu.org/cgit/guile.git/tree/module/system/base/types/internal.scm?h=wip-tailify#n124)
-from native Guile.
-
-(This strategy is good but suboptimal.  Consider that on browser
-WebAssembly implementations, every GC-managed object's first word is a
-pointer to its "hidden class".  Really we want to have each distinct
-`SCM` subtype have its own hidden class, and then type checks are a
-pointer comparison of the first word against known hidden classes.
-Support for this idiom is a [planned post-MVP
-feature](https://github.com/WebAssembly/gc/issues/275), though, so we
-can't rely on it yet.  Also it poses interesting modularity concerns:
-all compiled modules would have to import a common module defining
-types, in order to be able to pass values between each other.  Anyway,
-sticking with explicit tags seems to be a good MVP measure for the
-Guile-on-WebAssembly effort.)
-
-We do make a few deviations from what native Guile does, because of
-platform differences and because we don't have existing C API consumers
-that have assumptions about Guile's ABI.  So though we are inspired by
-Guile, the type definitions described below are the canonical
-documentation.
+In WebAssembly, garbage-collected objects can also also be associated
+with a type identifier which WebAssembly programs can introspect over,
+for example to branch to a label if a value has a given type.  We will
+use these built-in capabilities when implementing the various Scheme
+data types.
 
 ## Calling convention
 
@@ -141,12 +120,12 @@ its codepoint is in the high bits of the payload.  The sign bit will
 always be unset, because codepoints only go up to 2<sup>21</sup>.
 
 Otherwise, the possible payloads are:
-  - `#b000001`: `#f`
-  - `#b000101`: `nil`
-  - `#b001101`: `'()` (null)
-  - `#b010001`: `#t`
-  - `#b100001`: the unspecified value
-  - `#b101001`: EOF
+  - `#b000001`: 1: `#f`
+  - `#b000101`: 5: `nil`
+  - `#b001101`: 13: `'()` (null)
+  - `#b010001`: 17: `#t`
+  - `#b100001`: 33: the unspecified value
+  - `#b101001`: 41: EOF
 
 Some common oddball tests:
   - `null?`: check for null or nil; `(= (logand payload #b110111) #b001001)`
@@ -159,9 +138,9 @@ Some common oddball tests:
 (type $raw-immutable-bitvector (array i32))
 (type $raw-immutable-bytevector (array i8))
 
-(type $raw-bitvector (array mut i32))
-(type $raw-bytevector (array mut i8))
-(type $raw-scmvector (array mut (ref eq)))
+(type $raw-bitvector (array (mut i32)))
+(type $raw-bytevector (array (mut i8)))
+(type $raw-scmvector (array (mut (ref eq))))
 ```
 
 ### Continuation types
@@ -175,102 +154,83 @@ all calls are tail calls, so there are no return values.
 (type $kvarargs (func (param $nargs i32) (result)))
 ```
 
-### Oddball heap types
+### Heap types
+
+All Guile objects which are not represented as `(ref i31)` are "heap
+objects".  These objects are all subtypes of `$heap-object`:
+
+```wat
+(type $void-struct (struct))
+(type $heap-object (sub $void-struct (struct)))
+```
+
+The use of `sub` puts us into a nominal typing regime; only structs that
+are instances of specifically declared subtypes of `$heap-object` will
+be recognized as Guile's own objects.
 
 #### Pairs
 
 ```wat
 (type $pair
-  (struct (field $car mut (ref eq)) (field $cdr mut (ref eq))))
+  (sub $heap-object
+    (struct (field $car (mut (ref eq))) (field $cdr (mut (ref eq))))))
 ```
 
 It may make sense to have an immutable pair type:
 
 ```wat
 (type $immutable-pair
-  (struct (field $car (ref eq)) (field $cdr (ref eq))))
+  (sub $heap-object
+    (struct (field $car (ref eq)) (field $cdr (ref eq)))))
 ```
 
-If I understand the WebAssembly type system correctly, we can specify
-the `car` accessor in terms of `$immutable-pair`, and have it work for
-`$pair` also.  `set-car!` would require the mutable `$pair`.
+However these data types are not equivalent; you have to define e.g. two
+versions of `car`.  A problem for another day, perhaps.
 
 #### Structs
 
 ```wat
-(rec
-  (type $struct (struct (field $vtable (ref $vtable))))
-  (type $vtable
-    (sub $struct
-      (struct
-        (field $layout (ref eq))
-        (field $flags i32)
-        (field $finalize (ref null eq))
-        (field $print (ref null eq))
-        (field $name (ref eq))
-        (field $size i32)
-        (field $unboxed-fields (ref $raw-bitvector))))))
+(type $struct
+  (sub $heap-object
+    (struct
+     (field $vtable (mut (ref null $struct)))
+     (field $fields (ref $raw-scmvector)))))
 ```
 
-We may want to instead increase the set of fields in `$vtable` to be
-like [record type
-descriptors](http://git.savannah.gnu.org/cgit/guile.git/tree/module/ice-9/boot-9.scm?h=wip-tailify#n937).
+Guile's structs are the underlying facility that implements records and
+object-orientation.  They have the oddity that their vtable is also a
+struct.  Anyway a struct is an object with two fields, the vtable and an
+array of fields.  It would be nice to have inline field allocation but
+that's not how Guile's struct facility works.
 
 #### Bytevectors
 
-We can just use `$raw-bytevector` and `$raw-immutable-bytevector`: no
-other tags.
+Not quite sure yet; we can just use `$raw-bytevector` and
+`$raw-immutable-bytevector` but the open questions are:
+  - whether we need to define all operations twice 
+  - probably we should subtype `$heap-array` or something
 
-### Tagged heap types
-
-All tagged heap types are subtypes of `$tagged`.
+#### Procedures
 
 ```wat
-(type $tagged (struct (field $tag i8)))
+(type $proc
+  (sub $heap-object
+    (struct
+      (field $func (ref $kvarargs))
+      (field $free-vars (ref null $raw-scmvector)))))
 ```
 
-Each of the following concrete subtypes corresponds to a heap object
-that native Guile represents using a specific heap tag (value of the low
-bits of the `$tag` field).
-
-Tag values:
-  - `#b00000000`:  `0`: procedure
-  - `#b00000001`:  `1`: string
-  - `#b00000010`:  `2`: symbol
-  - `#b00000011`:  `3`: keyword
-  - `#b00000100`:  `4`: variable (box)
-  - `#b00000101`:  `5`: atomic box
-  - `#b00000110`:  `6`: vector
-  - `#b00000111`:  `7`: hash-table
-  - `#b00001000`:  `8`: fluid
-  - `#b00001001`:  `9`: dynamic-state
-  - `#b00001010`: `10`: syntax
-  - `#b00001011`: `11`: bitvector
-  - `#b00001100`: `12`: port
-  - `#b00001111`: `15`: flonum
-  - `#b00011111`: `31`: bignum
-  - `#b00101111`: `47`: complex
-  - `#b00111111`: `63`: fraction
-
-The last four data types are heap numbers, and it's useful to be able to
-do some predicates via math on their tags:
-
-  - `heap-number?`: `(= 15 (logand $tag 15))`
-  - `inexact-number?`: `(= 0 (logand $tag 16))` (if already known to be a number)
-  - `exact-number?`: `(= 16 (logand $tag 16))` (if already known to be a number)
-
-Checking a tagged value's type at run-time is always possible by
-checking the tag.  Sometimes, though, types can be introspected by
-`ref.test` and related core WebAssembly type checks; this is the case
-for types which are structurally equivalent to no other type in the
-system.  In the future when WebAssembly gets run-time types (RTTs), tags
-will no longer be necessary.
+A procedure is just another name for a function.  A `$proc` is a tagged
+function.  Some functions close over a set of free variables; for them,
+we fill in `$free-vars`.  Probably the free-vars array should be
+immutable.  Also in future, WebAssembly will support funcrefs which are
+themselves closures; in that case we can avoid the free-vars array.
 
 #### Strings
 
 ```wat
 (type $string
-  (sub $tagged
+  (sub $heap-object
     (struct (field $str (ref string)))))
 ```
 
@@ -286,12 +246,12 @@ Guile-to-Wasm compiler, all strings will be immutable.
 
 ```wat
 (type $symbol
-  (sub $tagged
+  (sub $heap-object
     (struct (field $hash i32)
             (field $name (ref string)))))
 
 (type $keyword
-  (sub $tagged
+  (sub $heap-object
     (struct (field $name (ref $symbol)))))
 ```
 
@@ -301,19 +261,23 @@ How to compute the symbol's hash is not yet determined.
 
 ```wat
 (type $box
-  (sub $tagged (struct (field mut $val (ref eq)))))
+  (sub $heap-object (struct (field $val (mut (ref eq))))))
+(type $atomic-box
+  (sub $heap-object (struct (field $val (mut (ref eq))))))
 ```
 
-These two types have the same representation so they end up using the
-same WebAssembly type.  WebAssembly does support multiple threads, but
-there is no multi-thread support for GC objects, so for the time being
-atomic boxes don't need to use atomic operations.
+The use of `sub` tells WebAssembly to distinguish between these types,
+even when they are actually the same representation.
+
+WebAssembly does support multiple threads, but there is no multi-thread
+support for GC objects, so for the time being atomic boxes don't need to
+use atomic operations.
 
 #### Vectors
 
 ```wat
 (type $vector
-  (sub $tagged
+  (sub $heap-object
     (struct (field $vals (ref $raw-scmvector)))))
 ```
 
@@ -323,7 +287,7 @@ field.
 We need to support the ability for a vector to be immutable.  I am not
 sure whether a separate mutable flag will be necessary, or if we can use
 an immutable `(array (ref eq))` value array, and rely on casts to tell
-them apart.  The issue would be to ensure that all needed initialization
+them apart.  One issue would be to ensure that all needed initialization
 expressions for the vector are
 [constant](https://webassembly.github.io/spec/core/valid/instructions.html?highlight=constant#constant-expressions),
 in the sense of WebAssembly.
@@ -331,20 +295,16 @@ in the sense of WebAssembly.
 #### Heap numbers
 
 ```wat
+(type $heap-number (sub $heap-object (struct)))
 (type $bignum
-  (sub $tagged (struct (field $val (ref extern))))) ; BigInt
+  (sub $heap-number (struct (field $val (ref extern))))) ;; BigInt
 (type $flonum
-  (sub $tagged (struct (field $val f64))))
+  (sub $heap-number (struct (field $val f64))))
 (type $complex
-  (sub $tagged (struct (field $real f64) (field $imag f64))))
+  (sub $heap-number (struct (field $real f64) (field $imag f64))))
 (type $fraction
-  (sub $tagged (struct (field $num (ref eq)) (field $denom (ref eq)))))
+  (sub $heap-number (struct (field $num (ref eq)) (field $denom (ref eq)))))
 ```
-
-All of these numbers are heap-tagged.  We could use just a `(struct
-f64)` for flonums in the future, perhaps; the WebAssembly type system
-attaches its own tag, but perhaps this is something to think of when we
-get RTTs.
 
 #### Hash tables and weak tables
 
@@ -355,22 +315,24 @@ in all objects.
 
 ```wat
 (type $hash-table
-  (sub $tagged (struct (field $map (ref extern)))))
+  (sub $heap-object (struct (field $map (ref extern)))))
+(type $weak-hash-table
+  (sub $heap-object (struct (field $map (ref extern)))))
 ```
 
 Unfortunately this strategy doesn't generalize to `equal?` hash tables.
 But, these can be built in Scheme, so no big ABI concerns there.
 
-For weak tables, we have the same, but with `$tag = #b1010111`, and the
-JS ref is to a `WeakMap` instead of a `Map`.
+For weak tables, we have the same, but with the JS ref is to a `WeakMap`
+instead of a `Map`.
 
 #### Dynamic state
 
 ```wat
 (type $fluid
-  (sub $tagged (struct (field $hash i32) (field $init (ref eq)))))
+  (sub $heap-object (struct (field $hash i32) (field $init (ref eq)))))
 (type $dynamic-state
-  (sub $tagged
+  (sub $heap-object
     (struct
       (field $values (ref extern)))))
 ```
@@ -389,7 +351,7 @@ of "tagged struct holding a `(ref extern)`" is the same as for
 
 ```wat
 (type $syntax
-  (sub $tagged
+  (sub $heap-object
     (struct
       (field $expr (ref eq))
       (field $wrap (ref eq))
@@ -406,21 +368,6 @@ hollow out a space for it for Guile-on-WebAssembly.
 Note there is also a `scm_tc16_macro` for syntax transformers in native
 Guile, that we will also need to implement at some point.
 
-#### Procedures
-
-```wat
-; Proper support for closures is a post-MVP feature.
-(type $proc
-  (sub $tagged (struct (field $func (ref $kvarargs)))
-(type $closure
-  (sub $proc (struct (field $free-vars (ref $raw-scmvector)))))
-```
-
-A procedure is just another name for a function.  A `$proc` is a tagged
-function.  Some functions close over a set of free variables; for them,
-we use the subtype `$closure`.  Probably the free-vars array should be
-immutable.
-
 #### Multi-dimensional arrays
 
 In this first version, we'll punt on these.  We should check with Daniel
@@ -433,7 +380,8 @@ generally smaller than the storage space in the raw `i32` array.
 
 ```wat
 (type $bitvector
-  (sub $tagged (struct (field $len i32) (field $bits (ref $raw-bitvector)))))
+  (sub $heap-object
+    (struct (field $len i32) (field $bits (ref $raw-bitvector)))))
 ```
 
 #### Ports
@@ -452,32 +400,32 @@ We can also simplify and assume UTF-8 encoding for textual I/O on ports.
 (type $port-type
   (struct
     (field $name (ref eq))
-    ; in guile these are (port, bv, start, count) -> size_t
-    (field $read (ref $closure)) ; could have a more refined type
-    (field $write (ref $closure))
-    (field $seek (ref $closure)) ; (port, offset, whence) -> offset
-    (field $close (ref $closure)) ; (port) -> ()
-    (field $get-natural-buffer-sizes (ref $closure)) ; port -> (rdsz, wrsz)
-    (field $random-access? (ref $closure)) ; port -> bool
-    (field $input-waiting (ref $closure)) ; port -> bool
-    (field $truncate (ref $closure)) ; (port, length) -> ()
+    ;; in guile these are (port, bv, start, count) -> size_t
+    (field $read (ref $proc)) ;; could have a more refined type
+    (field $write (ref $proc))
+    (field $seek (ref $proc)) ;; (port, offset, whence) -> offset
+    (field $close (ref $proc)) ;; (port) -> ()
+    (field $get-natural-buffer-sizes (ref $proc)) ;; port -> (rdsz, wrsz)
+    (field $random-access? (ref $proc)) ;; port -> bool
+    (field $input-waiting (ref $proc)) ;; port -> bool
+    (field $truncate (ref $proc)) ;; (port, length) -> ()
     (field $flags i32)
-    ; Guile also has GOOPS classes here.
+    ;; Guile also has GOOPS classes here.
     ))
 (type $port
-  (sub $tagged
+  (sub $heap-object
     (struct
       (field $pt (ref $port-type))
-      (field $stream mut (ref eq))
-      (field $file_name mut (ref eq))
+      (field $stream (mut (ref eq)))
+      (field $file_name (mut (ref eq)))
       (field $position (ref $pair))
-      (field $read_buf mut (ref eq)) ; A 5-vector
-      (field $write_buf mut (ref eq)) ; A 5-vector
-      (field $write_buf_aux mut (ref eq)) ; A 5-vector
-      (field $read_buffering mut i32)
-      (field $refcount mut i32)
-      (field $rw_random mut i8)
-      (field $properties mut (ref eq)))))
+      (field $read_buf (mut (ref eq))) ;; A 5-vector
+      (field $write_buf (mut (ref eq))) ;; A 5-vector
+      (field $write_buf_aux (mut (ref eq))) ;; A 5-vector
+      (field $read_buffering (mut i32))
+      (field $refcount (mut i32))
+      (field $rw_random (mut i8))
+      (field $properties (mut (ref eq))))))
 ```
 
 The meanings of these various fields are as in native Guile; you have to
@@ -511,9 +459,6 @@ or include a hash code in all objects?
 
 Should we take the opportunity to have `cons` make immutable pairs,
 perhaps adding `mcons` also?
-
-Need to verify that the pair type above is actually disjoint from
-structs, to WebAssembly's type system; otherwise we'd need a type code.
 
 Should we be annotating struct types with `final`?  The MVP document
 mentions it but binaryen does not seem to support it.

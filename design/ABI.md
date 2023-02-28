@@ -463,6 +463,9 @@ perhaps adding `mcons` also?
 Should we be annotating struct types with `final`?  The MVP document
 mentions it but binaryen does not seem to support it.
 
+JS has a symbol data type with a convenient `Symbol.from` constructor.
+Should we use it?  Probably not.
+
 ## JS API
 
 Wasm GC values (and thus Guile-on-Wasm values) are opaque to JavaScript;

@@ -6,7 +6,7 @@
 
   (type $raw-bitvector (array (mut i32)))
   (type $raw-bytevector (array (mut i8)))
-  (type $raw-scmvector (array (mut (ref eq))))
+  (type $vector (array (mut (ref eq))))
 
   (type $void-struct (struct))
   (type $heap-object (sub $void-struct (struct)))
@@ -22,12 +22,12 @@
         (sub $heap-object
              (struct
               (field $vtable (mut (ref null $struct)))
-              (field $fields (ref $raw-scmvector)))))
+              (field $fields (ref $vector)))))
   ;; Built-in support for closures is a post-MVP feature.
   (type $proc
     (sub $heap-object
          (struct (field $func (ref $kvarargs))
-                 (field $free-vars (ref null $raw-scmvector)))))
+                 (field $free-vars (ref null $vector)))))
   (type $string
     (sub $heap-object (struct (field $str (ref string)))))
   (type $symbol
@@ -40,9 +40,6 @@
          ;; Box kind: 0: variable, 1: atomic box
          (struct (field $kind i8)
                  (field $val (mut (ref eq))))))
-  (type $vector
-    (sub $heap-object
-         (struct (field $vals (ref $raw-scmvector)))))
   (type $extern-ref
     (sub $heap-object
          ;; Kind: 0: hash-table, 1: dynamic-state
@@ -131,18 +128,18 @@
   (func $%make-vtable
         (param $vt (ref null $struct)) (param $flags i32) (param $nfields i32)
         (result (ref $struct))
-    (local $fields (ref $raw-scmvector))
+    (local $fields (ref $vector))
     ;; fixme: pull nfields from vtable
     (local.set $fields
-               (array.new $raw-scmvector (i31.new (i32.const 1))
+               (array.new $vector (i31.new (i32.const 1))
                           (i32.const 4)))
     ;; field 0: flags: fixnum(validated | vtable-vtable)
-    (array.set $raw-scmvector
+    (array.set $vector
                (local.get $fields)
                (i32.const 0)
                (i31.new (i32.shl (local.get $flags) (i32.const 1))))
     ;; field 1: nfields: fixnum(6)
-    (array.set $raw-scmvector
+    (array.set $vector
                (local.get $fields)
                (i32.const 1)
                (i31.new (i32.shl (local.get $nfields) (i32.const 1))))
@@ -152,14 +149,14 @@
   (func $%make-struct (param $vt (ref $struct)) (result (ref $struct))
     (struct.new $struct
                 (local.get $vt)
-                (array.new $raw-scmvector
+                (array.new $vector
                            ;; Init fields to #f.
                            (i31.new (i32.const 1))
                            (i32.shr_u
                             (i31.get_s
                              (ref.cast
                               i31
-                              (array.get $raw-scmvector
+                              (array.get $vector
                                          (struct.get $struct 1 (local.get $vt))
                                          (i32.const 1))))
                             (i32.const 1)))))
@@ -383,6 +380,94 @@
     (global.set $return-sp (i32.sub (global.get $return-sp) (i32.const 1)))
     (ref.as_non_null (table.get $return-stack (global.get $return-sp))))
 
+  ;; For now, the Java string hash function, except over codepoints
+  ;; rather than WTF-16 code units.
+  (func $string_hash (param $str (ref string)) (result i32)
+    (local $iter (ref stringview_iter))
+    (local $hash i32)
+    (local $codepoint i32)
+    (local.set $iter (string.as_iter (local.get $str)))
+    (block $done
+      (loop $lp
+        (local.set $codepoint (stringview_iter.next (local.get $iter)))
+        (br_if $done (i32.eq (i32.const -1) (local.get $codepoint)))
+        (local.set $hash
+                   (i32.add (i32.mul (local.get $hash) (i32.const 31))
+                            (local.get $codepoint)))
+        (br $lp)))
+    (local.get $hash))
+
+  (type $symtab-entry
+        (struct (field $sym (ref $symbol)) (field $next (ref null $symtab-entry))))
+  (type $symtab (array (mut (ref null $symtab-entry))))
+  (global $the-symtab (ref $symtab)
+          (array.new $symtab (ref.null $symtab-entry) (i32.const 47)))
+  (func $string_to_symbol (param $str (ref string)) (result (ref $symbol))
+    (local $hash i32)
+    (local $idx i32)
+    (local $entry (ref null $symtab-entry))
+    (local $ret (ref null $symbol))
+    (local.set $hash (call $string_hash (local.get $str)))
+    (local.set $idx (i32.rem_u (local.get $hash) (array.len (global.get $the-symtab))))
+    (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
+    (block $done
+      (block $insert
+        (loop $lp
+          (br_if $insert (ref.is_null (local.get $entry)))
+          (block $next
+            (br_if $next
+                   (i32.ne (struct.get $symbol 0
+                                       (struct.get $symtab-entry 0 (local.get $entry)))
+                           (local.get $hash)))
+            (br_if $next
+                   (i32.eqz
+                    (string.eq (struct.get $symbol 1
+                                           (struct.get $symtab-entry 0 (local.get $entry)))
+                               (local.get $str))))
+            (local.set $ret (struct.get $symtab-entry 0 (local.get $entry)))
+            (br $done))
+          (local.set $entry (struct.get $symtab-entry 1 (local.get $entry)))
+          (br $lp)))
+      (local.set $ret (struct.new $symbol (local.get $hash) (local.get $str)))
+      (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
+      (array.set $symtab (global.get $the-symtab) (local.get $idx)
+                 (struct.new $symtab-entry (ref.as_non_null (local.get $ret))
+                             (local.get $entry))))
+    (ref.as_non_null (local.get $ret)))
+
+  (type $kwtab-entry
+        (struct (field $kw (ref $keyword)) (field $next (ref null $kwtab-entry))))
+  (type $kwtab (array (mut (ref null $kwtab-entry))))
+  (global $the-kwtab (ref $kwtab)
+          (array.new $kwtab (ref.null $kwtab-entry) (i32.const 47)))
+  (func $symbol_to_keyword (param $sym (ref $symbol)) (result (ref $keyword))
+    (local $idx i32)
+    (local $entry (ref null $kwtab-entry))
+    (local $ret (ref null $keyword))
+    (local.set $idx (i32.rem_u (struct.get $symbol 0 (local.get $sym))
+                               (array.len (global.get $the-kwtab))))
+    (local.set $entry (array.get $kwtab (global.get $the-kwtab) (local.get $idx)))
+    (block $done
+      (block $insert
+        (loop $lp
+          (br_if $insert (ref.is_null (local.get $entry)))
+          (block $next
+            (br_if $next
+                   (i32.eqz
+                    (ref.eq (struct.get $keyword 0
+                                        (struct.get $kwtab-entry 0 (local.get $entry)))
+                            (local.get $sym))))
+            (local.set $ret (struct.get $kwtab-entry 0 (local.get $entry)))
+            (br $done))
+          (local.set $entry (struct.get $kwtab-entry 1 (local.get $entry)))
+          (br $lp)))
+      (local.set $ret (struct.new $keyword (local.get $sym)))
+      (local.set $entry (array.get $kwtab (global.get $the-kwtab) (local.get $idx)))
+      (array.set $kwtab (global.get $the-kwtab) (local.get $idx)
+                 (struct.new $kwtab-entry (ref.as_non_null (local.get $ret))
+                             (local.get $entry))))
+    (ref.as_non_null (local.get $ret)))
+
   (func $main (param $nargs i32) (result i32)
     ;; Fixnum: 1.
     (table.set $argv (i32.const 0) (i31.new (i32.const 2)))
@@ -420,12 +505,20 @@
                            ;; one field
                            (i32.const 1))))
     (table.set $argv (i32.const 12)
-               (struct.new $proc (ref.func $main) (ref.null $raw-scmvector)))
-    ;;                           $Lstring
-    ;;                           $Lsymbol
-    ;;                           $Lkeyword
-    ;;                           $Lvariable
-    ;;                           $Latomic-box
+               (struct.new $proc (ref.func $main) (ref.null $vector)))
+    (table.set $argv (i32.const 13)
+               (struct.new $string (string.const "hello world!")))
+    (table.set $argv (i32.const 14)
+               (call $string_to_symbol (string.const "my-symbol")))
+    (table.set $argv (i32.const 15)
+               (call $symbol_to_keyword
+                     (call $string_to_symbol (string.const "my-symbol"))))
+    (table.set $argv (i32.const 16)
+               (struct.new $box (i32.const 0) (i31.new (i32.const 1))))
+    (table.set $argv (i32.const 17)
+               (struct.new $box (i32.const 1) (i31.new (i32.const 1))))
+    (table.set $argv (i32.const 18)
+               (array.new $vector (i31.new (i32.const 1)) (i32.const 10)))
     ;;                           $Lvector
     ;;                           $Lhash-table
     ;;                           $Lfluid
@@ -438,7 +531,7 @@
     ;;_if $Lbignum (i32.eq (local.get $tmp) (i32.const 31)))
     ;;_if $Lcomplex (i32.eq (local.get $tmp) (i32.const 47)))
     ;;_if $Lfraction (i32.eq (local.get $tmp) (i32.const 63)))
-    (return_call_ref $kvarargs (i32.const 13) (call $pop-return)))
+    (return_call_ref $kvarargs (i32.const 19) (call $pop-return)))
 
   (func $return (param $nargs i32) (result i32)
     (local.get $nargs))

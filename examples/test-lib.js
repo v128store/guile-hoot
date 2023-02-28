@@ -29,6 +29,11 @@ class MutableBytevector extends HeapObject { toString() { return "#<mutable-byte
 class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
 class Struct extends HeapObject { toString() { return "#<struct>"; } }
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
+class Sym extends HeapObject { toString() { return "#<symbol>"; } }
+class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
+class Variable extends HeapObject { toString() { return "#<variable>"; } }
+class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
+class Vector extends HeapObject { toString() { return "#<vector>"; } }
 
 class SCM {
     #rt = {
@@ -91,6 +96,12 @@ class SCM {
             'immutable-bytevector': () => new Bytevector(scm),
             struct: () => new Struct(scm),
             procedure: () => new Procedure(scm),
+            string: () => api.string_value(scm),
+            symbol: () => new Sym(scm),
+            keyword: () => new Keyword(scm),
+            variable: () => new Variable(scm),
+            'atomic-box': () => new AtomicBox(scm),
+            'vector': () => new Vector(scm),
         };
         let handler = handlers[descr];
         return handler ? handler() : scm;

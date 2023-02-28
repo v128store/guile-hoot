@@ -528,8 +528,6 @@
                (array.new $vector (i31.new (i32.const 1)) (i32.const 10)))
     (table.set $argv (i32.const 19)
                (struct.new $extern-ref (i32.const 0) (call $make-hash-table)))
-    ;;                           $Lvector
-    ;;                           $Lhash-table
     ;;                           $Lfluid
     ;;                           $Ldynamic-state
     ;;                           $Lsyntax

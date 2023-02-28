@@ -328,6 +328,13 @@
   (func $bignum-get-i64 (import "rt" "bignum_get_i64")
         (param (ref extern)) (result i64))
 
+  (func $make-hash-table (import "rt" "make_hash_table")
+        (result (ref extern)))
+  (func $hashq-ref (import "rt" "hashq_ref")
+        (param (ref extern) (ref eq)) (result (ref null eq)))
+  (func $hashq-set (import "rt" "hashq_set")
+        (param (ref extern) (ref eq) (ref eq)))
+
   (func $scm-from-f64 (export "scm_from_f64") (param $v f64) (result (ref $flonum))
     (struct.new $flonum (local.get $v)))
   (func $scm-from-integer (export "scm_from_integer") (param $v (ref extern)) (result (ref eq))
@@ -519,6 +526,8 @@
                (struct.new $box (i32.const 1) (i31.new (i32.const 1))))
     (table.set $argv (i32.const 18)
                (array.new $vector (i31.new (i32.const 1)) (i32.const 10)))
+    (table.set $argv (i32.const 19)
+               (struct.new $extern-ref (i32.const 0) (call $make-hash-table)))
     ;;                           $Lvector
     ;;                           $Lhash-table
     ;;                           $Lfluid
@@ -531,7 +540,7 @@
     ;;_if $Lbignum (i32.eq (local.get $tmp) (i32.const 31)))
     ;;_if $Lcomplex (i32.eq (local.get $tmp) (i32.const 47)))
     ;;_if $Lfraction (i32.eq (local.get $tmp) (i32.const 63)))
-    (return_call_ref $kvarargs (i32.const 19) (call $pop-return)))
+    (return_call_ref $kvarargs (i32.const 20) (call $pop-return)))
 
   (func $return (param $nargs i32) (result i32)
     (local.get $nargs))

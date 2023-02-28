@@ -34,6 +34,7 @@ class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
 class Variable extends HeapObject { toString() { return "#<variable>"; } }
 class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
 class Vector extends HeapObject { toString() { return "#<vector>"; } }
+class HashTable extends HeapObject { toString() { return "#<hash-table>"; } }
 
 class SCM {
     #rt = {
@@ -44,7 +45,12 @@ class SCM {
             return 0n <= n && n <= 0xFFFF_FFFF_FFFF_FFFFn;
         },
         // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
-        bignum_get_i64(n) { return n; }
+        bignum_get_i64(n) { return n; },
+
+        // Probably should use internal hash codes instead :/
+        make_hash_table() { return new Map; },
+        hashq_ref(tab, k) { return tab.get(k); },
+        hashq_set(tab, k, v) { tab.set(k, v); }
     };
 
     constructor(mod) {
@@ -102,6 +108,7 @@ class SCM {
             variable: () => new Variable(scm),
             'atomic-box': () => new AtomicBox(scm),
             'vector': () => new Vector(scm),
+            'hash-table': () => new HashTable(scm),
         };
         let handler = handlers[descr];
         return handler ? handler() : scm;

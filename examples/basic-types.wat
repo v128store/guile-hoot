@@ -37,22 +37,20 @@
          (struct (field $name (ref $symbol)))))
   (type $box
     (sub $heap-object
-         (struct (field $val (mut (ref eq))))))
-  (type $atomic-box
-    (sub $heap-object
-         (struct (field $val (mut (ref eq))))))
+         ;; Box kind: 0: variable, 1: atomic box
+         (struct (field $kind i8)
+                 (field $val (mut (ref eq))))))
   (type $vector
     (sub $heap-object
          (struct (field $vals (ref $raw-scmvector)))))
-  (type $hash-table
+  (type $extern-ref
     (sub $heap-object
-         (struct (field $map (ref extern)))))
+         ;; Kind: 0: hash-table, 1: dynamic-state
+         (struct (field $kind i8)
+                 (field $val (ref extern)))))
   (type $fluid
     (sub $heap-object
          (struct (field $hash i32) (field $init (ref eq)))))
-  (type $dynamic-state
-    (sub $heap-object
-         (struct (field $values (ref extern)))))
   (type $syntax
     (sub $heap-object
          (struct
@@ -205,78 +203,88 @@
                       (block $Lsymbol
                         (block $Lkeyword
                           (block $Lbox
+                            (block $Lvector
+                              (block $Lextern-ref
+                                (block $Lfluid
+                                  (block $Lsyntax
+                                    (block $Lbitvector
+                                      (block $Lport
+                                        (block $Lflonum
+                                          (block $Lbignum
+                                            (block $Lcomplex
+                                              (block $Lfraction
+                                                (br_if $Limmediate
+                                                       (ref.test i31 (local.get $scm)))
+                                                (br_if $Limmutable-pair
+                                                       (ref.test $immutable-pair (local.get $scm)))
+                                                (br_if $Lpair
+                                                       (ref.test $pair (local.get $scm)))
+                                                (br_if $Lbytevector
+                                                       (ref.test $raw-bytevector (local.get $scm)))
+                                                (br_if $Limmutable-bytevector
+                                                       (ref.test $raw-immutable-bytevector (local.get $scm)))
+                                                (br_if $Lstruct
+                                                       (ref.test $struct (local.get $scm)))
+                                                (br_if $Lprocedure
+                                                       (ref.test $proc (local.get $scm)))
+                                                (br_if $Lstring
+                                                       (ref.test $string (local.get $scm)))
+                                                (br_if $Lsymbol
+                                                       (ref.test $symbol (local.get $scm)))
+                                                (br_if $Lkeyword
+                                                       (ref.test $keyword (local.get $scm)))
+                                                (br_if $Lbox
+                                                       (ref.test $box (local.get $scm)))
+                                                (br_if $Lvector
+                                                       (ref.test $vector (local.get $scm)))
+                                                (br_if $Lextern-ref
+                                                       (ref.test $extern-ref (local.get $scm)))
+                                                (br_if $Lfluid
+                                                       (ref.test $fluid (local.get $scm)))
+                                                (br_if $Lsyntax
+                                                       (ref.test $syntax (local.get $scm)))
+                                                (br_if $Lbitvector
+                                                       (ref.test $bitvector (local.get $scm)))
+                                                (br_if $Lport
+                                                       (ref.test $port (local.get $scm)))
+                                                (br_if $Lflonum
+                                                       (ref.test $flonum (local.get $scm)))
+                                                (br_if $Lbignum
+                                                       (ref.test $bignum (local.get $scm)))
+                                                (br_if $Lcomplex
+                                                       (ref.test $complex (local.get $scm)))
+                                                (br_if $Lfraction
+                                                       (ref.test $fraction (local.get $scm)))
+                                                (unreachable))
+                                              (br $Ldone (string.const "fraction")))
+                                            (br $Ldone (string.const "complex")))
+                                          (br $Ldone (string.const "bignum")))
+                                        (br $Ldone (string.const "flonum")))
+                                      (br $Ldone (string.const "port")))
+                                    (br $Ldone (string.const "bitvector")))
+                                  (br $Ldone (string.const "syntax")))
+                                (br $Ldone (string.const "fluid")))
+                              (block $Lhash-table
+                                (block $Ldynamic-state
+                                  (block $Lunknown-extern-ref
+                                    (br_table
+                                     $Lhash-table $Ldynamic-state $Lunknown-extern-ref
+                                     (struct.get_u $extern-ref 0
+                                                   (ref.cast $extern-ref (local.get $scm)))))
+                                  (unreachable))
+                                (br $Ldone (string.const "dynamic-state")))
+                              (br $Ldone (string.const "hash-table")))
+                            (br $Ldone (string.const "vector")))
+                          (block $Lvariable
                             (block $Latomic-box
-                              (block $Lvector
-                                (block $Lhash-table
-                                  (block $Lfluid
-                                    (block $Ldynamic-state
-                                      (block $Lsyntax
-                                        (block $Lbitvector
-                                          (block $Lport
-                                            (block $Lflonum
-                                              (block $Lbignum
-                                                (block $Lcomplex
-                                                  (block $Lfraction
-                                                    (br_if $Limmediate
-                                                           (ref.test i31 (local.get $scm)))
-                                                    (br_if $Limmutable-pair
-                                                           (ref.test $immutable-pair (local.get $scm)))
-                                                    (br_if $Lpair
-                                                           (ref.test $pair (local.get $scm)))
-                                                    (br_if $Lbytevector
-                                                           (ref.test $raw-bytevector (local.get $scm)))
-                                                    (br_if $Limmutable-bytevector
-                                                           (ref.test $raw-immutable-bytevector (local.get $scm)))
-                                                    (br_if $Lstruct
-                                                           (ref.test $struct (local.get $scm)))
-                                                    (br_if $Lprocedure
-                                                           (ref.test $proc (local.get $scm)))
-                                                    (br_if $Lstring
-                                                           (ref.test $string (local.get $scm)))
-                                                    (br_if $Lsymbol
-                                                           (ref.test $symbol (local.get $scm)))
-                                                    (br_if $Lkeyword
-                                                           (ref.test $keyword (local.get $scm)))
-                                                    (br_if $Lbox
-                                                           (ref.test $box (local.get $scm)))
-                                                    (br_if $Latomic-box
-                                                           (ref.test $atomic-box (local.get $scm)))
-                                                    (br_if $Lvector
-                                                           (ref.test $vector (local.get $scm)))
-                                                    (br_if $Lhash-table
-                                                           (ref.test $hash-table (local.get $scm)))
-                                                    (br_if $Lfluid
-                                                           (ref.test $fluid (local.get $scm)))
-                                                    (br_if $Ldynamic-state
-                                                           (ref.test $dynamic-state (local.get $scm)))
-                                                    (br_if $Lsyntax
-                                                           (ref.test $syntax (local.get $scm)))
-                                                    (br_if $Lbitvector
-                                                           (ref.test $bitvector (local.get $scm)))
-                                                    (br_if $Lport
-                                                           (ref.test $port (local.get $scm)))
-                                                    (br_if $Lflonum
-                                                           (ref.test $flonum (local.get $scm)))
-                                                    (br_if $Lbignum
-                                                           (ref.test $bignum (local.get $scm)))
-                                                    (br_if $Lcomplex
-                                                           (ref.test $complex (local.get $scm)))
-                                                    (br_if $Lfraction
-                                                           (ref.test $fraction (local.get $scm)))
-                                                    (unreachable))
-                                                  (br $Ldone (string.const "fraction")))
-                                                (br $Ldone (string.const "complex")))
-                                              (br $Ldone (string.const "bignum")))
-                                            (br $Ldone (string.const "flonum")))
-                                          (br $Ldone (string.const "port")))
-                                        (br $Ldone (string.const "bitvector")))
-                                      (br $Ldone (string.const "syntax")))
-                                    (br $Ldone (string.const "dynamic-state")))
-                                  (br $Ldone (string.const "fluid")))
-                                (br $Ldone (string.const "hash-table")))
-                              (br $Ldone (string.const "vector")))
+                              (block $Lunknown-box
+                                (br_table
+                                 $Lvariable $Latomic-box $Lunknown-box
+                                 (struct.get_u $box 0
+                                               (ref.cast $box (local.get $scm)))))
+                              (unreachable))
                             (br $Ldone (string.const "atomic-box")))
-                          (br $Ldone (string.const "box")))
+                          (br $Ldone (string.const "variable")))
                         (br $Ldone (string.const "keyword")))
                       (br $Ldone (string.const "symbol")))
                     (br $Ldone (string.const "string")))

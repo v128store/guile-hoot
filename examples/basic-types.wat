@@ -107,17 +107,16 @@
         (field $source (ref eq)))))
   (type $port-type
     (struct
-      (field $name (ref eq))
+      (field $name (ref string))
       ;; in guile these are (port, bv, start, count) -> size_t
-      (field $read (ref $closure)) ;; could have a more refined type
-      (field $write (ref $closure))
-      (field $seek (ref $closure)) ;; (port, offset, whence) -> offset
-      (field $close (ref $closure)) ;; (port) -> ()
-      (field $get-natural-buffer-sizes (ref $closure)) ;; port -> (rdsz, wrsz)
-      (field $random-access? (ref $closure)) ;; port -> bool
-      (field $input-waiting (ref $closure)) ;; port -> bool
-      (field $truncate (ref $closure)) ;; (port, length) -> ()
-      (field $flags i32)
+      (field $read (ref null $proc)) ;; could have a more refined type
+      (field $write (ref null $proc))
+      (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
+      (field $close (ref null $proc)) ;; (port) -> ()
+      (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
+      (field $random-access? (ref null $proc)) ;; port -> bool
+      (field $input-waiting (ref null $proc)) ;; port -> bool
+      (field $truncate (ref null $proc)) ;; (port, length) -> ()
       ;; Guile also has GOOPS classes here.
       ))
   (type $port
@@ -250,7 +249,8 @@
     (call $grow-argv (i32.const 42))
     (call $grow-return-stack (i32.const 42))
     (call $%init-structs)
-    (call $%init-keywords))
+    (call $%init-keywords)
+    (call $%init-ports))
   (start $start)
 
   (func $set_arg (export "set_arg") (param $idx i32) (param $arg (ref eq))
@@ -395,6 +395,14 @@
         (param (ref extern)) (result i32))
   (func $bignum-get-i64 (import "rt" "bignum_get_i64")
         (param (ref extern)) (result i64))
+  (func $make-weak-map (import "rt" "make_weak_map")
+        (result (ref extern)))
+  (func $weak-map-get (import "rt" "weak_map_get")
+        (param (ref extern)) (result (ref null eq)))
+  (func $weak-map-set (import "rt" "weak_map_set")
+        (param (ref extern) (ref eq) (ref eq)))
+  (func $weak-map-delete (import "rt" "weak_map_delete")
+        (param (ref extern) (ref eq)) (result i32))
 
   (func $scm-from-f64 (export "scm_from_f64") (param $v f64) (result (ref $flonum))
     (struct.new $flonum (i32.const 0) (local.get $v)))
@@ -423,6 +431,12 @@
   (func $scm-from-char (export "scm_from_char") (param $ch i32) (result (ref i31))
     (i31.new (i32.and (i32.const 3)
                       (i32.shl (local.get $ch) (i32.const 2)))))
+  (func $scm-from-fraction (export "scm_from_fraction") (param (ref eq) (ref eq)) (result (ref $fraction))
+    ;; FIXME: check types.
+    (struct.new $fraction (i32.const 3) (local.get 0) (local.get 1)))
+  (func $scm-from-complex (export "scm_from_complex") (param f64 f64) (result (ref $complex))
+    ;; FIXME: check types?
+    (struct.new $complex (i32.const 2) (local.get 0) (local.get 1)))
   (func $scm-from-string (export "scm_from_string") (param $str (ref string)) (result (ref $string))
     (struct.new $string (i32.const 12) (local.get $str)))
 
@@ -629,6 +643,121 @@
           (local.get $new-kw))
     (local.get $new-kw))
 
+  ;; Things like this should be implemented in Scheme.
+  (type $string-input-port-stream
+        (struct (field $bv (ref $raw-bytevector))
+                (field $pos (mut i32))))
+  (func $string-input-port-read (param $nargs i32) (result i32)
+    (local $port (ref $port))
+    (local $dst (ref $raw-bytevector))
+    (local $start i32)
+    (local $count i32)
+    (local $stream (ref $string-input-port-stream))
+    (local $src (ref $raw-bytevector))
+    (local $pos i32)
+    (local $avail i32)
+    (local $i i32)
+    (block $check-nargs
+      (br_if $check-nargs (i32.eq (local.get $nargs) (i32.const 4)))
+      (unreachable))
+    (local.set $port (ref.cast $port (table.get $argv (i32.const 0))))
+    (local.set $dst (struct.get $bytevector 1
+                                (ref.cast $bytevector (table.get $argv (i32.const 1)))))
+    (local.set $start (i31.get_s (ref.cast i31 (table.get $argv (i32.const 2)))))
+    (local.set $count (i31.get_s (ref.cast i31 (table.get $argv (i32.const 3)))))
+    (local.set $stream (ref.cast $string-input-port-stream
+                                 (struct.get $port $stream (local.get $port))))
+    (local.set $src (struct.get $string-input-port-stream 0 (local.get $stream)))
+    (local.set $pos (struct.get $string-input-port-stream 1 (local.get $stream)))
+    (local.set $avail
+               (i32.sub (array.len (local.get $src)) (local.get $pos)))
+    (block $trim
+      (br_if $trim (i32.lt_s (local.get $count) (local.get $avail)))
+      (local.set $count (local.get $avail)))
+    (block $done
+      (loop $lp
+        (br_if $done (i32.eq (local.get $i) (local.get $count)))
+        (array.set $raw-bytevector
+                   (local.get $dst)
+                   (i32.add (local.get $start) (local.get $i))
+                   (array.get_u $raw-bytevector (local.get $src)
+                                (i32.add (local.get $pos) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $lp)))
+    (struct.set $string-input-port-stream 1 (local.get $stream)
+                (i32.add (local.get $pos) (local.get $count)))
+    (table.set $argv (i32.const 0) (i31.new (local.get $count)))
+    (return_call_ref $kvarargs (i32.const 1) (call $pop-return)))
+  (func $string-input-port-seek (param $nargs i32) (result i32)
+    ;; Not yet implemented.
+    (unreachable))
+  (func $string-input-port-random-access? (param $nargs i32) (result i32)
+    ;; Not yet implemented.
+    (unreachable))
+  (func $string-input-port-input-waiting? (param $nargs i32) (result i32)
+    ;; Not yet implemented.
+    (unreachable))
+
+  (func $string-output-port-write (param $nargs i32) (result i32)
+    ;; Not yet implemented.
+    (unreachable))
+
+  (global $string-input-port-type (mut (ref null $port-type)) (ref.null $port-type))
+  (global $string-output-port-type (mut (ref null $port-type)) (ref.null $port-type))
+  (func $%init-ports
+    (global.set
+     $string-input-port-type
+     (struct.new
+      $port-type
+      (string.const "string-input-port")
+      (struct.new $proc (i32.const 14) (ref.func $string-input-port-read))
+      (ref.null $proc) ;; write
+      (struct.new $proc (i32.const 14) (ref.func $string-input-port-seek))
+      (ref.null $proc) ;; close
+      (ref.null $proc) ;; get-natural-buffer-sizes
+      (struct.new $proc (i32.const 14) (ref.func $string-input-port-random-access?))
+      (struct.new $proc (i32.const 14) (ref.func $string-input-port-input-waiting?))
+      (ref.null $proc) ;; truncate
+      ))
+    (global.set
+     $string-output-port-type
+     (struct.new
+      $port-type
+      (string.const "string-output-port")
+      (ref.null $proc) ;; read
+      (struct.new $proc (i32.const 14) (ref.func $string-output-port-write)) ;; write
+      (ref.null $proc) ;; seek
+      (ref.null $proc) ;; close
+      (ref.null $proc) ;; get-natural-buffer-sizes
+      (ref.null $proc) ;; random-access?
+      (ref.null $proc) ;; input-waiting?
+      (ref.null $proc) ;; truncate
+      )))
+  (func $%make-string-input-port (param $str (ref string)) (result (ref $port))
+    (local $wtf8 (ref $raw-bytevector))
+    ;; FIXME!!!!! Binaryen borks measure_utf8 and measure_wtf8
+    (local.set $wtf8
+               (array.new_default $raw-bytevector (string.measure_wtf16 (local.get $str))))
+    ;; FIXME!!! binaryen borks this too
+    ;; (string.encode_lossy_utf8_array (local.get $str) (local.get $wtf8) (i32.const 0))
+    (struct.new $port (i32.const 24)
+                (ref.cast $port-type (global.get $string-input-port-type))
+                (struct.new $string-input-port-stream
+                            (local.get $wtf8)
+                            (i32.const 0))
+                (i31.new (i32.const 1)) ;; file_name
+                ;; position: (cons 0 0)
+                (struct.new $pair (i32.const 5)
+                            (i31.new (i32.const 0)) (i31.new (i32.const 0)))
+                (i31.new (i32.const 1)) ;; read buf: #f
+                (i31.new (i32.const 1)) ;; write buf: #f
+                (i31.new (i32.const 1)) ;; write buf aux: #f
+                (i32.const 0) ;; read-buffering
+                (i32.const 0) ;; refcount
+                (i32.const 0) ;; rw_random ?
+                (i31.new (i32.const 13)) ;; properties: ()
+                ))
+
   (func $main (param $nargs i32) (result i32)
     ;; Fixnum: 1.
     (table.set $argv (i32.const 0) (i31.new (i32.const 2)))
@@ -705,8 +834,12 @@
     ;; (make-hash-table)
     (table.set $argv (i32.const 22)
                (call $%make-hash-table))
-    ;; (make-struct (make-vtable 1) #f)
+    ;; (make-weak-key-hash-table)
     (table.set $argv (i32.const 23)
+               (struct.new $extern-ref (i32.const 20)
+                           (call $make-weak-map)))
+    ;; (make-struct (make-vtable 1) #f)
+    (table.set $argv (i32.const 24)
                (call $%make-struct1
                      (call $%make-simple-vtable
                            (global.get $root-vtable)
@@ -716,23 +849,43 @@
                            (i32.const 1))
                      (i31.new (i32.const 1))))
     ;; 42.69
-    (table.set $argv (i32.const 24)
+    (table.set $argv (i32.const 25)
                (struct.new $flonum (i32.const 0) (f64.const 42.69)))
     ;; 42.69
-    (table.set $argv (i32.const 25)
+    (table.set $argv (i32.const 26)
                (struct.new $extern-ref (i32.const 1)
                            (call $bignum-from-i64 (i64.const 42))))
     ;; 42+6.9i
-    (table.set $argv (i32.const 26)
+    (table.set $argv (i32.const 27)
                (struct.new $complex (i32.const 2)
                            (f64.const 42) (f64.const 6.9)))
     ;; 14/23
-    (table.set $argv (i32.const 27)
+    (table.set $argv (i32.const 28)
                (struct.new $fraction (i32.const 3)
                            (i31.new (i32.const 28))
                            (i31.new (i32.const 46))))
-    ;; Remaining data types: fluid, dynamic-state, syntax, port
-    (return_call_ref $kvarargs (i32.const 28) (call $pop-return)))
+    ;; (make-fluid #f)
+    (table.set $argv (i32.const 29)
+               (struct.new $fluid (i32.const 21) (i31.new (i32.const 1))))
+    ;; (current-dynamic-state)
+    (table.set $argv (i32.const 30)
+               (struct.new $extern-ref (i32.const 22)
+                           (call $make-weak-map)))
+    ;; (datum->syntax #f '() #:source #f)
+    (table.set $argv (i32.const 31)
+               (struct.new $syntax (i32.const 23)
+                           (i31.new (i32.const 13)) ;; datum: ()
+                           (struct.new $pair (i32.const 4)
+                                       (i31.new (i32.const 13))
+                                       (i31.new (i32.const 13))) ;; wrap: empty-wrap: (())
+                           (i31.new (i32.const 1)) ;; module: #f
+                           (i31.new (i32.const 1)) ;; source: #f
+                           ))
+    ;; (current-input-port)
+    (table.set $argv (i32.const 32)
+               (call $%make-string-input-port (string.const "hey!!!")))
+    ;; Remaining data types: port
+    (return_call_ref $kvarargs (i32.const 33) (call $pop-return)))
 
   (func $return (param $nargs i32) (result i32)
     (local.get $nargs))

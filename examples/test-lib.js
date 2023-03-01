@@ -57,6 +57,11 @@ class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
 class Variable extends HeapObject { toString() { return "#<variable>"; } }
 class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
 class HashTable extends HeapObject { toString() { return "#<hash-table>"; } }
+class WeakTable extends HeapObject { toString() { return "#<weak-table>"; } }
+class Fluid extends HeapObject { toString() { return "#<fluid>"; } }
+class DynamicState extends HeapObject { toString() { return "#<dynamic-state>"; } }
+class Syntax extends HeapObject { toString() { return "#<syntax>"; } }
+class Port extends HeapObject { toString() { return "#<port>"; } }
 class Struct extends HeapObject { toString() { return "#<struct>"; } }
 
 class SCM {
@@ -71,6 +76,11 @@ class SCM {
         },
         // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
         bignum_get_i64(n) { return n; },
+
+        make_weak_map() { return new WeakMap; },
+        weak_map_get(map, k) { return map.get(k); },
+        weak_map_set(map, k, v) { return map.set(k, v); },
+        weak_map_delete(map, k) { return map.delete(k); }
     };
 
     constructor(mod) {
@@ -95,6 +105,11 @@ class SCM {
             if (js instanceof Unspecified) return api.scm_unspecified();
             if (js instanceof Char) return api.scm_from_char(js.codepoint);
             if (js instanceof HeapObject) return js.obj;
+            if (js instanceof Fraction)
+                return api.scm_from_fraction(this.#to_scm(js.num),
+                                             this.#to_scm(js.denom));
+            if (js instanceof Complex)
+                return api.scm_from_complex(js.real, js.imag);
             throw new Error(`unhandled; ${typeof(js)}`);
         } else {
             throw new Error(`unexpected; ${typeof(js)}`);
@@ -135,6 +150,11 @@ class SCM {
             variable: () => new Variable(scm),
             'atomic-box': () => new AtomicBox(scm),
             'hash-table': () => new HashTable(scm),
+            'weak-table': () => new WeakTable(scm),
+            fluid: () => new Fluid(scm),
+            'dynamic-state': () => new DynamicState(scm),
+            syntax: () => new Syntax(scm),
+            port: () => new Port(scm),
             struct: () => new Struct(scm),
         };
         let handler = handlers[descr];

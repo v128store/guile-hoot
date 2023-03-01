@@ -480,17 +480,16 @@ We can also simplify and assume UTF-8 encoding for textual I/O on ports.
 ```wat
 (type $port-type
   (struct
-    (field $name (ref eq))
+    (field $name (ref string))
     ;; in guile these are (port, bv, start, count) -> size_t
-    (field $read (ref $proc)) ;; could have a more refined type
-    (field $write (ref $proc))
-    (field $seek (ref $proc)) ;; (port, offset, whence) -> offset
-    (field $close (ref $proc)) ;; (port) -> ()
-    (field $get-natural-buffer-sizes (ref $proc)) ;; port -> (rdsz, wrsz)
-    (field $random-access? (ref $proc)) ;; port -> bool
-    (field $input-waiting (ref $proc)) ;; port -> bool
-    (field $truncate (ref $proc)) ;; (port, length) -> ()
-    (field $flags i32)
+    (field $read (ref null $proc)) ;; could have a more refined type
+    (field $write (ref null $proc))
+    (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
+    (field $close (ref null $proc)) ;; (port) -> ()
+    (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
+    (field $random-access? (ref null $proc)) ;; port -> bool
+    (field $input-waiting (ref null $proc)) ;; port -> bool
+    (field $truncate (ref null $proc)) ;; (port, length) -> ()
     ;; Guile also has GOOPS classes here.
     ))
 (type $port

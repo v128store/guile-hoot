@@ -20,24 +20,49 @@ class Nil { toString() { return "#nil"; } }
 class Null { toString() { return "()"; } }
 class Unspecified { toString() { return "#<unspecified>"; } }
 
+class Complex {
+    constructor(real, imag) {
+        this.real = real;
+        this.imag = imag;
+    }
+    toString() {
+        return `${this.real}+${this.imag}i`;
+    }
+}
+class Fraction {
+    constructor(num, denom) {
+        this.num = num;
+        this.denom = denom;
+    }
+    toString() {
+        return `${this.num}/${this.denom}`;
+    }
+}
+
 class HeapObject {
     constructor(obj) { this.obj = obj; }
 }
-class MutablePair extends HeapObject { toString() { return "#<mutable-pair>"; } }
 class Pair extends HeapObject { toString() { return "#<pair>"; } }
-class MutableBytevector extends HeapObject { toString() { return "#<mutable-bytevector>"; } }
+class MutablePair extends HeapObject { toString() { return "#<mutable-pair>"; } }
+class Vector extends HeapObject { toString() { return "#<vector>"; } }
+class MutableVector extends HeapObject { toString() { return "#<mutable-vector>"; } }
 class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
-class Struct extends HeapObject { toString() { return "#<struct>"; } }
+class MutableBytevector extends HeapObject { toString() { return "#<mutable-bytevector>"; } }
+class Bitvector extends HeapObject { toString() { return "#<bitvector>"; } }
+class MutableBitvector extends HeapObject { toString() { return "#<mutable-bitvector>"; } }
+class MutableString extends HeapObject { toString() { return "#<mutable-string>"; } }
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
 class Sym extends HeapObject { toString() { return "#<symbol>"; } }
 class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
 class Variable extends HeapObject { toString() { return "#<variable>"; } }
 class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
-class Vector extends HeapObject { toString() { return "#<vector>"; } }
 class HashTable extends HeapObject { toString() { return "#<hash-table>"; } }
+class Struct extends HeapObject { toString() { return "#<struct>"; } }
 
 class SCM {
     #rt = {
+        bignum_from_i64(n) { return n; },
+        bignum_from_u64(n) { return n < 0n ? 0xffff_ffff_ffff_ffffn + (n + 1n) : n; },
         bignum_is_i64(n) {
             return -0x8000_0000_0000_0000n <= n && n <= 0x7FFF_FFFF_FFFF_FFFFn;
         },
@@ -46,11 +71,6 @@ class SCM {
         },
         // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
         bignum_get_i64(n) { return n; },
-
-        // Probably should use internal hash codes instead :/
-        make_hash_table() { return new Map; },
-        hashq_ref(tab, k) { return tab.get(k); },
-        hashq_set(tab, k, v) { tab.set(k, v); }
     };
 
     constructor(mod) {
@@ -86,8 +106,6 @@ class SCM {
         let descr = api.describe(scm);
         let handlers = {
             fixnum: () => BigInt(api.fixnum_value(scm)),
-            bignum: () => api.bignum_value(scm),
-            flonum: () => api.flonum_value(scm),
             char: () => new Char(api.char_value(scm)),
             true: () => true,
             false: () => false,
@@ -95,20 +113,29 @@ class SCM {
             nil: () => new Nil,
             null: () => new Null,
             unspecified: () => new Unspecified,
+            flonum: () => api.flonum_value(scm),
+            bignum: () => api.bignum_value(scm),
+            complex: () => new Complex(api.complex_real(scm),
+                                       api.complex_imag(scm)),
+            fraction: () => new Fraction(this.#to_js(api.fraction_num(scm)),
+                                         this.#to_js(api.fraction_denom(scm))),
+            pair: () => new Pair(scm),
+            'mutable-pair': () => new MutablePair(scm),
+            vector: () => new Vector(scm),
+            'mutable-vector': () => new MutableVector(scm),
+            bytevector: () => new Bytevector(scm),
+            'mutable-bytevector': () => new MutableBytevector(scm),
+            bitvector: () => new Bitvector(scm),
+            'mutable-bitvector': () => new MutableBitvector(scm),
             string: () => api.string_value(scm),
-            pair: () => new MutablePair(scm),
-            'immutable-pair': () => new Pair(scm),
-            bytevector: () => new MutableBytevector(scm),
-            'immutable-bytevector': () => new Bytevector(scm),
-            struct: () => new Struct(scm),
+            'mutable-string': () => new MutableString(scm),
             procedure: () => new Procedure(scm),
-            string: () => api.string_value(scm),
             symbol: () => new Sym(scm),
             keyword: () => new Keyword(scm),
             variable: () => new Variable(scm),
             'atomic-box': () => new AtomicBox(scm),
-            'vector': () => new Vector(scm),
             'hash-table': () => new HashTable(scm),
+            struct: () => new Struct(scm),
         };
         let handler = handlers[descr];
         return handler ? handler() : scm;

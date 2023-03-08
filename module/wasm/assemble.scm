@@ -21,7 +21,7 @@
 ;;;
 ;;; Code:
 
-(define-module (wasm assembler)
+(define-module (wasm assemble)
   #:use-module (ice-9 binary-ports)
   #:use-module (ice-9 match)
   #:use-module (rnrs bytevectors)

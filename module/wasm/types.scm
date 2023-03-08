@@ -27,11 +27,15 @@
             <func-sig> make-func-sig
             <type-use> make-type-use
             <ref-type> make-ref-type
+            <array-type> make-array-type
+            <field> make-field
+            <struct-type> make-struct-type
+            <sub-type> make-sub-type
+            <rec-group> make-rec-group
             <limits> make-limits
             <table-type> make-table-type
             <mem-type> make-mem-type
             <global-type> make-global-type
-            <subtype> make-subtype
             <type> make-type
             <import> make-import
             <export> make-export
@@ -73,7 +77,11 @@
   (<table-type> limits elem-type)
   (<mem-type> limits)
   (<global-type> mutable? type)
-  (<subtype> id type)
+  (<array-type> mutable? type)
+  (<field> id mutable? type)
+  (<struct-type> fields)
+  (<sub-type> supers type)
+  (<rec-group> types)
   (<type> id val)
   (<import> mod name kind id type)
   (<export> name kind idx)

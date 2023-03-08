@@ -28,28 +28,8 @@
   #:use-module ((srfi srfi-1) #:select (filter-map))
   #:use-module (srfi srfi-4)
   #:use-module (srfi srfi-11)
-  #:export (<wasm> make-wasm
-            <param> make-param
-            <func-sig> make-func-sig
-            <type-use> make-type-use
-            <limits> make-limits
-            <table-type> make-table-type
-            <mem-type> make-mem-type
-            <global-type> make-global-type
-            <subtype> make-subtype
-            <type> make-type
-            <import> make-import
-            <export> make-export
-            <mem-arg> make-mem-arg
-            <elem> make-elem
-            <data> make-data
-            <local> make-local
-            <func> make-func
-            <table> make-table
-            <memory> make-memory
-            <global> make-global
-
-            parse-wat
+  #:use-module (wasm types)
+  #:export (parse-wat
             resolve-wasm
             assemble-wasm
             wat->wasm))
@@ -63,46 +43,6 @@
 ;; differences from standard: scheme comments / no block comments.
 ;; strings have guile string syntax; bytevectors also for data.  could
 ;; write standard-compliant parser instead (port from wassemble).
-
-(define-syntax define-simple-record-type
-  (lambda (x)
-    (define (id-append id . parts)
-      (datum->syntax id (apply symbol-append parts)))
-    (syntax-case x ()
-      ((_ <rt> field ...)
-       (let ((stem (let ((str (symbol->string (syntax->datum #'<rt>))))
-                     (string->symbol
-                      (substring str 1 (1- (string-length str)))))))
-         (with-syntax ((make-rt (id-append #'<rt> 'make- stem)))
-           #'(begin
-               (define <rt> (make-record-type '<rt> '(field ...)))
-               (define make-rt (record-constructor <rt>)))))))))
-(define-syntax-rule (define-simple-record-types (rt field ...) ...)
-  (begin
-    (define-simple-record-type rt field ...)
-    ...))
-(define-simple-record-types
-  (<wasm> types imports funcs tables memories globals exports
-          start elems datas)
-  (<param> id type)
-  (<func-sig> params results)
-  (<type-use> idx sig)
-  (<limits> min max)
-  (<table-type> limits elem-type)
-  (<mem-type> limits)
-  (<global-type> mutable? type)
-  (<subtype> id type)
-  (<type> id val)
-  (<import> mod name kind id type)
-  (<export> name kind idx)
-  (<mem-arg> offset align)
-  (<elem> id mode table type offset inits)
-  (<data> id mode mem offset init)
-  (<local> id type)
-  (<func> id type locals body)
-  (<table> id type)
-  (<memory> id type)
-  (<global> id type init))
 
 (define (parse-wat expr)
   (define (id? x)

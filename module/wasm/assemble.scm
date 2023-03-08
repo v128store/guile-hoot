@@ -104,7 +104,7 @@
     (make-wasm (reverse types) (reverse imports) (reverse funcs)
                (reverse tables) (reverse memories) (reverse globals)
                (reverse exports) start (reverse elems)
-               (reverse datas)))
+               (reverse datas) '()))
 
   (define (parse-ref-type x)
     (match x
@@ -465,7 +465,7 @@
 
   (match (partition-clauses expr)
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas)
+        elems datas custom)
      (let ((types (map parse-type-def types))
            (imports (map parse-import imports))
            (exports (map parse-export exports))
@@ -528,9 +528,10 @@
                                       segment)))))
                   (make-table id
                               (make-table-type (make-limits len len)
-                                               elemtype))))
+                                               elemtype)
+                              #f)))
                (_
-                (make-table id (parse-table-type x)))))))
+                (make-table id (parse-table-type x) #f))))))
        (define (visit-memory x)
          (let*-values (((id x) (parse-id x))
                        ((id) (or id (fresh-id!))))
@@ -571,7 +572,7 @@
              (memories (filter-map visit-memory memories))
              (globals (filter-map visit-global globals)))
          (make-wasm types imports funcs tables memories globals exports start
-                    elems datas))))))
+                    elems datas custom))))))
 
 (define (resolve-wasm mod)
   (define counts (make-hash-table))
@@ -597,7 +598,7 @@
       idx))
   (match mod
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas)
+        elems datas custom)
      (for-each (match-lambda (($ <type> id type)
                               (add-id! id 'type)))
                types)
@@ -607,7 +608,7 @@
      (for-each (match-lambda (($ <func> id type locals body)
                               (add-id! id 'func)))
                funcs)
-     (for-each (match-lambda (($ <table> id type)
+     (for-each (match-lambda (($ <table> id type init)
                               (add-id! id 'table)))
                tables)
      (for-each (match-lambda (($ <memory> id type)
@@ -759,9 +760,9 @@
 
      (define (visit-table table)
        (match table
-         (($ <table> id type)
+         (($ <table> id type init)
           ;; FIXME: resolve (ref $foo)
-          (make-table id type))))
+          (make-table id type (and init (resolve-instructions init '() '()))))))
 
      (define (visit-memory mem) mem)
 
@@ -791,7 +792,7 @@
            (globals (map visit-global globals)))
        (make-wasm (map visit-type types)
                   imports funcs tables memories globals exports start
-                  elems datas)))))
+                  elems datas custom)))))
   
 (define (assemble-wasm wasm)
   (define (put-uleb port val)
@@ -1004,8 +1005,8 @@
       ('i64.store8          (emit-mem #x3C))
       ('i64.store16         (emit-mem #x3D))
       ('i64.store32         (emit-mem #x3E))
-      ('memory.size         (emit #x3F))
-      ('memory.grow         (emit #x40))
+      ('memory.size         (emit-idx #x3F))
+      ('memory.grow         (emit-idx #x40))
       ('i32.const           (emit-const #x41 emit-s32))
       ('i64.const           (emit-const #x42 emit-s64))
       ('f32.const           (emit-const #x43 emit-f32))
@@ -1181,7 +1182,7 @@
 
   (define (emit-table port table)
     (match table
-      (($ <table> id type)
+      (($ <table> id type init)
        (emit-table-type port type))))
 
   (define (emit-memory port memory)
@@ -1226,7 +1227,7 @@
        (emit-u8 port #x03)
        (emit-u8 port #x00) ;; elemkind: funcref
        (emit-vec port idx emit-u32))
-      (($ <elem> id 'active 0 type offset (expr ...))
+      (($ <elem> id 'active 0 'funcref offset (expr ...))
        (emit-u8 port #x04)
        (emit-expr port offset)
        (emit-vec port expr emit-expr))
@@ -1298,7 +1299,7 @@
   
   (match wasm
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas)
+        elems datas custom)
      (call-with-output-bytevector
       (lambda (port)
         (put-bytevector port #vu8(#x00 #x61 #x73 #x6d)) ;; "\0asm"

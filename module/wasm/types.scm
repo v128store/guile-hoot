@@ -26,6 +26,7 @@
             <param> make-param
             <func-sig> make-func-sig
             <type-use> make-type-use
+            <ref-type> make-ref-type
             <limits> make-limits
             <table-type> make-table-type
             <mem-type> make-mem-type
@@ -41,7 +42,8 @@
             <func> make-func
             <table> make-table
             <memory> make-memory
-            <global> make-global))
+            <global> make-global
+            <custom> make-custom))
 
 (define-syntax define-simple-record-type
   (lambda (x)
@@ -62,10 +64,11 @@
     ...))
 (define-simple-record-types
   (<wasm> types imports funcs tables memories globals exports
-          start elems datas)
+          start elems datas custom)
   (<param> id type)
   (<func-sig> params results)
   (<type-use> idx sig)
+  (<ref-type> nullable? heap-type)
   (<limits> min max)
   (<table-type> limits elem-type)
   (<mem-type> limits)
@@ -79,6 +82,7 @@
   (<data> id mode mem offset init)
   (<local> id type)
   (<func> id type locals body)
-  (<table> id type)
+  (<table> id type init)
   (<memory> id type)
-  (<global> id type init))
+  (<global> id type init)
+  (<custom> name bytes))

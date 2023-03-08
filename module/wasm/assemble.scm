@@ -885,6 +885,9 @@
 
   (define (emit-block-type port bt)
     (match bt
+      (#f (emit-u8 port #x40))
+      ((? symbol?) (emit-val-type port bt))
+      ;; FIXME: Ref types here
       (($ <type-use> #f ($ <func-sig> () ())) (emit-u8 port #x40))
       (($ <type-use> #f ($ <func-sig> () (vt))) (emit-val-type port vt))
       (($ <type-use> idx) (emit-u32 port idx))))

@@ -42,6 +42,7 @@
             <mem-arg> make-mem-arg
             <elem> make-elem
             <data> make-data
+            <tag> make-tag
             <local> make-local
             <func> make-func
             <table> make-table
@@ -68,7 +69,7 @@
     ...))
 (define-simple-record-types
   (<wasm> types imports funcs tables memories globals exports
-          start elems datas custom)
+          start elems datas tags strings custom)
   (<param> id type)
   (<func-sig> params results)
   (<type-use> idx sig)
@@ -88,9 +89,11 @@
   (<mem-arg> offset align)
   (<elem> id mode table type offset inits)
   (<data> id mode mem offset init)
+  (<tag> id type)
   (<local> id type)
   (<func> id type locals body)
   (<table> id type init)
   (<memory> id type)
+  (<tag> id type)
   (<global> id type init)
   (<custom> name bytes))

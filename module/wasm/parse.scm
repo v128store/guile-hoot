@@ -971,6 +971,15 @@
   (define (parse-memories port)
     (parse-vec port parse-mem-type))
 
+  (define (parse-tag port)
+    (make-tag #f (parse-type-use port)))
+  (define (parse-tags port)
+    (parse-vec port parse-tag))
+
+  (define (parse-strings port)
+    (expect-u8 port #x00)
+    (parse-vec port get-name))
+
   (define (parse-globals port)
     (define (parse-global port)
       (let ((type (parse-global-type port)))
@@ -1101,6 +1110,8 @@
                    (func-decls 3 parse-func-decls '())
                    (tables 4 parse-tables '())
                    (memories 5 parse-memories '())
+                   (tags 13 parse-tags '())
+                   (strings 14 parse-strings '())
                    (globals 6 parse-globals '())
                    (exports 7 parse-exports '())
                    (start 8 parse-start #f)
@@ -1144,6 +1155,8 @@
                  start
                  elems
                  data
+                 tags
+                 strings
                  custom))))
 
 ;;; Local Variables:

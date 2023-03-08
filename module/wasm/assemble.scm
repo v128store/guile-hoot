@@ -82,6 +82,8 @@
     (define start #f)
     (define elems '())
     (define datas '())
+    (define tags '())
+    (define strings '())
     (define (collect-raw x)
       (match x
         (('type . x) (set! types (cons x types)))
@@ -96,6 +98,8 @@
                         (set! start x)))
         (('elem . x) (set! elems (cons x elems)))
         (('data . x) (set! datas (cons x datas)))
+        (('tag . x) (set! tags (cons x tags)))
+        (('strings . x) (set! strings (append strings x)))
         (_ (error "unexpected form in module" x))))
     (match x
       (('module . clauses) (for-each collect-raw clauses))
@@ -104,7 +108,7 @@
     (make-wasm (reverse types) (reverse imports) (reverse funcs)
                (reverse tables) (reverse memories) (reverse globals)
                (reverse exports) start (reverse elems)
-               (reverse datas) '()))
+               (reverse datas) (reverse tags) strings '()))
 
   (define (parse-ref-type x)
     (match x
@@ -190,7 +194,7 @@
         (('struct . sig) (parse-struct-type sig))))
     (match x
       (('sub (? id-or-idx? id) sub)
-       (make-subtype id (parse-prim-type sub)))
+       (make-sub-type (list id) (parse-prim-type sub)))
       (_ (parse-prim-type x))))
   (define (parse-type-def x)
     (match x
@@ -457,6 +461,12 @@
         (init
          ;; Passive data segment.
          (make-data id 'passive #f #f (bytevector-concatenate init))))))
+  (define (parse-tag tag)
+    (let*-values (((id tag) (parse-id tag))
+                  ((type tag) (parse-type-use tag)))
+      (match tag
+        (() (make-tag id type))
+        (_ (error "bad tag" tag)))))
   (define (parse-start start)
     (let-values (((idx x) (parse-id-or-idx start)))
       (match x
@@ -465,12 +475,13 @@
 
   (match (partition-clauses expr)
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas custom)
+        elems datas tags strings custom)
      (let ((types (map parse-type-def types))
            (imports (map parse-import imports))
            (exports (map parse-export exports))
            (elems (map parse-elem elems))
            (datas (map parse-data datas))
+           (tags (map parse-tag tags))
            (start (and start (parse-start start))))
        (define-syntax-rule (push! id val)
          (set! id (append! id (list val))))
@@ -572,7 +583,7 @@
              (memories (filter-map visit-memory memories))
              (globals (filter-map visit-global globals)))
          (make-wasm types imports funcs tables memories globals exports start
-                    elems datas custom))))))
+                    elems datas tags strings custom))))))
 
 (define (resolve-wasm mod)
   (define counts (make-hash-table))
@@ -583,6 +594,7 @@
   (define global-ids (make-hash-table))
   (define elem-ids (make-hash-table))
   (define data-ids (make-hash-table))
+  (define tag-ids (make-hash-table))
   (define (add-id! id kind)
     (let ((idx (hashq-ref counts kind 0)))
       (hashq-set! counts kind (1+ idx))
@@ -594,11 +606,20 @@
           ('memory (hashq-set! memory-ids id idx))
           ('global (hashq-set! global-ids id idx))
           ('elem (hashq-set! elem-ids id idx))
-          ('data (hashq-set! data-ids id idx))))
+          ('data (hashq-set! data-ids id idx))
+          ('tag (hashq-set! tag-ids id idx))))
       idx))
+  (define interned-strings (make-hash-table))
+  (define interned-string-count 0)
+  (define (intern-string string)
+    (or (hash-ref interned-strings string)
+        (let ((idx interned-string-count))
+          (hash-set! interned-strings string idx)
+          (set! interned-string-count (1+ idx))
+          idx)))
   (match mod
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas custom)
+        elems datas tags strings custom)
      (for-each (match-lambda (($ <type> id type)
                               (add-id! id 'type)))
                types)
@@ -623,6 +644,10 @@
      (for-each (match-lambda (($ <data> id mode mem offset init)
                               (add-id! id 'data)))
                datas)
+     (for-each (match-lambda (($ <tag> id type)
+                              (add-id! id 'tag)))
+               tags)
+     (for-each intern-string strings)
 
      (define (resolver ids kind)
        (lambda (id)
@@ -637,6 +662,7 @@
      (define resolve-global (resolver global-ids "global"))
      (define resolve-elem (resolver elem-ids "elem"))
      (define resolve-data (resolver data-ids "data"))
+     (define resolve-tag (resolver tag-ids "tag"))
 
      (define (resolve-type-use x)
        (define (intern-func-sig/idx! params results idx)
@@ -712,6 +738,8 @@
           `(,inst ,(resolve-local local)))
          (((and inst (or 'global.get 'global.set)) global)
           `(,inst ,(resolve-global)))
+         (('string.const (? string? str))
+          `(string.const ,(intern-string str)))
          ;; fixme: tables, bulk memory, reftypes...
          (inst inst))
         insts))
@@ -776,6 +804,11 @@
        ;; for now no reftypes
        type)
 
+     (define (visit-tag tag)
+       (match tag
+         (($ <tag> id type)
+          (make-tag id (resolve-type-use type)))))
+
      ;; FIXME: reftypes means we have to resolve types in more places
 
      ;; Resolving any inline (param ...) (result ...) type definition
@@ -789,10 +822,15 @@
            (funcs (map visit-func funcs))
            (tables (map visit-table tables))
            (memories (map visit-memory memories))
-           (globals (map visit-global globals)))
+           (globals (map visit-global globals))
+           (tags (map visit-tag tags))
+           (strings (map car
+                         (sort (hash-map->list cons interned-strings)
+                               (match-lambda*
+                                (((s1 . idx1) (s2 . idx2)) (< idx1 idx2)))))))
        (make-wasm (map visit-type types)
                   imports funcs tables memories globals exports start
-                  elems datas custom)))))
+                  elems datas tags strings custom)))))
   
 (define (assemble-wasm wasm)
   (define (put-uleb port val)
@@ -1286,6 +1324,11 @@
        (emit-expr port offset)
        (emit-vec/u8 port init))))
 
+  (define (emit-tag port tag)
+    (match tag
+      (($ <tag> id ($ <type-use> idx _))
+       (emit-u32 port idx))))
+
   (define (emit-section port code bytes)
     (emit-u8 port code)
     (emit-vec/u8 port bytes))
@@ -1299,7 +1342,7 @@
   
   (match wasm
     (($ <wasm> types imports funcs tables memories globals exports start
-        elems datas custom)
+        elems datas tags strings custom)
      (call-with-output-bytevector
       (lambda (port)
         (put-bytevector port #vu8(#x00 #x61 #x73 #x6d)) ;; "\0asm"
@@ -1309,6 +1352,12 @@
         (emit-vec-section port 3 funcs emit-func-decl)
         (emit-vec-section port 4 tables emit-table)
         (emit-vec-section port 5 memories emit-memory)
+        (emit-vec-section port 13 tags emit-tag)
+        (unless (null? strings)
+          (emit-section port 14 (call-with-output-bytevector
+                                 (lambda (port)
+                                   (emit-u8 port #x00)
+                                   (emit-vec port strings emit-name)))))
         (emit-vec-section port 6 globals emit-global)
         (emit-vec-section port 7 exports emit-export)
         (when start
@@ -1316,6 +1365,10 @@
                                 (lambda (port)
                                   (emit-u32 port start)))))
         (emit-vec-section port 9 elems emit-export)
+        (unless (null? datas)
+          (emit-section port 12 (call-with-output-bytevector
+                                 (lambda (port)
+                                   (emit-u32 port (length datas))))))
         (emit-vec-section port 10 funcs emit-func-def)
         (emit-vec-section port 11 datas emit-data))))))
 

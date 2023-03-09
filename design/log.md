@@ -5,7 +5,7 @@ what the log might contain soon
 
 ## The past
 
-### 2022-02-15
+### 2023-02-15
 
 Project kickoff.  Beginnings of the [compilation strategy](./ABI.md)
 document, and the first WebAssembly files built by hand, to make sure
@@ -29,7 +29,7 @@ shape.  So in these first couple weeks there was significant confusion
 on whether structural checks would be sufficient, or whether you would
 need a tag word.
 
-### 2022-02-27
+### 2023-02-27
 
 First, some work on making the
 [basic-types](../examples/basic-types.wat) example represent all
@@ -60,7 +60,7 @@ Some additional run-time work in the basic-types example to show how to
 implement a symbol table, a keyword table, string hashing, struct
 vtables, and so on.
 
-### 2022-03-03
+### 2023-03-03
 
 Now that the hand-written basic-types example supports all types that
 Guile does, we start on making WebAssembly from Scheme.  First, a port

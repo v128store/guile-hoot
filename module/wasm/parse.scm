@@ -518,6 +518,14 @@
              (#x4a (k `(br_on_cast #t ,(parse-heap-type port))))
              (#x43 (k `(br_on_cast_fail #f ,(parse-heap-type port))))
              (#x4b (k `(br_on_cast_fail #t ,(parse-heap-type port))))
+
+             ;; FIXME: This opcode, ref.is_i31, is deprecated; we only
+             ;; parse it because binaryen still emits it for (ref.test
+             ;; i32).  Parse it to the new opcode.
+             (#x52 (k `(ref.test #f i31)))
+             ;; Same with this one: ref.as_i31.
+             (#x5a (k `(ref.cast #f i31)))
+
              (#x70 (k `(extern.internalize)))
              (#x71 (k `(extern.externalize)))
 

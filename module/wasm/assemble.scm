@@ -1375,12 +1375,41 @@
     (emit-end port))
 
   (define (emit-type-def port def)
+    (define (emit-field-type port mutable? st)
+      (match st
+        ('i8 (emit-u8 port #x7a))
+        ('i16 (emit-u8 port #x79))
+        (_ (emit-val-type port st)))
+      (emit-u8 port (if mutable? 1 0)))
+    (define (emit-field field)
+      (match field
+        (($ <field> id mutable? type)
+         (emit-field-type port mutable? type))))
+    (define (emit-base-type-def port def)
+      (match def
+        (($ <func-sig> (($ <param> _ param-type) ...) (result-type ...))
+         (emit-u8 port #x60)
+         (emit-result-type port param-type)
+         (emit-result-type port result-type))
+        (($ <struct-type> fields)
+         (emit-u8 port #x5f)
+         (emit-vec port fields emit-field))
+        (($ <array-type> mutable? type)
+         (emit-u8 port #x5e)
+         (emit-field-type port mutable? type))))
+    (define (emit-sub-type-def port def)
+      (match def
+        (($ <sub-type> supers def)
+         (emit-u8 port #x50)
+         (emit-vec port supers emit-u32)
+         (emit-base-type-def port def))
+        (_ (emit-base-type-def port def))))
     (match def
-      (($ <type> _ ($ <func-sig>
-                      (($ <param> _ param-type) ...) (result-type ...)))
-       (emit-u8 port #x60)
-       (emit-result-type port param-type)
-       (emit-result-type port result-type))))
+      (($ <rec-group> (($ <type> _ def) ...))
+       (emit-u8 port #x4f)
+       (emit-vec port def emit-sub-type-def))
+      (($ <type> id def)
+       (emit-sub-type-def port def))))
 
   (define (emit-type-use port type)
     (match type

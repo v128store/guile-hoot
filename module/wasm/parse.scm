@@ -1052,7 +1052,7 @@
        (lambda (port)
          (define (parse-local port)
            (let ((n (get-uleb port)))
-             (make-list n (parse-val-type port))))
+             (make-list n (make-local #f (parse-val-type port)))))
          (let* ((locals (apply append (parse-vec port parse-local)))
                 (body (parse-expr port)))
            (unless (eof-object? (lookahead-u8 port))

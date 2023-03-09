@@ -160,8 +160,11 @@
          (format port "  Function #~a:\n" idx)
          (when id (format port "    Id: ~a\n" id))
          (format port "    Type: ~a\n" (type-use-repr type))
-         (unless (null? locals)
-           (format port "    Locals: ~a\n" (map val-type-repr locals)))
+         (match locals
+           (() #t)
+           ((($ <local> id vt) ...)
+            (format port "    Locals:~:{ ~@[~a:~]~a~}\n"
+                    (map list id (map val-type-repr vt)))))
          (format port "    Body:\n")
          (pretty-print body #:port port #:per-line-prefix "      ")))
        funcs

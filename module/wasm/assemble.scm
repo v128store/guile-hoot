@@ -870,14 +870,52 @@
     (emit-u32 port (bytevector-length bv))
     (put-bytevector port bv))
   
+  (define (emit-heap-type port ht)
+    (match ht
+      ((and (? exact-integer?) (not (? negative?))) (put-sleb port ht))
+      ('func (emit-u8 port #x70))
+      ('extern (emit-u8 port #x6F))
+      ('any (emit-u8 port #x6E))
+      ('eq (emit-u8 port #x6D))
+      ('i31 (emit-u8 port #x6A))
+      ('noextern (emit-u8 port #x69))
+      ('nofunc (emit-u8 port #x68))
+      ('struct (emit-u8 port #x67))
+      ('array (emit-u8 port #x66))
+      ('none (emit-u8 port #x65))
+      ('string (emit-u8 port #x64))
+      ('stringview_wtf8 (emit-u8 port #x63))
+      ('stringview_wtf16 (emit-u8 port #x62))
+      ('stringview_iter (emit-u8 port #x61))
+
+      (_ (error "unexpected heap type" ht))))
+
   (define (emit-val-type port vt)
     (match vt
       ('i32 (emit-u8 port #x7F))
       ('i64 (emit-u8 port #x7E))
       ('f32 (emit-u8 port #x7D))
       ('f64 (emit-u8 port #x7C))
+      ('v128 (emit-u8 port #x7B))
       ('funcref (emit-u8 port #x70))
       ('externref (emit-u8 port #x6F))
+      ('anyref (emit-u8 port #x6E))
+      ('eqref (emit-u8 port #x6D))
+      ('i31ref (emit-u8 port #x6A))
+      ('nullexternref (emit-u8 port #x69))
+      ('nullfuncref (emit-u8 port #x68))
+      ('structref (emit-u8 port #x67))
+      ('arrayref (emit-u8 port #x66))
+      ('nullref (emit-u8 port #x65))
+      ('stringref (emit-u8 port #x64))
+      ('stringview_wtf8ref (emit-u8 port #x63))
+      ('stringview_wtf16ref (emit-u8 port #x62))
+      ('stringview_iterref (emit-u8 port #x61))
+
+      (($ <ref-type> nullable? ht)
+       (emit-u8 port (if nullable? #x6C #x6B))
+       (emit-heap-type port ht))
+
       (_ (error "unexpected valtype" vt))))
 
   (define (emit-result-type port rt)
@@ -886,8 +924,7 @@
   (define (emit-block-type port bt)
     (match bt
       (#f (emit-u8 port #x40))
-      ((? symbol?) (emit-val-type port bt))
-      ;; FIXME: Ref types here
+      ((or (? symbol?) ($ <ref-type>)) (emit-val-type port bt))
       (($ <type-use> #f ($ <func-sig> () ())) (emit-u8 port #x40))
       (($ <type-use> #f ($ <func-sig> () (vt))) (emit-val-type port vt))
       (($ <type-use> idx) (emit-u32 port idx))))
@@ -904,8 +941,9 @@
 
   (define (emit-ref-type port rt)
     (match rt
-      ((or 'externref 'funcref) (emit-val-type port rt))
-      (_ (error "unexpected reftype" rt))))
+      ((or 'i32 'i64 'f32 'f64 'i128)
+       (error "unexpected reftype" rt))
+      (_ (emit-val-type port rt))))
 
   (define (emit-elem-type port et)
     (emit-ref-type port et))

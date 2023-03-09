@@ -1099,6 +1099,27 @@
          (emit-gc-op (if nullable? nullable-code code))
          (emit-heap-type port ht))
         (_ (bad-instruction))))
+    (define (emit-misc-op code)
+      (emit-u8 port #xfc)
+      (put-uleb port code))
+    (define (emit-misc code)
+      (match args
+        (()
+         (emit-misc-op code))
+        (_ (bad-instruction))))
+    (define (emit-misc-idx code)
+      (match args
+        ((idx)
+         (emit-misc-op code)
+         (emit-u32 port idx))
+        (_ (bad-instruction))))
+    (define (emit-misc-idx-idx code)
+      (match args
+        ((idx0 idx1)
+         (emit-misc-op code)
+         (emit-u32 port idx0)
+         (emit-u32 port idx1))
+        (_ (bad-instruction))))
 
     (match op
       ('unreachable         (emit #x00))
@@ -1364,6 +1385,26 @@
       ('string.new_wtf8_array              (emit-gc #xb5))
       ('string.encode_lossy_utf8_array     (emit-gc #xb6))
       ('string.encode_wtf8_array           (emit-gc #xb7))
+
+      ;; Misc opcodes.
+      ('i32.trunc_sat_f32_s                (emit-misc #x00))
+      ('i32.trunc_sat_f32_u                (emit-misc #x01))
+      ('i32.trunc_sat_f64_s                (emit-misc #x02))
+      ('i32.trunc_sat_f64_u                (emit-misc #x03))
+      ('i64.trunc_sat_f32_s                (emit-misc #x04))
+      ('i64.trunc_sat_f32_u                (emit-misc #x05))
+      ('i64.trunc_sat_f64_s                (emit-misc #x06))
+      ('i64.trunc_sat_f64_u                (emit-misc #x07))
+      ('memory.init                        (emit-misc-idx-idx #x08))
+      ('data.drop                          (emit-misc-idx #x09))
+      ('memory.copy                        (emit-misc-idx-idx #x0a))
+      ('memory.fill                        (emit-misc-idx #x0b))
+      ('table.init                         (emit-misc-idx-idx #x0c))
+      ('elem.drop                          (emit-misc-idx #x0d))
+      ('table.copy                         (emit-misc-idx-idx #x0e))
+      ('table.grow                         (emit-misc-idx #x0f))
+      ('table.size                         (emit-misc-idx #x10))
+      ('table.fill                         (emit-misc-idx #x11))
 
       (_ (bad-instruction))))
   

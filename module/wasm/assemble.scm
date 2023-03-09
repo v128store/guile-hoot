@@ -982,7 +982,7 @@
         (_ (bad-instruction))))
     (define (emit-block code)
       (match args
-        ((bt insts)
+        ((label bt insts)
          (emit-u8 port code)
          (emit-block-type port bt)
          (emit-instructions port insts)
@@ -991,7 +991,7 @@
     (define (emit-if code)
       (define else-code #x05)
       (match args
-        ((bt consequent alternate)
+        ((label bt consequent alternate)
          (emit-u8 port code)
          (emit-block-type port bt)
          (emit-instructions port consequent)
@@ -1148,6 +1148,8 @@
       ('local.tee           (emit-idx #x22))
       ('global.get          (emit-idx #x23))
       ('global.set          (emit-idx #x24))
+      ('table.get           (emit-idx #x25))
+      ('table.set           (emit-idx #x26))
       ('i32.load            (emit-mem #x28))
       ('i64.load            (emit-mem #x29))
       ('f32.load            (emit-mem #x2A))
@@ -1422,7 +1424,7 @@
         ('i16 (emit-u8 port #x79))
         (_ (emit-val-type port st)))
       (emit-u8 port (if mutable? 1 0)))
-    (define (emit-field field)
+    (define (emit-field port field)
       (match field
         (($ <field> id mutable? type)
          (emit-field-type port mutable? type))))
@@ -1551,13 +1553,13 @@
     (define (emit-compressed-locals port locals)
       (define compressed
         (let compress ((locals locals))
-         (match locals
-           (() '())
-           ((($ <local> id type) . locals)
-            (match (compress locals)
-              (((count . (? (lambda (vt) (equal? vt type)))) . compressed)
-               (acons (1+ count) type locals))
-              (compressed (acons 1 type compressed)))))))
+          (match locals
+            (() '())
+            ((($ <local> id type) . locals)
+             (match (compress locals)
+               (((count . (? (lambda (vt) (equal? vt type)))) . compressed)
+                (acons (1+ count) type compressed))
+               (compressed (acons 1 type compressed)))))))
       (emit-vec port compressed
                 (lambda (port pair)
                   (match pair
@@ -1627,7 +1629,7 @@
           (emit-section port 8 (call-with-output-bytevector
                                 (lambda (port)
                                   (emit-u32 port start)))))
-        (emit-vec-section port 9 elems emit-export)
+        (emit-vec-section port 9 elems emit-element)
         (unless (null? datas)
           (emit-section port 12 (call-with-output-bytevector
                                  (lambda (port)

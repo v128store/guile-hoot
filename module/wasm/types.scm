@@ -94,6 +94,5 @@
   (<func> id type locals body)
   (<table> id type init)
   (<memory> id type)
-  (<tag> id type)
   (<global> id type init)
   (<custom> name bytes))

@@ -40,4 +40,24 @@
   (func (param) (result i32)
         (i32.const 42))))
 
+(define basic-types.wasm
+  (call-with-input-file "./basic-types.wasm" get-bytevector-all))
+(define basic-types/1
+  (call-with-input-bytevector basic-types.wasm parse-wasm))
+(define basic-types.wasm/2
+  (assemble-wasm basic-types/1))
+(define basic-types/2
+  (call-with-input-bytevector basic-types.wasm/2 parse-wasm))
+(define basic-types.wasm/3
+  (assemble-wasm basic-types/2))
+
+;; For wasm files like basic-types.wasm that are produced by external
+;; tools, we don't aim for byte-for-byte parsing and re-serialization,
+;; notably because binaryen emits deprecated GC opcodes which we rewrite
+;; to the updated ones.  But if we parse a file that we generate and
+;; then re-serialize it, they should be the same.
+(test-equal "basic types reassembly"
+            basic-types.wasm/2 basic-types.wasm/3)
+
 (test-end "test-wasm-assembler")
+

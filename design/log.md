@@ -104,6 +104,11 @@ Some good starter tasks for new contributors:
    no declarative element segment in basic-types.wat, but the wasm file
    is generated with one.
 
+ - The [WebAssembly tool
+   conventions](https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md)
+   define a way to serialize names to object files.  Probably we should
+   do this, for debuggability.
+
 The broader picture is that we have two sides of a bridge and now just
 have to build the bridge itself.  On one side, we have
 [tailified](https://lists.gnu.org/archive/html/guile-devel/2021-06/msg00005.html)

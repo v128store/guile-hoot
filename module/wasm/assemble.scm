@@ -44,6 +44,36 @@
 ;; strings have guile string syntax; bytevectors also for data.  could
 ;; write standard-compliant parser instead (port from wassemble).
 
+(define (natural-alignment inst)
+  (case inst
+    ((i32.load8_s
+      i32.load8_u
+      i64.load8_s
+      i64.load8_u
+      i32.store8
+      i64.store8)
+     8)
+    ((i32.load16_s
+      i32.load16_u
+      i64.load16_s
+      i64.load16_u
+      i32.store16
+      i64.store16)
+     16)
+    ((i32.load
+      f32.load
+      i64.load32_s
+      i64.load32_u
+      i32.store
+      f32.store
+      i64.store32)
+     32)
+    ((i64.load
+      f64.load
+      i64.store
+      f64.store)
+     64)))
+
 (define (parse-wat expr)
   (define (id? x)
     (and (symbol? x) (eqv? (string-ref (symbol->string x) 0) #\$)))
@@ -218,10 +248,11 @@
     (match x
       (((? string? name) ((and kind (or 'func 'table 'memory 'global)) idx))
        (make-export name kind idx))))
-  (define (parse-mem-arg x)
+  (define (parse-mem-arg x inst)
     (define (symbol-with-prefix prefix)
       (lambda (x)
-        (string-prefix? prefix (symbol->string x))))
+        (and (symbol? x)
+         (string-prefix? prefix (symbol->string x)))))
     (define (symbol-suffix x prefix)
       (substring (symbol->string x) (string-length prefix)))
     (define (parse-arg prefix x)
@@ -229,12 +260,14 @@
         (((? (symbol-with-prefix prefix) arg) . x)
          (values
           (or (string->number (symbol-suffix arg prefix))
-              (error "bad mem arg" arg)
-              x)))
+              (error "bad mem arg" arg))
+          x))
         (_ (values #f x))))
     (let*-values (((offset x) (parse-arg "offset=" x))
                   ((align x) (parse-arg "align=" x)))
-      (values (make-mem-arg offset align) x)))
+      (values (make-mem-arg (or offset 0)
+                            (or align (natural-alignment inst)))
+              x)))
   (define (unfold-instruction inst)
     (define (unfold-type-use type)
       (match type
@@ -310,7 +343,7 @@
                      'i64.store16
                      'i64.store32'))
         . args)
-       (let-values (((mem-arg args) (parse-mem-arg args)))
+       (let-values (((mem-arg args) (parse-mem-arg args tag)))
          `(,@args ,tag ,@(unfold-mem-arg mem-arg))))
       (((and tag (or 'i32.const 'i64.const 'f32.const 'f64.const)) val . insts)
        `(,@insts ,tag ,val))
@@ -387,7 +420,7 @@
                 'f32.store 'f64.store
                 'i32.store8 'i32.store16
                 'i64.store8 'i64.store16 'i64.store32)
-            (let-values (((mem-arg in) (parse-mem-arg in)))
+            (let-values (((mem-arg in) (parse-mem-arg in inst)))
               (lp/inst in `(,inst ,mem-arg))))
            ('i32.const
             (match in

@@ -778,7 +778,7 @@
          (((and inst (or 'local.get 'local.set 'local.tee)) local)
           `(,inst ,(resolve-local local)))
          (((and inst (or 'global.get 'global.set)) global)
-          `(,inst ,(resolve-global)))
+          `(,inst ,(resolve-global global)))
          (('string.const (? string? str))
           `(string.const ,(intern-string str)))
          ;; fixme: tables, bulk memory, reftypes...

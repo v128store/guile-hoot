@@ -25,7 +25,7 @@
   #:use-module (ice-9 binary-ports)
   #:use-module (ice-9 match)
   #:use-module (rnrs bytevectors)
-  #:use-module ((srfi srfi-1) #:select (filter-map))
+  #:use-module ((srfi srfi-1) #:select (filter-map list-index))
   #:use-module (srfi srfi-4)
   #:use-module (srfi srfi-11)
   #:use-module (wasm types)
@@ -740,14 +740,22 @@
          (match label
            ((? exact-integer?) label)
            (_
-            (or (list-index labels label)
+            (or (list-index (lambda (x) (eqv? x label)) labels)
                 (error "unbound label" label labels)))))
        (define (resolve-local id)
          (match id
            ((? exact-integer?) id)
            (_
-            (or (list-index locals id)
-                (error "unbound local" id locals)))))
+            (let ((local (list-index
+                          (lambda (local)
+                            (match local
+                              (($ <local> id* _) (eqv? id id*))
+                              (($ <param> id* _) (eqv? id id*))
+                              (_ #f)))
+                          locals)))
+              (unless local
+                (error "unbound local" id locals))
+              local))))
        (map
         (match-lambda
          (((and inst (or 'block 'loop)) label type body)
@@ -816,8 +824,14 @@
      (define (visit-func func)
        (match func
          (($ <func> id type locals body)
-          (make-func id (resolve-type-use type) locals
-                     (resolve-instructions body locals '())))))
+          (match type
+            (($ <type-use> _ ($ <func-sig> params _))
+             (make-func id
+                        (resolve-type-use type)
+                        locals
+                        (resolve-instructions body
+                                              (append params locals)
+                                              '())))))))
 
      (define (visit-table table)
        (match table

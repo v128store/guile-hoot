@@ -297,7 +297,7 @@
          (define (finish test consequent alternate)
            `(,@test
              if ,@(if label `(,label) '()) ,@(unfold-type-use type)
-             then ,@consequent
+             ,@consequent
              else ,@alternate
              end))
          (match body
@@ -306,7 +306,7 @@
            ((test ... ('then consequent ...) ('else alternate ...))
             (finish test consequent alternate)))))
       (((and tag (or 'br 'br_if 'call 'local.get 'local.set 'local.tee
-                     'global.get 'global.tee))
+                     'global.get 'global.set))
         idx
         . args)
        `(,@args ,tag ,idx))
@@ -341,7 +341,7 @@
                      'i32.store16
                      'i64.store8
                      'i64.store16
-                     'i64.store32'))
+                     'i64.store32))
         . args)
        (let-values (((mem-arg args) (parse-mem-arg args tag)))
          `(,@args ,tag ,@(unfold-mem-arg mem-arg))))
@@ -393,7 +393,7 @@
               (error "unexpected 'end'"))
             (values (reverse out) in))
            ((or 'br 'br_if 'call 'local.get 'local.set 'local.tee 'global.get
-                'global.tee)
+                'global.set)
             (let-values (((idx in) (parse-id-or-idx in)))
               (unless idx (error "missing idx" inst in))
               (lp/inst in `(,inst ,idx))))
@@ -1518,7 +1518,7 @@
          ('table
           (emit-u8 port #x01)
           (emit-table-type port type))
-         ('mem
+         ('memory
           (emit-u8 port #x02)
           (emit-mem-type port type))
          ('global

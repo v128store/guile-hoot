@@ -348,7 +348,7 @@
       (((and tag (or 'i32.const 'i64.const 'f32.const 'f64.const)) val . insts)
        `(,@insts ,tag ,val))
       ((tag . args)
-       `(,@args (,tag)))))
+       `(,@args ,tag))))
   (define (parse-block x block-kind)
     (let lp ((in x) (out '()))
       (define (lp/inst in parsed)
@@ -1021,7 +1021,9 @@
     (define (bad-instruction) (error "bad instruction" inst))
                   
     (define-values (op args)
-      (match inst ((op args ...) (values op args))))
+      (match inst
+        ((op args ...) (values op args))
+        (op (values op '()))))
 
     (define (emit code)
       (match args

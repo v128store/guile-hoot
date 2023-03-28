@@ -86,6 +86,48 @@ Finally, after getting the parser working and the assembler back up to
 speed on (almost) all the features that the parser can parse, tied
 things together with some [tests](./test/test-wasm-assembler.scm).
 
+### 2023-03-28
+
+Gave a talk about our efforts at [BOB
+2023](https://wingolog.org/archives/2023/03/20/a-world-to-win-webassembly-for-the-rest-of-us).
+Seems to have been well-received.
+
+On the implementation side, started looking at the
+[tailify](http://git.savannah.gnu.org/cgit/guile.git/tree/module/language/cps/tailify.scm?h=wip-tailify)
+pass.  Right now if you [compile](./compile.scm) the trivial Scheme
+program `42`, you get this:
+
+```scheme
+L0:
+  v0 := self
+  L1(...)
+L1:
+  receive()
+  v1 := const 42                              ; val 
+  v2 := restore1[ptr]()                       ; ret 
+  tail calli v2(v1)
+```
+
+Here we see two blocks.  (Really it's just one, but it renders as two
+because the `$kentry` has two successors: the `$kclause` and the
+`$ktail`).  `L0` is the entry, which binds `self` as the closure and
+then continues to `L1` which parses the args, expecting 0 additional
+args.  Then we define the return value (`42`), then pop a `ptr` from the
+stack and call it indirectly (`tail calli`).
+
+The thing is, `ptr` is a really lazy way to describe the type of the
+continuation.  Can we assume that it's a return continuation or are
+there other kinds of pointers that we might see?  Turns out, yes, for
+now at least we can assume it's a return continuation; the other uses of
+`ptr`-typed locals in native Guile are for interior pointers for strings
+and pointers to the struct-unboxed-field bitvector, neither of which we
+will have for the wasm target.
+
+But, we still have some work to do on the compiler front-end, to avoid
+eager "instruction explosion" of CPS primitives in `(language tree-il
+compile-cps)` to primitives that correspond to the native Guile VM
+rather than what we will use in wasm.
+
 ## The near future
 
 Some good starter tasks for new contributors:

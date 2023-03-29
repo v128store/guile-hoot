@@ -76,9 +76,10 @@ or so.)
 
 Additionally, Guile functions can accept a variable number of arguments,
 whereas WebAssembly functions have a fixed type.  In the general case we
-pass arguments via a global argument-passing array, and only pass the
-number of arguments as a function parameter.  Since all calls are tail
-calls, this convention applies to returning values as well.
+may need to pass arguments via a global argument-passing array.  The
+first few arguments can be passed as parameters though.  The number of
+arguments is also passed as a function parameter.  Since all calls are
+tail calls, this convention applies to returning values as well.
 
 ### Dynamic stack
 
@@ -146,12 +147,21 @@ Some common oddball tests:
 ### Continuation types
 
 The functions residualized by the tailify transform take a variable
-number of arguments from a global array.  The number of values to take
-is passed to the function as an argument.  Since we tailify everything,
-all calls are tail calls, so there are no return values.
+number of arguments.  The number of values to take is passed to the
+function as an argument.  The first three arguments are passed in
+parameters; any addition arguments get passed through a global array.
+If a function has fewer than three parameters, you can pass any value as
+the argument, for example `(i31.new (i32.const 0))`.
+
+Since we tailify everything, all calls are tail calls, so there are no
+return values.
 
 ```wat
-(type $kvarargs (func (param $nargs i32) (result)))
+(type $kvarargs (func (param $nargs i32)
+                      (param $arg0 (ref eq))
+                      (param $arg1 (ref eq))
+                      (param $arg2 (ref eq))
+                      (result)))
 ```
 
 ### Heap types

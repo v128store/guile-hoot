@@ -85,18 +85,36 @@
          (define (arg-ref idx)
            (if (< idx 3)
                `(local.get ,(string->symbol (format #f "$arg~a" idx)))
-               `(array.get $argv (global.get $argv) (i32.const ,(- idx 4)))))
+               `(array.get $argv (global.get $argv) (i32.const ,(- idx 3)))))
          (define (func-label k) (string->symbol (format #f "$f~a" k)))
          (define (compile-tail exp)
+           (define (pass-abi-arguments args)
+             (cons
+              `(i32.const ,(length args))
+              (let lp ((args args) (idx 0))
+                (match args
+                  (()
+                   (if (< idx 3)
+                       (cons '(i31.new (i32.const 0))
+                             (lp args (1+ idx)))
+                       '()))
+                  ((arg . args)
+                   (if (< idx 3)
+                       (cons (local.get arg)
+                             (lp args (1+ idx)))
+                       (cons `(array.set $argv (global.get $argv)
+                                         (i32.const ,(- idx 3))
+                                         ,(local.get arg))
+                             (lp args (1+ idx)))))))))
            (match exp
              (($ $call proc args)
-              `(return_call_ref ,@(map local.get args)
+              `(return_call_ref ,@(pass-abi-arguments args)
                                 (struct.get $proc 1
                                             (ref.cast $proc
                                                       ,(local.get proc)))))
              (($ $calli args callee)
               ;; This is a return.
-              `(return_call_ref ,@(map local.get args) ,(local.get callee)))
+              `(return_call_ref ,@(pass-abi-arguments args) ,(local.get callee)))
              (($ $callk k proc args)
               `(return_call ,(func-label k)
                             ,@(map local.get
@@ -260,10 +278,23 @@
               (cons (sanitize-one x)
                     (sanitize-sequence xs)))))
          (define code (sanitize-one (do-tree kfun (make-ctx #f '()))))
+         (define (type-for-repr repr)
+           (match repr
+             ('scm '(ref eq))
+             ('f64 'f64)
+             ((or 's64 'u64) 'i64)
+             ('ptr '(func (param i32 (ref eq) (ref eq) (ref eq))))))
+         (define locals
+           (intmap-fold (lambda (var repr out)
+                          (cons `(local ,(var-label var)
+                                        ,(type-for-repr repr))
+                                out))
+                        (compute-var-representations cps) '()))
          `(func (param $nargs i32)
                 (param $arg0 (ref eq))
                 (param $arg1 (ref eq))
                 (param $arg2 (ref eq))
+                ,@locals
                 ,code)))
      (compute-reachable-functions cps 0)))
   (intmap-fold (lambda (kfun fun) (pretty-print fun) (values)) funcs)

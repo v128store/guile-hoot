@@ -2,14 +2,38 @@
              (ice-9 match)
              (system base compile)
              (system base language)
+             (language cps)
+             (language cps intset)
+             (language cps intmap)
              (language cps tailify)
              (language cps verify)
              (language cps renumber)
              (language cps dce)
              (language cps simplify)
-             (language cps dump))
+             (language cps dump)
+             (language cps utils))
 
-(define (compile-to-wasm cps)
+(define (invert-tree parents)
+  (intmap-fold
+   (lambda (child parent tree)
+     (let ((tree (intmap-add tree child empty-intset intset-union)))
+       (match parent
+         (-1 tree)
+         (_ (intmap-add tree parent (intset child) intset-union)))))
+   parents empty-intmap))
+
+(define (intset-filter pred set)
+  (persistent-intset
+   (intset-fold (lambda (i out)
+                  (if (pred i) (intset-add! out i) out))
+                set empty-intset)))
+
+(define (intset-pop set)
+  (match (intset-next set)
+    (#f (values set #f))
+    (i (values (intset-remove set i) i))))
+
+(define (lower-to-wasm cps)
   ;; for each function,
   ;;   split into blocks.
   ;;   blocks already sorted topologically because of renumbering.
@@ -26,7 +50,174 @@
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
-  #f)
+  (define strings '())
+  (define heap-constants '())
+  (define funcs
+    (intmap-map
+     (lambda (kfun body)
+       (let ((cps (intmap-select cps body)))
+         (define preds (compute-predecessors cps kfun))
+         (define idoms (compute-idoms cps kfun))
+         (define dom-children (invert-tree idoms))
+         (define (merge-cont? label)
+           (let lp ((preds (intmap-ref preds label))
+                    (has-forward-in-edge? #f))
+             (match preds
+               (() #f)
+               ((pred . preds)
+                (if (< pred label)
+                    (or has-forward-in-edge?
+                        (lp preds #t))
+                    (lp preds has-forward-in-edge?))))))
+         (define (loop-cont? label)
+           (or-map (lambda (pred) (<= label pred))
+                   (intmap-ref preds label)))
+         (define (loop-label label)
+           (string->symbol (format #f "$l~a" label)))
+         (define (wrap-loop expr label)
+           (if (loop-cont? label)
+               `(loop ,(loop-label label) ,expr)
+               expr))
+         (define (var-label var) (string->symbol (format #f "$v~a" var)))
+         (define (local.get var) `(local.get ,(var-label var)))
+         (define (local.set var) `(local.set ,(var-label var)))
+         (define (arg-ref idx)
+           (if (< idx 4)
+               `(global.get ,(string->symbol (format #f "$arg~a" idx)))
+               `(array.get $argv (global.get $argv) (i32.const ,(- idx 4)))))
+         (define (func-label k) (string->symbol (format #f "$f~a" k)))
+         (define (block-label k ctx)
+           (let lp ((ctx ctx) (depth 0))
+             (match ctx
+               (('if-then-else . ctx) (lp ctx (1+ depth)))
+               ((((or 'loop-headed-by 'block-followed-by) label) . ctx)
+                (if (eqv? label k)
+                    depth
+                    (lp ctx (1+ depth))))
+               (_ (error "block label not found" k)))))
+         (define (compile-tail exp)
+           (match exp
+             (($ $call proc args)
+              `(return_call_ref ,@(map local.get args)
+                                (struct.get $proc 1
+                                            (ref.cast $proc
+                                                      ,(local.get proc)))))
+             (($ $calli args callee)
+              ;; This is a return.
+              `(return_call_ref ,@(map local.get args) ,(local.get callee)))
+             (($ $callk k proc args)
+              `(return_call ,(func-label k)
+                            ,@(map local.get
+                                   (if proc (cons proc args) args))))))
+         (define (compile-values exp)
+           (define (fixnum? val)
+             (and (exact-integer? val)
+                  (<= (ash -1 -29) val (1- (ash 1 29)))))
+           (match exp
+             (($ $const val)
+              (match val
+                ((? fixnum?) `(i31.new (i32.const ,val)))
+                (_ (error "unimplemented constant" val))))
+             (($ $primcall 'restore1 'ptr ())
+              `(call $pop-return!))
+             (_
+              (error "unimplemented!" exp))))
+         (define (compile-receive exp req rest kargs)
+           (match exp
+             (_
+              (error "unimplemented!!" exp req rest kargs))))
+         (define (compile-test op param args)
+           (match op
+             (_ (error "unimplemented!!!" op param args))))
+         
+         ;; See "Beyond Relooper: Recursive Translation of Unstructured
+         ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP
+         ;; 2022.
+         (define (do-tree label ctx)
+           (define (code-for-label ctx)
+             ;; here if label is a switch we node-within all children
+             ;; instead of only merge nodes.
+             (define children
+               (intset-filter merge-cont? (intmap-ref dom-children label)))
+             (node-within label children ctx))
+           (if (loop-cont? label)
+               `(loop ,(code-for-label `((loop-headed-by ,label) . ctx)))
+               (code-for-label ctx)))
+         (define (do-branch pred succ ctx)
+           (cond
+            ((or (<= succ pred)
+                 (merge-cont? succ))
+             ;; Backward branch or branch to merge: jump.
+             `(br ,(block-label succ ctx)))
+            (else
+             ;; Otherwise render successor inline.
+             (do-tree succ ctx))))
+         (define (node-within label ys ctx)
+           (pk 'node-within label ys)
+           (call-with-values (lambda () (intset-pop ys))
+             (lambda (ys y)
+               (match y
+                 (#f
+                  (match (intmap-ref cps label)
+                    (($ $kargs names vars term)
+                     ;; could change to bind names at continuation?
+                     (match term
+                       (($ $continue k src exp)
+                        (match (intmap-ref cps k)
+                          (($ $ktail)
+                           (compile-tail exp))
+                          (($ $kargs _ vars)
+                           `(begin
+                              ,(compile-values exp)
+                              ,@(reverse (map local.set vars))
+                              ,(do-branch label k ctx)))
+                          (($ $kreceive ($ $arity req () rest () #f) kargs)
+                           (compile-receive exp req rest kargs))))
+                       (($ $branch kf kt src op param args)
+                        `(if ,(compile-test op param args)
+                             (then
+                              ,(do-branch label kt (cons 'if-then-else ctx)))
+                             (else
+                              ,(do-branch label kf (cons 'if-then-else ctx)))))
+                       (($ $switch kf kt* src arg)
+                        (error "switch unimplemented"))
+                       (($ $prompt k kh src escape? tag)
+                        (error "prompts should be removed by tailification?"))
+                       (($ $throw src op param args)
+                        (error "throw unimplemented"))))
+                    (($ $kreceive ($ $arity req () rest () #f) kbody)
+                     (error "kreceive unimplemented"))
+                    (($ $kfun src meta self ktail kentry)
+                     (if self
+                         ;; only if referenced?
+                         `(begin
+                            (,@(local.set self) ,(arg-ref 0))
+                            ,(do-branch label kentry ctx))
+                         (do-tree kentry ctx)))
+                    (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
+                        kbody kalt)
+                     (when kalt (error "case-lambda unimplemented"))
+                     (when allow-other-keys? (error "allow-other-keys? unimplemented"))
+                     (when (not (null? kw)) (error "kwargs unimplemented"))
+                     (when (not (null? opt)) (error "optargs unimplemented"))
+                     (when rest (error "rest args unimplemented"))
+                     `(if (i32.eq (local.get $nargs) (i32.const ,(1+ (length req))))
+                          (then ,@(map (lambda (arg idx)
+                                         `(,@(local.set arg) ,(arg-ref (1+ idx))))
+                                       (iota (length req)))
+                                ,(do-branch label kbody ctx))
+                          (else (unreachable))))
+                    (($ $ktail)
+                     '(unreachable))))
+                 (y
+                  `(begin
+                     (block ,(node-within label ys
+                                          `((block-followed-by ,label) . ,ctx)))
+                     ,(do-tree y ctx)))))))
+         (do-tree kfun '())))
+     (compute-reachable-functions cps 0)))
+  (intmap-fold (lambda (kfun fun) (pk kfun fun) (values)) funcs)
+  funcs)
 
 (define* (compile-to-wasm input-file output-file #:key
                           (from (current-language))
@@ -56,8 +247,9 @@
       (set-port-encoding! in (or (file-encoding in) "UTF-8"))
       (define cps (compile-to-cps in))
       (dump cps)
-      #;
       (let ((wasm (lower-to-wasm cps)))
+        wasm
+        #;
         (call-with-output-file output-file
           (lambda (out)
             (write-wasm wasm out)))))))

@@ -1,5 +1,6 @@
 (use-modules (ice-9 format)
              (ice-9 match)
+             (ice-9 pretty-print)
              (system base compile)
              (system base language)
              (language cps)
@@ -86,15 +87,6 @@
                `(global.get ,(string->symbol (format #f "$arg~a" idx)))
                `(array.get $argv (global.get $argv) (i32.const ,(- idx 4)))))
          (define (func-label k) (string->symbol (format #f "$f~a" k)))
-         (define (block-label k ctx)
-           (let lp ((ctx ctx) (depth 0))
-             (match ctx
-               (('if-then-else . ctx) (lp ctx (1+ depth)))
-               ((((or 'loop-headed-by 'block-followed-by) label) . ctx)
-                (if (eqv? label k)
-                    depth
-                    (lp ctx (1+ depth))))
-               (_ (error "block label not found" k)))))
          (define (compile-tail exp)
            (match exp
              (($ $call proc args)
@@ -116,7 +108,7 @@
            (match exp
              (($ $const val)
               (match val
-                ((? fixnum?) `(i31.new (i32.const ,val)))
+                ((? fixnum?) `(i31.new (i32.const ,(ash val 1))))
                 (_ (error "unimplemented constant" val))))
              (($ $primcall 'restore1 'ptr ())
               `(call $pop-return!))
@@ -133,6 +125,33 @@
          ;; See "Beyond Relooper: Recursive Translation of Unstructured
          ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP
          ;; 2022.
+         (define (make-ctx next-label stack) (cons next-label stack))
+         (define (push-loop label ctx)
+           (match ctx
+             ((next-label . stack)
+              (make-ctx label
+                        (acons 'loop-headed-by label stack)))))
+         (define (push-block label ctx)
+           (match ctx
+             ((next-label . stack)
+              (make-ctx label
+                        (acons 'block-followed-by label stack)))))
+         (define (push-if label ctx)
+           (match ctx
+             ((next-label . stack)
+              (make-ctx next-label (cons 'if-then-else stack)))))
+         (define (lookup-label k ctx)
+           (match ctx
+             ((next-label . stack)
+              (let lp ((stack stack) (depth 0))
+                (match stack
+                  (('if-then-else . stack) (lp stack (1+ depth)))
+                  ((((or 'loop-headed-by 'block-followed-by) label) . stack)
+                   (if (eqv? label k)
+                       depth
+                       (lp stack (1+ depth))))
+                  (_ (error "block label not found" k)))))))
+
          (define (do-tree label ctx)
            (define (code-for-label ctx)
              ;; here if label is a switch we node-within all children
@@ -141,14 +160,18 @@
                (intset-filter merge-cont? (intmap-ref dom-children label)))
              (node-within label children ctx))
            (if (loop-cont? label)
-               `(loop ,(code-for-label `((loop-headed-by ,label) . ctx)))
+               `(loop ,(code-for-label (push-loop label ctx)))
                (code-for-label ctx)))
          (define (do-branch pred succ ctx)
            (cond
             ((or (<= succ pred)
                  (merge-cont? succ))
              ;; Backward branch or branch to merge: jump.
-             `(br ,(block-label succ ctx)))
+             (match ctx
+               ((next-label . stack)
+                (if (eqv? succ next-label)
+                    '(nop)
+                    `(br ,(lookup-label succ ctx))))))
             (else
              ;; Otherwise render successor inline.
              (do-tree succ ctx))))
@@ -208,15 +231,42 @@
                                 ,(do-branch label kbody ctx))
                           (else (unreachable))))
                     (($ $ktail)
-                     '(unreachable))))
+                     '(nop))))
                  (y
                   `(begin
-                     (block ,(node-within label ys
-                                          `((block-followed-by ,label) . ,ctx)))
+                     (block ,(node-within label ys (push-block label ctx)))
                      ,(do-tree y ctx)))))))
-         (do-tree kfun '())))
+         (define (sanitize-one x)
+           (match x
+             (('begin expr ...)
+              (match (sanitize-sequence expr)
+                (() '(nop))
+                ((expr) expr)
+                (exprs `(begin . ,exprs))))
+             (('if test ... ('then t ...) ('else f ...))
+              `(if ,@(sanitize-sequence test)
+                   (then ,@(sanitize-sequence t))
+                   (else ,@(sanitize-sequence f))))
+             (('block expr ...) `(block ,@(sanitize-sequence expr)))
+             (('loop expr ...) `(loop ,@(sanitize-sequence expr)))
+             (expr expr)))
+         (define (sanitize-sequence xs)
+           (match xs
+             (() '())
+             ((('nop) . xs) (sanitize-sequence xs))
+             ((('begin . body) . xs)
+              (sanitize-sequence (append body xs)))
+             ((x . xs)
+              (cons (sanitize-one x)
+                    (sanitize-sequence xs)))))
+         (define code (sanitize-one (do-tree kfun (make-ctx #f '()))))
+         `(func (param $nargs i32)
+                (param $arg0 (ref eq))
+                (param $arg1 (ref eq))
+                (param $arg2 (ref eq))
+                ,code)))
      (compute-reachable-functions cps 0)))
-  (intmap-fold (lambda (kfun fun) (pk kfun fun) (values)) funcs)
+  (intmap-fold (lambda (kfun fun) (pretty-print fun) (values)) funcs)
   funcs)
 
 (define* (compile-to-wasm input-file output-file #:key

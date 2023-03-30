@@ -132,55 +132,64 @@
           (field $read_buffering (mut i32))
           (field $refcount (mut i32))
           (field $rw_random (mut i8))
-          (field $properties (mut (ref eq)))))))
-
-  ;; Vtable link is mutable so that we can tie the knot for top types.
-  (rec
+          (field $properties (mut (ref eq))))))
     (type $struct
       (sub $heap-object
         (struct
           (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4))))))
-    (type $struct1
+          ;; Vtable link is mutable so that we can tie the knot for top
+          ;; types.
+          (field $vtable (mut (ref null $vtable))))))
+    (type $vtable
       (sub $struct
         (struct
           (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4)))
-          (field $field0 (mut (ref eq))))))
-    (type $struct2
-      (sub $struct1
-        (struct
-          (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4)))
-          (field $field0 (mut (ref eq)))
-          (field $field1 (mut (ref eq))))))
-    (type $struct3
-      (sub $struct2
-        (struct
-          (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4)))
-          (field $field0 (mut (ref eq)))
-          (field $field1 (mut (ref eq)))
-          (field $field2 (mut (ref eq))))))
-    (type $struct4
-      (sub $struct3
-        (struct
-          (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4)))
+          (field $vtable (mut (ref null $vtable)))
           (field $field0 (mut (ref eq)))
           (field $field1 (mut (ref eq)))
           (field $field2 (mut (ref eq)))
-          (field $field3 (mut (ref eq))))))
-    (type $structN
-      (sub $struct4
-        (struct
-          (field $tag-and-hash (mut i32))
-          (field $vtable (mut (ref null $struct4)))
-          (field $field0 (mut (ref eq)))
-          (field $field1 (mut (ref eq)))
-          (field $field2 (mut (ref eq)))
-          (field $field3 (mut (ref eq)))
-          (field $tail (ref $raw-scmvector))))))
+          (field $field3 (mut (ref eq)))))))
+
+  (type $struct1
+    (sub $struct
+      (struct
+        (field $tag-and-hash (mut i32))
+        (field $vtable (mut (ref null $vtable)))
+        (field $field0 (mut (ref eq))))))
+  (type $struct2
+    (sub $struct
+      (struct
+        (field $tag-and-hash (mut i32))
+        (field $vtable (mut (ref null $vtable)))
+        (field $field0 (mut (ref eq)))
+        (field $field1 (mut (ref eq))))))
+  (type $struct3
+    (sub $struct
+      (struct
+        (field $tag-and-hash (mut i32))
+        (field $vtable (mut (ref null $vtable)))
+        (field $field0 (mut (ref eq)))
+        (field $field1 (mut (ref eq)))
+        (field $field2 (mut (ref eq))))))
+  (type $struct4
+    (sub $struct
+      (struct
+        (field $tag-and-hash (mut i32))
+        (field $vtable (mut (ref null $vtable)))
+        (field $field0 (mut (ref eq)))
+        (field $field1 (mut (ref eq)))
+        (field $field2 (mut (ref eq)))
+        (field $field3 (mut (ref eq))))))
+  (type $structN
+    (sub $struct
+      (struct
+        (field $tag-and-hash (mut i32))
+        (field $vtable (mut (ref null $vtable)))
+        (field $field0 (mut (ref eq)))
+        (field $field1 (mut (ref eq)))
+        (field $field2 (mut (ref eq)))
+        (field $field3 (mut (ref eq)))
+        (field $tail (ref $raw-scmvector)))))
 
   ;; FIXME: Probably we should have non-nullable types here but binaryen
   ;; doesn't support it.
@@ -204,23 +213,27 @@
                                                  (local.get $diff))))
     (unreachable))
 
-  (func $%make-struct1 (param (ref null $struct4) (ref eq))
+  (func $%make-struct1 (param (ref null $vtable) (ref eq))
         (result (ref $struct1))
     (struct.new $struct1 (i32.const 25) (local.get 0) (local.get 1)))
-  (func $%make-struct2 (param (ref null $struct4) (ref eq) (ref eq))
+  (func $%make-struct2 (param (ref null $vtable) (ref eq) (ref eq))
         (result (ref $struct2))
     (struct.new $struct2 (i32.const 25) (local.get 0) (local.get 1) (local.get 2)))
-  (func $%make-struct3 (param (ref null $struct4) (ref eq) (ref eq) (ref eq))
+  (func $%make-struct3 (param (ref null $vtable) (ref eq) (ref eq) (ref eq))
         (result (ref $struct3))
     (struct.new $struct3 (i32.const 25) (local.get 0) (local.get 1) (local.get 2) (local.get 3)))
-  (func $%make-struct4 (param (ref null $struct4) (ref eq) (ref eq) (ref eq) (ref eq))
+  (func $%make-struct4 (param (ref null $vtable) (ref eq) (ref eq) (ref eq) (ref eq))
         (result (ref $struct4))
     (struct.new $struct4 (i32.const 25) (local.get 0)
                 (local.get 1) (local.get 2) (local.get 3) (local.get 4)))
+  (func $%make-vtable (param (ref null $vtable) (ref eq) (ref eq) (ref eq) (ref eq))
+        (result (ref $vtable))
+    (struct.new $vtable (i32.const 25) (local.get 0)
+                (local.get 1) (local.get 2) (local.get 3) (local.get 4)))
   (func $%make-simple-vtable
-        (param $vt (ref null $struct4)) (param $flags i32) (param $nfields i32)
-        (result (ref $struct4))
-    (call $%make-struct4
+        (param $vt (ref null $vtable)) (param $flags i32) (param $nfields i32)
+        (result (ref $vtable))
+    (call $%make-vtable
           (local.get $vt)
           ;; field 0: flags: fixnum
           (i31.new (i32.shl (local.get $flags) (i32.const 1)))
@@ -231,16 +244,16 @@
           ;; field 3: print: #f
           (i31.new (i32.const 1))))
 
-  (global $root-vtable (mut (ref null $struct4)) (ref.null $struct4))
+  (global $root-vtable (mut (ref null $vtable)) (ref.null $vtable))
   
   (func $%init-structs
     (global.set $root-vtable
                 (call $%make-simple-vtable
-                      (ref.null $struct4)
+                      (ref.null $vtable)
                       (i32.const 3) ;; flags: validated | vtable-vtable
                       (i32.const 4))) ;; 4 fields
     ;; Tie the knot.
-    (struct.set $struct4 1 (global.get $root-vtable) (global.get $root-vtable)))
+    (struct.set $vtable 1 (global.get $root-vtable) (global.get $root-vtable)))
 
   ;; When the module is instantiated, grow a new default-sized $argv and
   ;; $return-stack.

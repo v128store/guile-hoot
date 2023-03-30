@@ -174,66 +174,25 @@ objects".  These objects are all subtypes of `$heap-object`:
 (type $heap-object
   (sub $void-struct
     (struct
-      (field $tag-and-hash (mut i32)))))
+      (field $hash (mut i32)))))
 ```
 
-Each of the following concrete subtypes corresponds to a heap object
-that native Guile represents using a specific heap tag (value of the low
-bits of the `$tag-and-hash` field).
+There are subtypes for each concrete kind of object that Guile uses
+(approximately 20 types).
 
-Tag values:
-  - `#b00000000`:  `0`: flonum
-  - `#b00000001`:  `1`: bignum
-  - `#b00000010`:  `2`: complex
-  - `#b00000011`:  `3`: fraction
-  - `#b00000100`:  `4`: pair
-  - `#b00000101`:  `5`: mutable-pair
-  - `#b00000110`:  `6`: vector
-  - `#b00000111`:  `7`: mutable-vector
-  - `#b00001000`:  `8`: bytevector
-  - `#b00001001`:  `9`: mutable-bytevector
-  - `#b00001010`: `10`: bitvector
-  - `#b00001011`: `11`: mutable-bitvector
-  - `#b00001100`: `12`: string
-  - `#b00001101`: `13`: mutable-string
-  - `#b00001110`: `14`: procedure
-  - `#b00001111`: `15`: symbol
-  - `#b00010000`: `16`: keyword
-  - `#b00010001`: `17`: variable (box)
-  - `#b00010010`: `18`: atomic box
-  - `#b00010011`: `19`: hash-table
-  - `#b00010100`: `20`: weak-table
-  - `#b00010101`: `21`: fluid
-  - `#b00010110`: `22`: dynamic-state
-  - `#b00010111`: `23`: syntax
-  - `#b00011000`: `24`: port
-  - `#b00011001`: `25`: struct
+As a WebAssembly type system detail, note that usually two types that
+have the same shape will be deemed equivalent and thus
+indistinguishable.  It is the case that there are Guile objects that
+have the same shape.  However we use the "hybrid nominal typing"
+facility to declare our types as being distinct, even when some of them
+have the same shape.  By wrapping all our types in a `rec` block, we
+ensure that dynamic type checks can be made with a simple `ref.test`.
 
-The first four data types are heap numbers, and it's useful to be able
-to do some predicates via math on their tags:
-
-  - `heap-number?`: `(< $tag 4)`
-  - `inexact-number?`: `(= 0 (logand $tag 30))` (if already known to be a number)
-  - `exact-number?`: `(= 1 (logand $tag 29))` (if already known to be a number)
-
-Similarly you can check whether a value is a vector or mutable vector
-with a simple mask.
-
-The `$tag-and-hash` field holds the tag in the low 5 bits and the hash
-in the high 26 bits.  For symbols and keywords, the hash is eagerly
-computed based on the string-hash of the underlying string.  For other
-data types, the hash is computed lazily.  A hash of 0 indicates an
-uninitialized hash.  Bit 6 is always set if the hash is initialized.
-Otherwise for immediate values, there is a simlpe bit-mixing hash
-function.
-
-Checking a tagged value's type at run-time is always possible by
-checking the tag.  Sometimes, though, types can be introspected by
-`ref.test` and related core WebAssembly type checks; this is the case
-for types which are structurally equivalent to no other type in the
-system.  In the future when WebAssembly gets run-time types (RTTs), tags
-will no longer be necessary, but we still will need the tag field for
-hashq values.
+For symbols and keywords, the `$hash` field is eagerly computed based on
+the string-hash of the underlying string.  For other data types, the
+hash is computed lazily.  A hash of 0 indicates an uninitialized hash.
+Bit 0 is always set if the hash is initialized.  Otherwise for immediate
+values, there is a simple bit-mixing hash function.
 
 #### References to host facilities
 
@@ -241,33 +200,36 @@ hashq values.
 (type $extern-ref
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $val (ref extern)))))
 ```
 
-Sometimes we want to refer to a reference-typed value from the host.
-Currently we do this for bignums and weak maps.  For a JS host we will
-implement these using JavaScript's `BigInt` and `WeakMap`.
+Sometimes we want to refer to a reference-typed value from the host, so
+one data type is an `$extern-ref`.
 
 #### Heap numbers
 
 ```wat
-;; Bignums are an $extern-ref with the bignum tag.
+(type $bignum
+  (sub $heap-object
+    (struct
+      (field $hash (mut i32))
+      (field $val (ref extern)))))
 (type $flonum
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $val f64))))
 (type $complex
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $real f64)
       (field $imag f64))))
 (type $fraction
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $num (ref eq))
       (field $denom (ref eq)))))
 ```
@@ -278,10 +240,14 @@ implement these using JavaScript's `BigInt` and `WeakMap`.
 (type $pair
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $car (mut (ref eq)))
       (field $cdr (mut (ref eq))))))
 ```
+
+There is also a `$mutable-pair` subtype of `$pair`, with the same
+fields.  `car` requires that the object be a `$pair`, but `set-car!`
+requires the subset of `$pair` values which are also `$mutable-pair`.
 
 #### Vectors
 
@@ -289,9 +255,12 @@ implement these using JavaScript's `BigInt` and `WeakMap`.
 (type $vector
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vals (ref $raw-scmvector)))))
 ```
+
+There is also a `$mutable-vector` subtype of `$vector` with the same
+fields.
 
 You can get the length of the vector using `array.length` on the `$vals`
 field.
@@ -302,9 +271,12 @@ field.
 (type $bytevector
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vals (ref $raw-bytevector)))))
 ```
+
+There is also a `$mutable-bytevector` subtype of `$bytevector` with the same
+fields.
 
 You can get the length of the bytevector using `array.length` on the
 `$vals` field.
@@ -318,10 +290,13 @@ space in the raw `i32` array.
 (type $bitvector
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $len i32)
       (field $bits (ref $raw-bitvector)))))
 ```
+
+There is also a `$mutable-bitvector` subtype of `$bitvector` with the
+same fields.
 
 #### Strings
 
@@ -329,7 +304,7 @@ space in the raw `i32` array.
 (type $string
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $str (mut (ref string))))))
 ```
 
@@ -340,13 +315,16 @@ we have to wrap strings with a tagged struct.  But, this also gives us
 the possibility to have a hashq field, and to possibly mutate the string
 (by replacing its contents).
 
+There is also a `$mutable-string` subtype of `$string` with the same
+fields.
+
 #### Procedures
 
 ```wat
 (type $proc
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $func (ref $kvarargs)))))
 ```
 
@@ -360,13 +338,13 @@ there are subtypes of `$proc`:
 (type $closure1
   (sub $proc
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $func (ref $kvarargs))
       (field $free0 (ref eq)))))
 (type $closure2
   (sub $proc
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $func (ref $kvarargs))
       (field $free0 (ref eq))
       (field $free1 (ref eq)))))
@@ -374,7 +352,7 @@ there are subtypes of `$proc`:
 ```
 
 The set of closure types will depend on what is needed by the code being
-compiled.
+compiled, and are not part of the `rec` block of distinct types.
 
 Also note that in the future, WebAssembly will support funcrefs which
 are themselves closures; in that case we can avoid the separate
@@ -386,13 +364,13 @@ are themselves closures; in that case we can avoid the separate
 (type $symbol
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $name (ref string)))))
 
 (type $keyword
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $name (ref $symbol)))))
 ```
 
@@ -401,15 +379,17 @@ How to compute the symbol's hash is not yet determined.
 #### Variables and atomic boxes
 
 ```wat
-(type $box
+(type $variable
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
+      (field $val (mut (ref eq))))))
+(type $atomic-box
+  (sub $heap-object
+    (struct
+      (field $hash (mut i32))
       (field $val (mut (ref eq))))))
 ```
-
-These two types have the same representation so they end up using the
-same WebAssembly type.
 
 WebAssembly does support multiple threads, but there is no multi-thread
 support for GC objects, so for the time being atomic boxes don't need to
@@ -423,14 +403,22 @@ We use a simple buckets-and-chains hash table, implemented in Scheme.
 (type $hash-table
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $size (mut (ref i31)))
       (field $buckets (ref $vector)))))
 ```
 
 #### Weak tables
 
-Weak tables are an `$extern-ref` to a host-supplied weak map.
+```wat
+(type $weak-table
+  (sub $heap-object
+    (struct
+      (field $hash (mut i32))
+      (field $val (ref extern)))))
+```
+
+The external value held by the weak table is a host-supplied weak map.
 
 #### Dynamic state
 
@@ -438,9 +426,13 @@ Weak tables are an `$extern-ref` to a host-supplied weak map.
 (type $fluid
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $init (ref eq)))))
-;; Dynamic states are an $extern-ref to a weak map.
+(type $dynamic-state
+  (sub $heap-object
+    (struct
+      (field $hash (mut i32))
+      (field $val (ref extern)))))
 ```
 
 In native Guile, a fluid is essentially a key and a dynamic state is a
@@ -454,7 +446,7 @@ have to be some run-time support routines for fluids.
 (type $syntax
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $expr (ref eq))
       (field $wrap (ref eq))
       (field $module (ref eq))
@@ -505,7 +497,7 @@ We can also simplify and assume UTF-8 encoding for textual I/O on ports.
 (type $port
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $pt (ref $port-type))
       (field $stream (mut (ref eq)))
       (field $file_name (mut (ref eq)))
@@ -533,42 +525,63 @@ unclear if we will need this eventually.  Probably not.
 (type $struct
   (sub $heap-object
     (struct
-      (field $tag-and-hash (mut i32))
-      (field $vtable (mut (ref null $struct4))))))
+      (field $hash (mut i32))
+      (field $vtable (mut (ref null $vtable))))))
+(type $vtable
+  (sub $struct
+    (struct
+      (field $hash (mut i32))
+      (field $vtable (mut (ref null $vtable)))
+      (field $field0 (mut (ref eq)))
+      (field $field1 (mut (ref eq)))
+      (field $field2 (mut (ref eq)))
+      (field $field3 (mut (ref eq))))))
+```
+
+Guile's structs are the underlying facility that implements records and
+object-orientation.  They have the oddity that their vtable is also a
+struct with at least 4 fields.
+
+The `$struct` and `$vtable` definitions are inside the `rec` block.
+Specific struct types as needed by the program will be residualized as
+needed.  If the struct has more than 4 fields, it may store them in a
+heap vector.
+
+```
 (type $struct1
   (sub $struct
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vtable (mut (ref null $struct4)))
       (field $field0 (mut (ref eq))))))
 (type $struct2
-  (sub $struct1
+  (sub $struct
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vtable (mut (ref null $struct4)))
       (field $field0 (mut (ref eq)))
       (field $field1 (mut (ref eq))))))
 (type $struct3
-  (sub $struct2
+  (sub $struct
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vtable (mut (ref null $struct4)))
       (field $field0 (mut (ref eq)))
       (field $field1 (mut (ref eq)))
       (field $field2 (mut (ref eq))))))
 (type $struct4
-  (sub $struct3
+  (sub $struct
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vtable (mut (ref null $struct4)))
       (field $field0 (mut (ref eq)))
       (field $field1 (mut (ref eq)))
       (field $field2 (mut (ref eq)))
       (field $field3 (mut (ref eq))))))
 (type $structN
-  (sub $struct4
+  (sub $struct
     (struct
-      (field $tag-and-hash (mut i32))
+      (field $hash (mut i32))
       (field $vtable (mut (ref null $struct4)))
       (field $field0 (mut (ref eq)))
       (field $field1 (mut (ref eq)))
@@ -576,11 +589,6 @@ unclear if we will need this eventually.  Probably not.
       (field $field3 (mut (ref eq)))
       (field $tail (ref $raw-scmvector)))))
 ```
-
-Guile's structs are the underlying facility that implements records and
-object-orientation.  They have the oddity that their vtable is also a
-struct with at least 4 fields.  If the struct has more than 4 fields, it
-stores them in a heap vector.
 
 ## Not-yet-supported types
 

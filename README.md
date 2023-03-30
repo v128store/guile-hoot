@@ -57,6 +57,6 @@ Build and upload the image:
 ```
 guix pack -m manifest.scm -f docker -S /bin=bin
 docker load < $pack-from-prev-cmd
-docker tag $image-name-from-prev-cms:latest registry.gitlab.com/spritely/guile-hoot-updates
+docker tag $image-name-from-prev-cmd:latest registry.gitlab.com/spritely/guile-hoot-updates
 docker push registry.gitlab.com/spritely/guile-hoot-updates
 ```

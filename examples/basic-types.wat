@@ -18,8 +18,11 @@
         (struct
           (field $tag-and-hash (mut i32))
           (field $val (ref extern)))))
-
-    ;; Bignums are $extern-ref.
+    (type $bignum
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (ref extern)))))
     (type $flonum
       (sub $heap-object
         (struct
@@ -43,13 +46,29 @@
           (field $tag-and-hash (mut i32))
           (field $car (mut (ref eq)))
           (field $cdr (mut (ref eq))))))
+    (type $mutable-pair
+      (sub $pair
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $car (mut (ref eq)))
+          (field $cdr (mut (ref eq))))))
     (type $vector
       (sub $heap-object
         (struct
           (field $tag-and-hash (mut i32))
           (field $vals (ref $raw-scmvector)))))
+    (type $mutable-vector
+      (sub $vector
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $vals (ref $raw-scmvector)))))
     (type $bytevector
       (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $vals (ref $raw-bytevector)))))
+    (type $mutable-bytevector
+      (sub $bytevector
         (struct
           (field $tag-and-hash (mut i32))
           (field $vals (ref $raw-bytevector)))))
@@ -59,8 +78,19 @@
           (field $tag-and-hash (mut i32))
           (field $len i32)
           (field $vals (ref $raw-bitvector)))))
+    (type $mutable-bitvector
+      (sub $bitvector
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $len i32)
+          (field $vals (ref $raw-bitvector)))))
     (type $string
       (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $str (ref string)))))
+    (type $mutable-string
+      (sub $string
         (struct
           (field $tag-and-hash (mut i32))
           (field $str (ref string)))))
@@ -79,7 +109,12 @@
         (struct
           (field $tag-and-hash (mut i32))
           (field $name (ref $symbol)))))
-    (type $box
+    (type $variable
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (mut (ref eq))))))
+    (type $atomic-box
       (sub $heap-object
         (struct
           (field $tag-and-hash (mut i32))
@@ -90,12 +125,21 @@
           (field $tag-and-hash (mut i32))
           (field $size (mut (ref i31)))
           (field $buckets (ref $vector)))))
+    (type $weak-table
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (ref extern)))))
     (type $fluid
       (sub $heap-object
         (struct
           (field $tag-and-hash (mut i32))
           (field $init (ref eq)))))
-    ;; Dynamic states are $extern-ref to host weak map.
+    (type $dynamic-state
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (ref extern)))))
     (type $syntax
       (sub $heap-object
         (struct
@@ -277,10 +321,6 @@
       ;; specifically doesn't do implicit stack arguments, so we can't
       ;; use br_on_cast as we would like.
       (block $Limmediate
-        (block $Lheap-object
-          (br_if $Limmediate (ref.test i31 (local.get $scm)))
-          (br_if $Lheap-object (ref.test $heap-object (local.get $scm)))
-          (unreachable))
         (block $Lflonum
           (block $Lbignum
             (block $Lcomplex
@@ -295,7 +335,7 @@
                               (block $Lmutable-bitvector
                                 (block $Lstring
                                   (block $Lmutable-string
-                                    (block $Lprocedure
+                                    (block $Lproc
                                       (block $Lsymbol
                                         (block $Lkeyword
                                           (block $Lvariable
@@ -307,40 +347,33 @@
                                                       (block $Lsyntax
                                                         (block $Lport
                                                           (block $Lstruct
-                                                            (block $Lunknown-tag
-                                                              (br_table
-                                                               $Lflonum
-                                                               $Lbignum
-                                                               $Lcomplex
-                                                               $Lfraction
-                                                               $Lpair
-                                                               $Lmutable-pair
-                                                               $Lvector
-                                                               $Lmutable-vector
-                                                               $Lbytevector
-                                                               $Lmutable-bytevector
-                                                               $Lbitvector
-                                                               $Lmutable-bitvector
-                                                               $Lstring
-                                                               $Lmutable-string
-                                                               $Lprocedure
-                                                               $Lsymbol
-                                                               $Lkeyword
-                                                               $Lvariable
-                                                               $Latomic-box
-                                                               $Lhash-table
-                                                               $Lweak-table
-                                                               $Lfluid
-                                                               $Ldynamic-state
-                                                               $Lsyntax
-                                                               $Lport
-                                                               $Lstruct
-                                                               $Lunknown-tag
-                                                               (i32.and
-                                                                (i32.const 31)
-                                                                (struct.get $heap-object 0
-                                                                            (ref.cast $heap-object
-                                                                                      (local.get $scm))))))
+                                                            (br_if $Limmediate (ref.test i31 (local.get $scm)))
+                                                            (br_if $Lflonum (ref.test $flonum (local.get $scm)))
+                                                            (br_if $Lbignum (ref.test $bignum (local.get $scm)))
+                                                            (br_if $Lcomplex (ref.test $complex (local.get $scm)))
+                                                            (br_if $Lfraction (ref.test $fraction (local.get $scm)))
+                                                            (br_if $Lmutable-pair (ref.test $mutable-pair (local.get $scm)))
+                                                            (br_if $Lpair (ref.test $pair (local.get $scm)))
+                                                            (br_if $Lmutable-vector (ref.test $mutable-vector (local.get $scm)))
+                                                            (br_if $Lvector (ref.test $vector (local.get $scm)))
+                                                            (br_if $Lmutable-bytevector (ref.test $mutable-bytevector (local.get $scm)))
+                                                            (br_if $Lbytevector (ref.test $bytevector (local.get $scm)))
+                                                            (br_if $Lmutable-bitvector (ref.test $mutable-bitvector (local.get $scm)))
+                                                            (br_if $Lbitvector (ref.test $bitvector (local.get $scm)))
+                                                            (br_if $Lmutable-string (ref.test $mutable-string (local.get $scm)))
+                                                            (br_if $Lstring (ref.test $string (local.get $scm)))
+                                                            (br_if $Lproc (ref.test $proc (local.get $scm)))
+                                                            (br_if $Lsymbol (ref.test $symbol (local.get $scm)))
+                                                            (br_if $Lkeyword (ref.test $keyword (local.get $scm)))
+                                                            (br_if $Lvariable (ref.test $variable (local.get $scm)))
+                                                            (br_if $Latomic-box (ref.test $atomic-box (local.get $scm)))
+                                                            (br_if $Lhash-table (ref.test $hash-table (local.get $scm)))
+                                                            (br_if $Lweak-table (ref.test $weak-table (local.get $scm)))
+                                                            (br_if $Lfluid (ref.test $fluid (local.get $scm)))
+                                                            (br_if $Ldynamic-state (ref.test $dynamic-state (local.get $scm)))
+                                                            (br_if $Lsyntax (ref.test $syntax (local.get $scm)))
+                                                            (br_if $Lport (ref.test $port (local.get $scm)))
+                                                            (br_if $Lstruct (ref.test $struct (local.get $scm)))
                                                             (unreachable))
                                                           (br $Ldone (string.const "struct")))
                                                         (br $Ldone (string.const "port")))
@@ -427,7 +460,7 @@
                                          (local.get $tmp))
                                 (i64.const 0x4000_0000)))
       (br 1 (i31.new (i32.wrap_i64 (local.get $tmp)))))
-    (struct.new $extern-ref (i32.const 1) (local.get $v)))
+    (struct.new $bignum (i32.const 1) (local.get $v)))
   (func $scm-false (export "scm_false") (result (ref i31))
     (i31.new (i32.const 1)))
   (func $scm-nil (export "scm_nil") (result (ref i31))
@@ -456,8 +489,8 @@
     (i32.shr_s (i31.get_s (local.get $v)) (i32.const 1)))
   (func $char_value (export "char_value") (param $v (ref i31)) (result i32)
     (i32.shr_u (i31.get_s (local.get $v)) (i32.const 2)))
-  (func $bignum_value (export "bignum_value") (param $v (ref $extern-ref)) (result (ref extern))
-    (struct.get $extern-ref 1 (local.get $v)))
+  (func $bignum_value (export "bignum_value") (param $v (ref $bignum)) (result (ref extern))
+    (struct.get $bignum 1 (local.get $v)))
   (func $flonum_value (export "flonum_value") (param $v (ref $flonum)) (result f64)
     (struct.get $flonum 1 (local.get $v)))
   ;; FIXME: Should return 2 values but binaryen doesn't support that :-(
@@ -791,7 +824,7 @@
                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; (cons 1 2)
     (table.set $argv (i32.const 8)
-               (struct.new $pair (i32.const 5)
+               (struct.new $mutable-pair (i32.const 5)
                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; #(#f #f #f)
     (table.set $argv (i32.const 9)
@@ -799,7 +832,7 @@
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; (vector #f #f #f)
     (table.set $argv (i32.const 10)
-               (struct.new $vector (i32.const 7)
+               (struct.new $mutable-vector (i32.const 7)
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; #vu8(0 0 0 0 0)
     (table.set $argv (i32.const 11)
@@ -807,7 +840,7 @@
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; (bytevector 0 0 0 0 0)
     (table.set $argv (i32.const 12)
-               (struct.new $bytevector (i32.const 9)
+               (struct.new $mutable-bytevector (i32.const 9)
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; #*11111
     (table.set $argv (i32.const 13)
@@ -816,7 +849,7 @@
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; (bitvector #t #t #t #t #t)
     (table.set $argv (i32.const 14)
-               (struct.new $bitvector (i32.const 11)
+               (struct.new $mutable-bitvector (i32.const 11)
                            (i32.const 5)
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; "hello world!"
@@ -825,7 +858,7 @@
                            (string.const "hello world!")))
     ;; (string #\h #\e #\l #\l #\o #\o)
     (table.set $argv (i32.const 16)
-               (struct.new $string (i32.const 13)
+               (struct.new $mutable-string (i32.const 13)
                            (string.const "helloo")))
     ;; #<procedure main>
     (table.set $argv (i32.const 17)
@@ -839,16 +872,16 @@
                      (call $string-to-symbol (string.const "my-symbol"))))
     ;; (make-variable #f)
     (table.set $argv (i32.const 20)
-               (struct.new $box (i32.const 17) (i31.new (i32.const 1))))
+               (struct.new $variable (i32.const 17) (i31.new (i32.const 1))))
     ;; (make-atomic-box #f)
     (table.set $argv (i32.const 21)
-               (struct.new $box (i32.const 18) (i31.new (i32.const 1))))
+               (struct.new $atomic-box (i32.const 18) (i31.new (i32.const 1))))
     ;; (make-hash-table)
     (table.set $argv (i32.const 22)
                (call $%make-hash-table))
     ;; (make-weak-key-hash-table)
     (table.set $argv (i32.const 23)
-               (struct.new $extern-ref (i32.const 20)
+               (struct.new $weak-table (i32.const 20)
                            (call $make-weak-map)))
     ;; (make-struct (make-vtable 1) #f)
     (table.set $argv (i32.const 24)
@@ -863,10 +896,10 @@
     ;; 42.69
     (table.set $argv (i32.const 25)
                (struct.new $flonum (i32.const 0) (f64.const 42.69)))
-    ;; 42.69
+    ;; 1<<31
     (table.set $argv (i32.const 26)
-               (struct.new $extern-ref (i32.const 1)
-                           (call $bignum-from-i64 (i64.const 42))))
+               (struct.new $bignum (i32.const 1)
+                           (call $bignum-from-i64 (i64.const 0x80000000))))
     ;; 42+6.9i
     (table.set $argv (i32.const 27)
                (struct.new $complex (i32.const 2)
@@ -881,7 +914,7 @@
                (struct.new $fluid (i32.const 21) (i31.new (i32.const 1))))
     ;; (current-dynamic-state)
     (table.set $argv (i32.const 30)
-               (struct.new $extern-ref (i32.const 22)
+               (struct.new $dynamic-state (i32.const 22)
                            (call $make-weak-map)))
     ;; (datum->syntax #f '() #:source #f)
     (table.set $argv (i32.const 31)

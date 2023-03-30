@@ -8,132 +8,131 @@
   (type $raw-bytevector (array (mut i8)))
   (type $raw-scmvector (array (mut (ref eq))))
 
-  (type $void-struct (struct))
-  (type $heap-object
-    (sub $void-struct
+  (rec
+    (type $heap-object
       (struct
-        (field $tag-and-hash (mut i32)))))
+        (field $tag-and-hash (mut i32))))
 
-  (type $extern-ref
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $val (ref extern)))))
+    (type $extern-ref
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (ref extern)))))
 
-  ;; Bignums are $extern-ref.
-  (type $flonum
-    (sub $heap-object
+    ;; Bignums are $extern-ref.
+    (type $flonum
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val f64))))
+    (type $complex
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $real f64)
+          (field $imag f64))))
+    (type $fraction
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $num (ref eq))
+          (field $denom (ref eq)))))
+    (type $pair
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $car (mut (ref eq)))
+          (field $cdr (mut (ref eq))))))
+    (type $vector
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $vals (ref $raw-scmvector)))))
+    (type $bytevector
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $vals (ref $raw-bytevector)))))
+    (type $bitvector
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $len i32)
+          (field $vals (ref $raw-bitvector)))))
+    (type $string
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $str (ref string)))))
+    (type $proc
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $func (ref $kvarargs)))))
+    (type $symbol
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $name (ref $string)))))
+    (type $keyword
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $name (ref $symbol)))))
+    (type $box
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $val (mut (ref eq))))))
+    (type $hash-table
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $size (mut (ref i31)))
+          (field $buckets (ref $vector)))))
+    (type $fluid
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $init (ref eq)))))
+    ;; Dynamic states are $extern-ref to host weak map.
+    (type $syntax
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $expr (ref eq))
+          (field $wrap (ref eq))
+          (field $module (ref eq))
+          (field $source (ref eq)))))
+    (type $port-type
       (struct
-        (field $tag-and-hash (mut i32))
-        (field $val f64))))
-  (type $complex
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $real f64)
-        (field $imag f64))))
-  (type $fraction
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $num (ref eq))
-        (field $denom (ref eq)))))
-  (type $pair
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $car (mut (ref eq)))
-        (field $cdr (mut (ref eq))))))
-  (type $vector
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $vals (ref $raw-scmvector)))))
-  (type $bytevector
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $vals (ref $raw-bytevector)))))
-  (type $bitvector
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $len i32)
-        (field $vals (ref $raw-bitvector)))))
-  (type $string
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $str (ref string)))))
-  (type $proc
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $func (ref $kvarargs)))))
-  (type $symbol
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $name (ref $string)))))
-  (type $keyword
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $name (ref $symbol)))))
-  (type $box
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $val (mut (ref eq))))))
-  (type $hash-table
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $size (mut (ref i31)))
-        (field $buckets (ref $vector)))))
-  (type $fluid
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $init (ref eq)))))
-  ;; Dynamic states are $extern-ref to host weak map.
-  (type $syntax
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $expr (ref eq))
-        (field $wrap (ref eq))
-        (field $module (ref eq))
-        (field $source (ref eq)))))
-  (type $port-type
-    (struct
-      (field $name (ref string))
-      ;; in guile these are (port, bv, start, count) -> size_t
-      (field $read (ref null $proc)) ;; could have a more refined type
-      (field $write (ref null $proc))
-      (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
-      (field $close (ref null $proc)) ;; (port) -> ()
-      (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
-      (field $random-access? (ref null $proc)) ;; port -> bool
-      (field $input-waiting (ref null $proc)) ;; port -> bool
-      (field $truncate (ref null $proc)) ;; (port, length) -> ()
-      ;; Guile also has GOOPS classes here.
-      ))
-  (type $port
-    (sub $heap-object
-      (struct
-        (field $tag-and-hash (mut i32))
-        (field $pt (ref $port-type))
-        (field $stream (mut (ref eq)))
-        (field $file_name (mut (ref eq)))
-        (field $position (ref $pair))
-        (field $read_buf (mut (ref eq)))  ;; A 5-vector
-        (field $write_buf (mut (ref eq))) ;; A 5-vector
-        (field $write_buf_aux (mut (ref eq))) ;; A 5-vector
-        (field $read_buffering (mut i32))
-        (field $refcount (mut i32))
-        (field $rw_random (mut i8))
-        (field $properties (mut (ref eq))))))
+        (field $name (ref string))
+        ;; in guile these are (port, bv, start, count) -> size_t
+        (field $read (ref null $proc)) ;; could have a more refined type
+        (field $write (ref null $proc))
+        (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
+        (field $close (ref null $proc)) ;; (port) -> ()
+        (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
+        (field $random-access? (ref null $proc)) ;; port -> bool
+        (field $input-waiting (ref null $proc)) ;; port -> bool
+        (field $truncate (ref null $proc)) ;; (port, length) -> ()
+        ;; Guile also has GOOPS classes here.
+        ))
+    (type $port
+      (sub $heap-object
+        (struct
+          (field $tag-and-hash (mut i32))
+          (field $pt (ref $port-type))
+          (field $stream (mut (ref eq)))
+          (field $file_name (mut (ref eq)))
+          (field $position (ref $pair))
+          (field $read_buf (mut (ref eq)))  ;; A 5-vector
+          (field $write_buf (mut (ref eq))) ;; A 5-vector
+          (field $write_buf_aux (mut (ref eq))) ;; A 5-vector
+          (field $read_buffering (mut i32))
+          (field $refcount (mut i32))
+          (field $rw_random (mut i8))
+          (field $properties (mut (ref eq)))))))
 
   ;; Vtable link is mutable so that we can tie the knot for top types.
   (rec

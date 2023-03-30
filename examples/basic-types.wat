@@ -1,5 +1,7 @@
 (module
-  (type $kvarargs (func (param i32) (result i32)))
+  (type $kvarargs
+    (func (param $nargs i32)
+          (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))))
 
   (type $raw-immutable-bitvector (array i32))
   (type $raw-immutable-bytevector (array i8))
@@ -235,6 +237,12 @@
         (field $field3 (mut (ref eq)))
         (field $tail (ref $raw-scmvector)))))
 
+  ;; $arg0, $arg1, $arg2: function parameters
+  (global $arg3 (mut (ref eq)) (i31.new (i32.const 0)))
+  (global $arg4 (mut (ref eq)) (i31.new (i32.const 0)))
+  (global $arg5 (mut (ref eq)) (i31.new (i32.const 0)))
+  (global $arg6 (mut (ref eq)) (i31.new (i32.const 0)))
+  (global $arg7 (mut (ref eq)) (i31.new (i32.const 0)))
   ;; FIXME: Probably we should have non-nullable types here but binaryen
   ;; doesn't support it.
   (table $argv 0 (ref null eq))
@@ -308,11 +316,6 @@
     (call $%init-keywords)
     (call $%init-ports))
   (start $start)
-
-  (func $set_arg (export "set_arg") (param $idx i32) (param $arg (ref eq))
-    (table.set $argv (local.get $idx) (local.get $arg)))
-  (func $get_arg (export "get_arg") (param $idx i32) (result (ref eq))
-    (ref.as_non_null (table.get $argv (local.get $idx))))
 
   (func $describe (export "describe") (param $scm (ref eq)) (result (ref string))
     (local $tmp i32)
@@ -429,6 +432,13 @@
           (br $Ldone (string.const "null")))
         (br $Ldone (string.const "nil")))
       (br $Ldone (string.const "false"))))
+
+  (func $get-argument (import "rt" "get_argument")
+        (param i32) (result (ref eq)))
+  (func $prepare-return-values (import "rt" "prepare_return_values")
+        (param i32))
+  (func $set-return-value (import "rt" "set_return_value")
+        (param i32 (ref eq)))
 
   (func $bignum-from-i64 (import "rt" "bignum_from_i64")
         (param i64) (result (ref extern)))
@@ -688,7 +698,8 @@
   (type $string-input-port-stream
         (struct (field $bv (ref $raw-bytevector))
                 (field $pos (mut i32))))
-  (func $string-input-port-read (param $nargs i32) (result i32)
+  (func $string-input-port-read (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     (local $port (ref $port))
     (local $dst (ref $raw-bytevector))
     (local $start i32)
@@ -701,11 +712,11 @@
     (block $check-nargs
       (br_if $check-nargs (i32.eq (local.get $nargs) (i32.const 4)))
       (unreachable))
-    (local.set $port (ref.cast $port (table.get $argv (i32.const 0))))
+    (local.set $port (ref.cast $port (local.get $arg0)))
     (local.set $dst (struct.get $bytevector 1
-                                (ref.cast $bytevector (table.get $argv (i32.const 1)))))
-    (local.set $start (i31.get_s (ref.cast i31 (table.get $argv (i32.const 2)))))
-    (local.set $count (i31.get_s (ref.cast i31 (table.get $argv (i32.const 3)))))
+                                (ref.cast $bytevector (local.get $arg1))))
+    (local.set $start (i31.get_s (ref.cast i31 (local.get $arg2))))
+    (local.set $count (i31.get_s (ref.cast i31 (global.get $arg3))))
     (local.set $stream (ref.cast $string-input-port-stream
                                  (struct.get $port $stream (local.get $port))))
     (local.set $src (struct.get $string-input-port-stream 0 (local.get $stream)))
@@ -727,19 +738,27 @@
         (br $lp)))
     (struct.set $string-input-port-stream 1 (local.get $stream)
                 (i32.add (local.get $pos) (local.get $count)))
-    (table.set $argv (i32.const 0) (i31.new (local.get $count)))
-    (return_call_ref $kvarargs (i32.const 1) (call $pop-return)))
-  (func $string-input-port-seek (param $nargs i32) (result i32)
+    (return_call_ref $kvarargs
+                     (i32.const 1) ;; nargs
+                     (i31.new (local.get $count))
+                     (i31.new (i32.const 0)) ;; filler
+                     (i31.new (i32.const 0)) ;; filler
+                     (call $pop-return)))
+  (func $string-input-port-seek (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Not yet implemented.
     (unreachable))
-  (func $string-input-port-random-access? (param $nargs i32) (result i32)
+  (func $string-input-port-random-access? (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Not yet implemented.
     (unreachable))
-  (func $string-input-port-input-waiting? (param $nargs i32) (result i32)
+  (func $string-input-port-input-waiting? (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Not yet implemented.
     (unreachable))
 
-  (func $string-output-port-write (param $nargs i32) (result i32)
+  (func $string-output-port-write (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Not yet implemented.
     (unreachable))
 
@@ -799,87 +818,88 @@
                 (i31.new (i32.const 13)) ;; properties: ()
                 ))
 
-  (func $main (param $nargs i32) (result i32)
+  (func $main (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Fixnum: 1.
-    (table.set $argv (i32.const 0) (i31.new (i32.const 2)))
+    (local.set $arg0 (i31.new (i32.const 2)))
     ;; Char: 1.
-    (table.set $argv (i32.const 1) (i31.new (i32.const 7)))
+    (local.set $arg1 (i31.new (i32.const 7)))
     ;; False.
-    (table.set $argv (i32.const 2) (i31.new (i32.const 1)))
+    (local.set $arg2 (i31.new (i32.const 1)))
     ;; Null.
-    (table.set $argv (i32.const 3) (i31.new (i32.const 13)))
+    (global.set $arg3 (i31.new (i32.const 13)))
     ;; True.
-    (table.set $argv (i32.const 4) (i31.new (i32.const 17)))
+    (global.set $arg4 (i31.new (i32.const 17)))
     ;; Unspecified.
-    (table.set $argv (i32.const 5) (i31.new (i32.const 33)))
+    (global.set $arg5 (i31.new (i32.const 33)))
     ;; EOF.
-    (table.set $argv (i32.const 6) (i31.new (i32.const 41)))
+    (global.set $arg6 (i31.new (i32.const 41)))
     ;; '(1 . 2)
-    (table.set $argv (i32.const 7)
-               (struct.new $pair (i32.const 0)
-                           (i31.new (i32.const 2)) (i31.new (i32.const 4))))
+    (global.set $arg7
+                (struct.new $pair (i32.const 0)
+                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; (cons 1 2)
-    (table.set $argv (i32.const 8)
+    (table.set $argv (i32.const 0)
                (struct.new $mutable-pair (i32.const 0)
                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; #(#f #f #f)
-    (table.set $argv (i32.const 9)
+    (table.set $argv (i32.const 1)
                (struct.new $vector (i32.const 0)
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; (vector #f #f #f)
-    (table.set $argv (i32.const 10)
+    (table.set $argv (i32.const 2)
                (struct.new $mutable-vector (i32.const 0)
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; #vu8(0 0 0 0 0)
-    (table.set $argv (i32.const 11)
+    (table.set $argv (i32.const 3)
                (struct.new $bytevector (i32.const 0)
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; (bytevector 0 0 0 0 0)
-    (table.set $argv (i32.const 12)
+    (table.set $argv (i32.const 4)
                (struct.new $mutable-bytevector (i32.const 0)
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; #*11111
-    (table.set $argv (i32.const 13)
+    (table.set $argv (i32.const 5)
                (struct.new $bitvector (i32.const 0)
                            (i32.const 5)
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; (bitvector #t #t #t #t #t)
-    (table.set $argv (i32.const 14)
+    (table.set $argv (i32.const 6)
                (struct.new $mutable-bitvector (i32.const 0)
                            (i32.const 5)
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; "hello world!"
-    (table.set $argv (i32.const 15)
+    (table.set $argv (i32.const 7)
                (struct.new $string (i32.const 0)
                            (string.const "hello world!")))
     ;; (string #\h #\e #\l #\l #\o #\o)
-    (table.set $argv (i32.const 16)
+    (table.set $argv (i32.const 8)
                (struct.new $mutable-string (i32.const 0)
                            (string.const "helloo")))
     ;; #<procedure main>
-    (table.set $argv (i32.const 17)
+    (table.set $argv (i32.const 9)
                (struct.new $proc (i32.const 0) (ref.func $main)))
     ;; 'my-symbol
-    (table.set $argv (i32.const 18)
+    (table.set $argv (i32.const 10)
                (call $string-to-symbol (string.const "my-symbol")))
     ;; #:my-symbol
-    (table.set $argv (i32.const 19)
+    (table.set $argv (i32.const 11)
                (call $symbol-to-keyword
                      (call $string-to-symbol (string.const "my-symbol"))))
     ;; (make-variable #f)
-    (table.set $argv (i32.const 20)
+    (table.set $argv (i32.const 12)
                (struct.new $variable (i32.const 17) (i31.new (i32.const 1))))
     ;; (make-atomic-box #f)
-    (table.set $argv (i32.const 21)
+    (table.set $argv (i32.const 13)
                (struct.new $atomic-box (i32.const 18) (i31.new (i32.const 1))))
     ;; (make-hash-table)
-    (table.set $argv (i32.const 22)
+    (table.set $argv (i32.const 14)
                (call $%make-hash-table))
     ;; (make-weak-key-hash-table)
-    (table.set $argv (i32.const 23)
+    (table.set $argv (i32.const 15)
                (struct.new $weak-table (i32.const 0) (call $make-weak-map)))
     ;; (make-struct (make-vtable 1) #f)
-    (table.set $argv (i32.const 24)
+    (table.set $argv (i32.const 16)
                (call $%make-struct1
                      (call $%make-simple-vtable
                            (global.get $root-vtable)
@@ -889,30 +909,30 @@
                            (i32.const 1))
                      (i31.new (i32.const 1))))
     ;; 42.69
-    (table.set $argv (i32.const 25)
+    (table.set $argv (i32.const 17)
                (struct.new $flonum (i32.const 0) (f64.const 42.69)))
     ;; 1<<31
-    (table.set $argv (i32.const 26)
+    (table.set $argv (i32.const 18)
                (struct.new $bignum (i32.const 0)
                            (call $bignum-from-i64 (i64.const 0x80000000))))
     ;; 42+6.9i
-    (table.set $argv (i32.const 27)
+    (table.set $argv (i32.const 19)
                (struct.new $complex (i32.const 0)
                            (f64.const 42) (f64.const 6.9)))
     ;; 14/23
-    (table.set $argv (i32.const 28)
+    (table.set $argv (i32.const 20)
                (struct.new $fraction (i32.const 0)
                            (i31.new (i32.const 28))
                            (i31.new (i32.const 46))))
     ;; (make-fluid #f)
-    (table.set $argv (i32.const 29)
+    (table.set $argv (i32.const 21)
                (struct.new $fluid (i32.const 0) (i31.new (i32.const 1))))
     ;; (current-dynamic-state)
-    (table.set $argv (i32.const 30)
+    (table.set $argv (i32.const 22)
                (struct.new $dynamic-state (i32.const 0)
                            (call $make-weak-map)))
     ;; (datum->syntax #f '() #:source #f)
-    (table.set $argv (i32.const 31)
+    (table.set $argv (i32.const 23)
                (struct.new $syntax (i32.const 0)
                            (i31.new (i32.const 13)) ;; datum: ()
                            (struct.new $pair (i32.const 0)
@@ -922,14 +942,102 @@
                            (i31.new (i32.const 1)) ;; source: #f
                            ))
     ;; (current-input-port)
-    (table.set $argv (i32.const 32)
+    (table.set $argv (i32.const 24)
                (call $%make-string-input-port (string.const "hey!!!")))
-    ;; Remaining data types: port
-    (return_call_ref $kvarargs (i32.const 33) (call $pop-return)))
+    (return_call_ref $kvarargs
+                     (i32.const 33)
+                     (local.get $arg0)
+                     (local.get $arg1)
+                     (local.get $arg2)
+                     (call $pop-return)))
 
-  (func $return (param $nargs i32) (result i32)
-    (local.get $nargs))
+  (func $return-to-host (param $nargs i32)
+        (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+    (local $i i32)
+    (call $prepare-return-values (local.get $nargs))
+    (block $nargs0
+      (block $nargs1
+        (block $nargs2
+          (block $nargs3
+            (block $nargs4
+              (block $nargs5
+                (block $nargs6
+                  (block $nargs7
+                    (block $nargs8
+                      (block $nargsN
+                        (br_table $nargs0
+                                  $nargs1
+                                  $nargs2
+                                  $nargs3
+                                  $nargs4
+                                  $nargs5
+                                  $nargs6
+                                  $nargs7
+                                  $nargs8
+                                  $nargsN
+                                  (local.get $nargs)))
+                      (local.set $i (i32.const 8))
+                      (loop
+                       (call $set-return-value
+                             (local.get $i)
+                             (ref.as_non_null
+                              (table.get $argv
+                                         (i32.sub (local.get $i) (i32.const 8)))))
+                       (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                       (br_if 0 (i32.lt_s (local.get $i) (local.get $nargs)))))
+                    (call $set-return-value (i32.const 7) (global.get $arg7)))
+                  (call $set-return-value (i32.const 6) (global.get $arg6)))
+                (call $set-return-value (i32.const 5) (global.get $arg5)))
+              (call $set-return-value (i32.const 4) (global.get $arg4)))
+            (call $set-return-value (i32.const 3) (global.get $arg3)))
+          (call $set-return-value (i32.const 2) (local.get $arg2)))
+        (call $set-return-value (i32.const 1) (local.get $arg1)))
+      (call $set-return-value (i32.const 0) (local.get $arg0))))
 
-  (func $init (export "_init") (param $nargs i32) (result i32)
-    (call $push-return (ref.func $return))
-    (return_call $main (local.get $nargs))))
+  (func $init (export "_init") (param $nargs i32)
+    (local $arg0 (ref eq))
+    (local $arg1 (ref eq))
+    (local $arg2 (ref eq))
+    (local $i i32)
+    (local.set $arg0 (i31.new (i32.const 0)))
+    (local.set $arg1 (i31.new (i32.const 0)))
+    (local.set $arg2 (i31.new (i32.const 0)))
+    (block $nargs0
+      (block $nargs1
+        (block $nargs2
+          (block $nargs3
+            (block $nargs4
+              (block $nargs5
+                (block $nargs6
+                  (block $nargs7
+                    (block $nargs8
+                      (block $nargsN
+                        (br_table $nargs0
+                                  $nargs1
+                                  $nargs2
+                                  $nargs3
+                                  $nargs4
+                                  $nargs5
+                                  $nargs6
+                                  $nargs7
+                                  $nargs8
+                                  $nargsN
+                                  (local.get $nargs)))
+                      (local.set $i (i32.const 8))
+                      (loop
+                       (table.set $argv
+                                  (i32.sub (local.get $i) (i32.const 8))
+                                  (call $get-argument (local.get $i)))
+                       (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                       (br_if 0 (i32.lt_s (local.get $i) (local.get $nargs)))))
+                    (global.set $arg7 (call $get-argument (i32.const 7))))
+                  (global.set $arg6 (call $get-argument (i32.const 6))))
+                (global.set $arg5 (call $get-argument (i32.const 5))))
+              (global.set $arg4 (call $get-argument (i32.const 4))))
+            (global.set $arg3 (call $get-argument (i32.const 3))))
+          (local.set $arg2 (call $get-argument (i32.const 2))))
+        (local.set $arg1 (call $get-argument (i32.const 1))))
+      (local.set $arg0 (call $get-argument (i32.const 0))))
+    (call $push-return (ref.func $return-to-host))
+    (return_call $main (local.get $nargs)
+                 (local.get $arg0) (local.get $arg1) (local.get $arg2))))

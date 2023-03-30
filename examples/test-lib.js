@@ -65,27 +65,32 @@ class Port extends HeapObject { toString() { return "#<port>"; } }
 class Struct extends HeapObject { toString() { return "#<struct>"; } }
 
 class SCM {
-    #rt = {
-        bignum_from_i64(n) { return n; },
-        bignum_from_u64(n) { return n < 0n ? 0xffff_ffff_ffff_ffffn + (n + 1n) : n; },
-        bignum_is_i64(n) {
-            return -0x8000_0000_0000_0000n <= n && n <= 0x7FFF_FFFF_FFFF_FFFFn;
-        },
-        bignum_is_u64(n) {
-            return 0n <= n && n <= 0xFFFF_FFFF_FFFF_FFFFn;
-        },
-        // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
-        bignum_get_i64(n) { return n; },
-
-        make_weak_map() { return new WeakMap; },
-        weak_map_get(map, k) { return map.get(k); },
-        weak_map_set(map, k, v) { return map.set(k, v); },
-        weak_map_delete(map, k) { return map.delete(k); }
-    };
+    #argv = [];
 
     constructor(mod) {
-        let imports = { rt: this.#rt };
-        this.instance = new WebAssembly.Instance(mod, imports);
+        let argv = this.#argv;
+        let rt = {
+            prepare_return_values(n) { argv.length = n; },
+            set_return_value(i, x) { argv[i] = x; },
+            get_argument(i) { return argv[i]; },
+
+            bignum_from_i64(n) { return n; },
+            bignum_from_u64(n) { return n < 0n ? 0xffff_ffff_ffff_ffffn + (n + 1n) : n; },
+            bignum_is_i64(n) {
+                return -0x8000_0000_0000_0000n <= n && n <= 0x7FFF_FFFF_FFFF_FFFFn;
+            },
+            bignum_is_u64(n) {
+                return 0n <= n && n <= 0xFFFF_FFFF_FFFF_FFFFn;
+            },
+            // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
+            bignum_get_i64(n) { return n; },
+
+            make_weak_map() { return new WeakMap; },
+            weak_map_get(map, k) { return map.get(k); },
+            weak_map_set(map, k, v) { return map.set(k, v); },
+            weak_map_delete(map, k) { return map.delete(k); }
+        };
+        this.instance = new WebAssembly.Instance(mod, { rt });
     }
 
     #to_scm(js) {
@@ -163,14 +168,16 @@ class SCM {
 
     call_named(func_name, ...args) {
         let api = this.instance.exports;
+        this.#argv.length = args.length;
         for (let [idx, arg] of args.entries())
-            api.set_arg(idx, this.#to_scm(arg));
+            this.#argv[idx] = this.#to_scm(arg);
         let f = api[func_name];
         if (!f) throw new Error(`no such function: ${func_name}`);
-        let nvals = f(args.length);
+        f(args.length);
         let values = [];
-        for (let idx = 0; idx < nvals; idx++)
-            values.push(this.#to_js(api.get_arg(idx)));
+        for (let idx = 0; idx < this.#argv.length; idx++)
+            values.push(this.#to_js(this.#argv[idx]));
+        this.#argv.length = 0;
         return values;
     }
 }

@@ -11,139 +11,139 @@
   (rec
     (type $heap-object
       (struct
-        (field $tag-and-hash (mut i32))))
+        (field $hash (mut i32))))
 
     (type $extern-ref
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (ref extern)))))
     (type $bignum
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (ref extern)))))
     (type $flonum
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val f64))))
     (type $complex
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $real f64)
           (field $imag f64))))
     (type $fraction
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $num (ref eq))
           (field $denom (ref eq)))))
     (type $pair
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $car (mut (ref eq)))
           (field $cdr (mut (ref eq))))))
     (type $mutable-pair
       (sub $pair
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $car (mut (ref eq)))
           (field $cdr (mut (ref eq))))))
     (type $vector
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $vals (ref $raw-scmvector)))))
     (type $mutable-vector
       (sub $vector
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $vals (ref $raw-scmvector)))))
     (type $bytevector
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $vals (ref $raw-bytevector)))))
     (type $mutable-bytevector
       (sub $bytevector
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $vals (ref $raw-bytevector)))))
     (type $bitvector
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $len i32)
           (field $vals (ref $raw-bitvector)))))
     (type $mutable-bitvector
       (sub $bitvector
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $len i32)
           (field $vals (ref $raw-bitvector)))))
     (type $string
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $str (ref string)))))
     (type $mutable-string
       (sub $string
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $str (ref string)))))
     (type $proc
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $func (ref $kvarargs)))))
     (type $symbol
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $name (ref $string)))))
     (type $keyword
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $name (ref $symbol)))))
     (type $variable
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (mut (ref eq))))))
     (type $atomic-box
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (mut (ref eq))))))
     (type $hash-table
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $size (mut (ref i31)))
           (field $buckets (ref $vector)))))
     (type $weak-table
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (ref extern)))))
     (type $fluid
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $init (ref eq)))))
     (type $dynamic-state
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $val (ref extern)))))
     (type $syntax
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $expr (ref eq))
           (field $wrap (ref eq))
           (field $module (ref eq))
@@ -165,7 +165,7 @@
     (type $port
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $pt (ref $port-type))
           (field $stream (mut (ref eq)))
           (field $file_name (mut (ref eq)))
@@ -180,14 +180,14 @@
     (type $struct
       (sub $heap-object
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           ;; Vtable link is mutable so that we can tie the knot for top
           ;; types.
           (field $vtable (mut (ref null $vtable))))))
     (type $vtable
       (sub $struct
         (struct
-          (field $tag-and-hash (mut i32))
+          (field $hash (mut i32))
           (field $vtable (mut (ref null $vtable)))
           (field $field0 (mut (ref eq)))
           (field $field1 (mut (ref eq)))
@@ -197,20 +197,20 @@
   (type $struct1
     (sub $struct
       (struct
-        (field $tag-and-hash (mut i32))
+        (field $hash (mut i32))
         (field $vtable (mut (ref null $vtable)))
         (field $field0 (mut (ref eq))))))
   (type $struct2
     (sub $struct
       (struct
-        (field $tag-and-hash (mut i32))
+        (field $hash (mut i32))
         (field $vtable (mut (ref null $vtable)))
         (field $field0 (mut (ref eq)))
         (field $field1 (mut (ref eq))))))
   (type $struct3
     (sub $struct
       (struct
-        (field $tag-and-hash (mut i32))
+        (field $hash (mut i32))
         (field $vtable (mut (ref null $vtable)))
         (field $field0 (mut (ref eq)))
         (field $field1 (mut (ref eq)))
@@ -218,7 +218,7 @@
   (type $struct4
     (sub $struct
       (struct
-        (field $tag-and-hash (mut i32))
+        (field $hash (mut i32))
         (field $vtable (mut (ref null $vtable)))
         (field $field0 (mut (ref eq)))
         (field $field1 (mut (ref eq)))
@@ -227,7 +227,7 @@
   (type $structN
     (sub $struct
       (struct
-        (field $tag-and-hash (mut i32))
+        (field $hash (mut i32))
         (field $vtable (mut (ref null $vtable)))
         (field $field0 (mut (ref eq)))
         (field $field1 (mut (ref eq)))
@@ -259,20 +259,20 @@
 
   (func $%make-struct1 (param (ref null $vtable) (ref eq))
         (result (ref $struct1))
-    (struct.new $struct1 (i32.const 25) (local.get 0) (local.get 1)))
+    (struct.new $struct1 (i32.const 0) (local.get 0) (local.get 1)))
   (func $%make-struct2 (param (ref null $vtable) (ref eq) (ref eq))
         (result (ref $struct2))
-    (struct.new $struct2 (i32.const 25) (local.get 0) (local.get 1) (local.get 2)))
+    (struct.new $struct2 (i32.const 0) (local.get 0) (local.get 1) (local.get 2)))
   (func $%make-struct3 (param (ref null $vtable) (ref eq) (ref eq) (ref eq))
         (result (ref $struct3))
-    (struct.new $struct3 (i32.const 25) (local.get 0) (local.get 1) (local.get 2) (local.get 3)))
+    (struct.new $struct3 (i32.const 0) (local.get 0) (local.get 1) (local.get 2) (local.get 3)))
   (func $%make-struct4 (param (ref null $vtable) (ref eq) (ref eq) (ref eq) (ref eq))
         (result (ref $struct4))
-    (struct.new $struct4 (i32.const 25) (local.get 0)
+    (struct.new $struct4 (i32.const 0) (local.get 0)
                 (local.get 1) (local.get 2) (local.get 3) (local.get 4)))
   (func $%make-vtable (param (ref null $vtable) (ref eq) (ref eq) (ref eq) (ref eq))
         (result (ref $vtable))
-    (struct.new $vtable (i32.const 25) (local.get 0)
+    (struct.new $vtable (i32.const 0) (local.get 0)
                 (local.get 1) (local.get 2) (local.get 3) (local.get 4)))
   (func $%make-simple-vtable
         (param $vt (ref null $vtable)) (param $flags i32) (param $nfields i32)
@@ -460,7 +460,7 @@
                                          (local.get $tmp))
                                 (i64.const 0x4000_0000)))
       (br 1 (i31.new (i32.wrap_i64 (local.get $tmp)))))
-    (struct.new $bignum (i32.const 1) (local.get $v)))
+    (struct.new $bignum (i32.const 0) (local.get $v)))
   (func $scm-false (export "scm_false") (result (ref i31))
     (i31.new (i32.const 1)))
   (func $scm-nil (export "scm_nil") (result (ref i31))
@@ -478,12 +478,12 @@
                       (i32.shl (local.get $ch) (i32.const 2)))))
   (func $scm-from-fraction (export "scm_from_fraction") (param (ref eq) (ref eq)) (result (ref $fraction))
     ;; FIXME: check types.
-    (struct.new $fraction (i32.const 3) (local.get 0) (local.get 1)))
+    (struct.new $fraction (i32.const 0) (local.get 0) (local.get 1)))
   (func $scm-from-complex (export "scm_from_complex") (param f64 f64) (result (ref $complex))
     ;; FIXME: check types?
-    (struct.new $complex (i32.const 2) (local.get 0) (local.get 1)))
+    (struct.new $complex (i32.const 0) (local.get 0) (local.get 1)))
   (func $scm-from-string (export "scm_from_string") (param $str (ref string)) (result (ref $string))
-    (struct.new $string (i32.const 12) (local.get $str)))
+    (struct.new $string (i32.const 0) (local.get $str)))
 
   (func $fixnum_value (export "fixnum_value") (param $v (ref i31)) (result i32)
     (i32.shr_s (i31.get_s (local.get $v)) (i32.const 1)))
@@ -531,6 +531,13 @@
     (i32.xor (local.get $v)
              (i32.shr_u (local.get $v) (i32.const 15))))
 
+  ;; Mix hash bits.  Result must be nonzero.
+  (func $finish-heap-object-hash (param $hash i32) (result i32)
+    (local.set $hash (call $integer-hash (local.get $hash)))
+    (if i32 (local.get $hash)
+      (then (local.get $hash))
+      (else (call $integer-hash (i32.const 42)))))
+
   (global $hashq-counter (mut i32) (i32.const 0))
   (func $%hashq (param $v (ref eq)) (result i32)
     (local $obj (ref $heap-object))
@@ -540,20 +547,13 @@
       (local.set $obj (ref.cast $heap-object (local.get $v)))
       (local.set $tag (struct.get $heap-object 0 (local.get $obj)))
       (block $Linitialized
-        (br_if $Linitialized
-               (i32.ne (i32.shr_u (local.get $tag) (i32.const 5))
-                       (i32.const 0)))
+        (br_if $Linitialized (local.get $tag))
         (global.set $hashq-counter
                     (i32.sub (global.get $hashq-counter) (i32.const 1)))
         (local.set $tag
-                   (i32.or
-                    (i32.or
-                     (i32.const 32)
-                     (i32.shl (call $integer-hash (global.get $hashq-counter))
-                              (i32.const 6)))
-                    (local.get $tag)))
+                   (call $finish-heap-object-hash (global.get $hashq-counter)))
         (struct.set $heap-object 0 (local.get $obj) (local.get $tag)))
-      (br 1 (call $integer-hash (local.get $tag))))
+      (br 1 (local.get $tag)))
     (call $integer-hash (i31.get_u (ref.cast i31 (local.get $v)))))
 
   ;; For now, the Java string hash function, except over codepoints
@@ -586,9 +586,7 @@
     (local $ret (ref null $symbol))
     (local.set $hash (call $string-hash (local.get $str)))
     (local.set $idx (i32.rem_u (local.get $hash) (array.len (global.get $the-symtab))))
-    ;; Attach symbol tag to hash.
-    (local.set $tag (i32.or (i32.shl (local.get $hash) (i32.const 6))
-                            (i32.const 47))) ;; #b101111
+    (local.set $tag (call $finish-heap-object-hash (local.get $hash)))
     (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
     (block $done
       (block $insert
@@ -611,8 +609,7 @@
           (local.set $entry (struct.get $symtab-entry 1 (local.get $entry)))
           (br $lp)))
       (local.set $ret (struct.new $symbol (local.get $tag)
-                                  ;; Immutable string.
-                                  (struct.new $string (i32.const 12) (local.get $str))))
+                                  (struct.new $string (i32.const 0) (local.get $str))))
       (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
       (array.set $symtab (global.get $the-symtab) (local.get $idx)
                  (struct.new $symtab-entry (ref.as_non_null (local.get $ret))
@@ -620,8 +617,8 @@
     (ref.as_non_null (local.get $ret)))
 
   (func $%make-hash-table (result (ref $hash-table))
-    (struct.new $hash-table (i32.const 19) (i31.new (i32.const 0))
-                (struct.new $vector (i32.const 7)
+    (struct.new $hash-table (i32.const 0) (i31.new (i32.const 0))
+                (struct.new $vector (i32.const 0)
                             (array.new $raw-scmvector
                                        (i31.new (i32.const 13)) (i32.const 47)))))
   (func $%hashq-lookup (param $tab (ref $hash-table)) (param $k (ref eq))
@@ -656,8 +653,8 @@
                                (array.len (local.get $buckets))))
     (array.set $raw-scmvector
                (local.get $buckets) (local.get $idx)
-               (struct.new $pair (i32.const 5)
-                           (struct.new $pair (i32.const 5) (local.get $k) (local.get $v))
+               (struct.new $pair (i32.const 0)
+                           (struct.new $pair (i32.const 0) (local.get $k) (local.get $v))
                            (array.get $raw-scmvector (local.get $buckets) (local.get $idx))))
     (struct.set $hash-table 1
                 (local.get $tab)
@@ -678,9 +675,8 @@
       (br 1 (ref.cast $keyword (struct.get $pair 2 (local.get $entry)))))
     (local.set $new-kw
                (struct.new $keyword
-                           ;; Symbol tag is 15, kw is 16.  Just add 1 to tag.
-                           (i32.add (struct.get $symbol 0 (local.get $sym))
-                                    (i32.const 1))
+                           (call $finish-heap-object-hash
+                                 (struct.get $symbol 0 (local.get $sym)))
                            (local.get $sym)))
     (call $%hashq-insert
           (ref.as_non_null (global.get $the-kwtab))
@@ -755,13 +751,13 @@
      (struct.new
       $port-type
       (string.const "string-input-port")
-      (struct.new $proc (i32.const 14) (ref.func $string-input-port-read))
+      (struct.new $proc (i32.const 0) (ref.func $string-input-port-read))
       (ref.null $proc) ;; write
-      (struct.new $proc (i32.const 14) (ref.func $string-input-port-seek))
+      (struct.new $proc (i32.const 0) (ref.func $string-input-port-seek))
       (ref.null $proc) ;; close
       (ref.null $proc) ;; get-natural-buffer-sizes
-      (struct.new $proc (i32.const 14) (ref.func $string-input-port-random-access?))
-      (struct.new $proc (i32.const 14) (ref.func $string-input-port-input-waiting?))
+      (struct.new $proc (i32.const 0) (ref.func $string-input-port-random-access?))
+      (struct.new $proc (i32.const 0) (ref.func $string-input-port-input-waiting?))
       (ref.null $proc) ;; truncate
       ))
     (global.set
@@ -770,7 +766,7 @@
       $port-type
       (string.const "string-output-port")
       (ref.null $proc) ;; read
-      (struct.new $proc (i32.const 14) (ref.func $string-output-port-write)) ;; write
+      (struct.new $proc (i32.const 0) (ref.func $string-output-port-write)) ;; write
       (ref.null $proc) ;; seek
       (ref.null $proc) ;; close
       (ref.null $proc) ;; get-natural-buffer-sizes
@@ -785,14 +781,14 @@
                (array.new_default $raw-bytevector (string.measure_wtf16 (local.get $str))))
     ;; FIXME!!! binaryen borks this too
     ;; (string.encode_lossy_utf8_array (local.get $str) (local.get $wtf8) (i32.const 0))
-    (struct.new $port (i32.const 24)
+    (struct.new $port (i32.const 0)
                 (ref.cast $port-type (global.get $string-input-port-type))
                 (struct.new $string-input-port-stream
                             (local.get $wtf8)
                             (i32.const 0))
                 (i31.new (i32.const 1)) ;; file_name
                 ;; position: (cons 0 0)
-                (struct.new $pair (i32.const 5)
+                (struct.new $mutable-pair (i32.const 0)
                             (i31.new (i32.const 0)) (i31.new (i32.const 0)))
                 (i31.new (i32.const 1)) ;; read buf: #f
                 (i31.new (i32.const 1)) ;; write buf: #f
@@ -820,49 +816,49 @@
     (table.set $argv (i32.const 6) (i31.new (i32.const 41)))
     ;; '(1 . 2)
     (table.set $argv (i32.const 7)
-               (struct.new $pair (i32.const 4)
+               (struct.new $pair (i32.const 0)
                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; (cons 1 2)
     (table.set $argv (i32.const 8)
-               (struct.new $mutable-pair (i32.const 5)
+               (struct.new $mutable-pair (i32.const 0)
                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
     ;; #(#f #f #f)
     (table.set $argv (i32.const 9)
-               (struct.new $vector (i32.const 6)
+               (struct.new $vector (i32.const 0)
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; (vector #f #f #f)
     (table.set $argv (i32.const 10)
-               (struct.new $mutable-vector (i32.const 7)
+               (struct.new $mutable-vector (i32.const 0)
                            (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
     ;; #vu8(0 0 0 0 0)
     (table.set $argv (i32.const 11)
-               (struct.new $bytevector (i32.const 8)
+               (struct.new $bytevector (i32.const 0)
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; (bytevector 0 0 0 0 0)
     (table.set $argv (i32.const 12)
-               (struct.new $mutable-bytevector (i32.const 9)
+               (struct.new $mutable-bytevector (i32.const 0)
                            (array.new_default $raw-bytevector (i32.const 5))))
     ;; #*11111
     (table.set $argv (i32.const 13)
-               (struct.new $bitvector (i32.const 10)
+               (struct.new $bitvector (i32.const 0)
                            (i32.const 5)
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; (bitvector #t #t #t #t #t)
     (table.set $argv (i32.const 14)
-               (struct.new $mutable-bitvector (i32.const 11)
+               (struct.new $mutable-bitvector (i32.const 0)
                            (i32.const 5)
                            (array.new $raw-bitvector (i32.const 31) (i32.const 1))))
     ;; "hello world!"
     (table.set $argv (i32.const 15)
-               (struct.new $string (i32.const 12)
+               (struct.new $string (i32.const 0)
                            (string.const "hello world!")))
     ;; (string #\h #\e #\l #\l #\o #\o)
     (table.set $argv (i32.const 16)
-               (struct.new $mutable-string (i32.const 13)
+               (struct.new $mutable-string (i32.const 0)
                            (string.const "helloo")))
     ;; #<procedure main>
     (table.set $argv (i32.const 17)
-               (struct.new $proc (i32.const 14) (ref.func $main)))
+               (struct.new $proc (i32.const 0) (ref.func $main)))
     ;; 'my-symbol
     (table.set $argv (i32.const 18)
                (call $string-to-symbol (string.const "my-symbol")))
@@ -881,8 +877,7 @@
                (call $%make-hash-table))
     ;; (make-weak-key-hash-table)
     (table.set $argv (i32.const 23)
-               (struct.new $weak-table (i32.const 20)
-                           (call $make-weak-map)))
+               (struct.new $weak-table (i32.const 0) (call $make-weak-map)))
     ;; (make-struct (make-vtable 1) #f)
     (table.set $argv (i32.const 24)
                (call $%make-struct1
@@ -898,29 +893,29 @@
                (struct.new $flonum (i32.const 0) (f64.const 42.69)))
     ;; 1<<31
     (table.set $argv (i32.const 26)
-               (struct.new $bignum (i32.const 1)
+               (struct.new $bignum (i32.const 0)
                            (call $bignum-from-i64 (i64.const 0x80000000))))
     ;; 42+6.9i
     (table.set $argv (i32.const 27)
-               (struct.new $complex (i32.const 2)
+               (struct.new $complex (i32.const 0)
                            (f64.const 42) (f64.const 6.9)))
     ;; 14/23
     (table.set $argv (i32.const 28)
-               (struct.new $fraction (i32.const 3)
+               (struct.new $fraction (i32.const 0)
                            (i31.new (i32.const 28))
                            (i31.new (i32.const 46))))
     ;; (make-fluid #f)
     (table.set $argv (i32.const 29)
-               (struct.new $fluid (i32.const 21) (i31.new (i32.const 1))))
+               (struct.new $fluid (i32.const 0) (i31.new (i32.const 1))))
     ;; (current-dynamic-state)
     (table.set $argv (i32.const 30)
-               (struct.new $dynamic-state (i32.const 22)
+               (struct.new $dynamic-state (i32.const 0)
                            (call $make-weak-map)))
     ;; (datum->syntax #f '() #:source #f)
     (table.set $argv (i32.const 31)
-               (struct.new $syntax (i32.const 23)
+               (struct.new $syntax (i32.const 0)
                            (i31.new (i32.const 13)) ;; datum: ()
-                           (struct.new $pair (i32.const 4)
+                           (struct.new $pair (i32.const 0)
                                        (i31.new (i32.const 13))
                                        (i31.new (i32.const 13))) ;; wrap: empty-wrap: (())
                            (i31.new (i32.const 1)) ;; module: #f

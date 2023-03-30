@@ -39,3 +39,24 @@ The name naturally flowed from there.
 ## Updates
 
 See the [log file](design/log.md).
+
+## GitLab CI
+
+Here's how to build a Docker image for use in GitLab CI.  Guix
+produces the actual image, but Docker is required to upload it to the
+GitLab container registry.
+
+If this is your first time using the GitLab registry, login:
+
+```
+docker login registry.gitlab.com
+```
+
+Build and upload the image:
+
+```
+guix pack -m manifest.scm -f docker -S /bin=bin
+docker load < $pack-from-prev-cmd
+docker tag $image-name-from-prev-cms:latest registry.gitlab.com/spritely/guile-hoot-updates
+docker push registry.gitlab.com/spritely/guile-hoot-updates
+```

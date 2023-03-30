@@ -1,0 +1,7 @@
+default:
+  image: registry.gitlab.com/spritely/guile-hoot-updates:latest
+
+test:
+  script:
+    - cd test
+    - make check

@@ -514,10 +514,14 @@
              (#x48 (k `(ref.test #t ,(parse-heap-type port))))
              (#x41 (k `(ref.cast #f ,(parse-heap-type port))))
              (#x49 (k `(ref.cast #t ,(parse-heap-type port))))
-             (#x42 (k `(br_on_cast #f ,(parse-heap-type port))))
-             (#x4a (k `(br_on_cast #t ,(parse-heap-type port))))
-             (#x43 (k `(br_on_cast_fail #f ,(parse-heap-type port))))
-             (#x4b (k `(br_on_cast_fail #t ,(parse-heap-type port))))
+
+             ;; FIXME: these parse incorrectly, but it seems the binary
+             ;; format is changing again; see
+             ;; https://github.com/WebAssembly/gc/pull/359.
+             ;; (#x42 (k `(br_on_cast #f ,(parse-heap-type port))))
+             ;; (#x4a (k `(br_on_cast #t ,(parse-heap-type port))))
+             ;; (#x43 (k `(br_on_cast_fail #f ,(parse-heap-type port))))
+             ;; (#x4b (k `(br_on_cast_fail #t ,(parse-heap-type port))))
 
              ;; FIXME: This opcode, ref.is_i31, is deprecated; we only
              ;; parse it because binaryen still emits it for (ref.test

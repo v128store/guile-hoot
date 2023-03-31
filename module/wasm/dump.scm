@@ -59,7 +59,7 @@
       (match params
         ((($ <param> #f type) ...)
          `((param ,@(map val-type-repr type))))
-        (((($ <param> id type) . params))
+        ((($ <param> id type) . params)
          (cons `(param ,id ,(val-type-repr type))
                (params-repr params)))))
     (define (results-repr results)

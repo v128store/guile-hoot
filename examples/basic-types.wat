@@ -3,9 +3,6 @@
     (func (param $nargs i32)
           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))))
 
-  (type $raw-immutable-bitvector (array i32))
-  (type $raw-immutable-bytevector (array i8))
-
   (type $raw-bitvector (array (mut i32)))
   (type $raw-bytevector (array (mut i8)))
   (type $raw-scmvector (array (mut (ref eq))))

@@ -1,6 +1,9 @@
-(use-modules (ice-9 format)
+(use-modules (ice-9 binary-ports)
+             (ice-9 control)
+             (ice-9 format)
              (ice-9 match)
              (ice-9 pretty-print)
+             ((srfi srfi-1) #:select (append-map))
              (system base compile)
              (system base language)
              (language cps)
@@ -12,7 +15,10 @@
              (language cps dce)
              (language cps simplify)
              (language cps dump)
-             (language cps utils))
+             (language cps utils)
+             (wasm assemble)
+             (wasm dump)
+             (wasm types))
 
 (define (invert-tree parents)
   (intmap-fold
@@ -34,25 +40,242 @@
     (#f (values set #f))
     (i (values (intset-remove set i) i))))
 
+;; Codegen improvements:
+;;
+;; 1. Eliminating directly-used locals.  Compute a set of variables that
+;;    are used once, right after they are defined, in such a way that
+;;    they can just flow to their use sites on the stack.  Avoid
+;;    creating locals for these.
+;;
+;; 2. Instruction selection.  Could be that some instructions could be
+;;    combined or rescheduled.  Perhaps this is something on the CPS
+;;    level though.
+;;
+;; 3. Optimised local allocation.  Do graph coloring to map variables to
+;;    a smaller set of locals, to avoid emitting one local per variable.
+
+(define scm-type (make-ref-type #f 'eq))
+(define kvarargs-sig
+  (make-func-sig (list (make-param '$nargs 'i32)
+                       (make-param '$arg0 scm-type)
+                       (make-param '$arg1 scm-type)
+                       (make-param '$arg2 scm-type))'()))
+(define standard-imports
+  (list
+   (make-import "rt" "get_argument" 'func '$get-argument
+                (make-func-sig (list (make-param #f 'i32))
+                               (list scm-type)))
+   (make-import "rt" "prepare_return_values" 'func '$prepare-return-values
+                (make-func-sig (list (make-param #f 'i32)) '()))
+   (make-import "rt" "set_return_value" 'func '$set-return-value
+                (make-func-sig (list (make-param #f 'i32)
+                                     (make-param #f scm-type))
+                               '()))
+   
+   (make-import "rt" "bignum_from_i64" 'func '$bignum-from-i64
+                (make-func-sig '(i64)
+                               (list (make-ref-type #f 'extern))))
+   (make-import "rt" "bignum_from_u64" 'func '$bignum-from-u64
+                (make-func-sig '(i64)
+                               (list (make-ref-type #f 'extern))))
+   (make-import "rt" "bignum_is_i64" 'func '$bignum-is-i64
+                (make-func-sig (list (make-ref-type #f 'extern))
+                               '(i32)))
+   (make-import "rt" "bignum_is_u64" 'func '$bignum-is-u64
+                (make-func-sig (list (make-ref-type #f 'extern))
+                               '(i32)))
+   (make-import "rt" "bignum_get_i64" 'func '$bignum-get-i64
+                (make-func-sig (list (make-ref-type #f 'extern))
+                               '(i64)))
+   (make-import "rt" "make_weak_map" 'func '$make-weak-map
+                (make-func-sig '()
+                               (list (make-ref-type #f 'extern))))
+   (make-import "rt" "weak_map_get" 'func '$weak-map-get
+                (make-func-sig (list (make-ref-type #f 'extern))
+                               (list scm-type)))
+   (make-import "rt" "weak_map_set" 'func '$weak-map-set
+                (make-func-sig (list (make-ref-type #f 'extern)
+                                     scm-type scm-type)
+                               '()))
+   (make-import "rt" "weak_map_delete" 'func '$weak-map-delete
+                (make-func-sig (list (make-ref-type #f 'extern) scm-type)
+                               '(i32)))))
+
+(define standard-tables
+  (list (make-table '$argv
+                    (make-table-type
+                     (make-limits 0 #f)
+                     scm-type)
+                    '((i32.const 0) i31.new))
+        (make-table '$return-stack
+                    (make-table-type
+                     (make-limits 0 #f)
+                     (make-ref-type #f '$kvarargs))
+                    #f)))
+
+(define standard-globals
+  (let ((scm-init '((i32.const 0) i31.new)))
+    (list (make-global '$arg3 (make-global-type #t scm-type) scm-init)
+          (make-global '$arg4 (make-global-type #t scm-type) scm-init)
+          (make-global '$arg5 (make-global-type #t scm-type) scm-init)
+          (make-global '$arg6 (make-global-type #t scm-type) scm-init)
+          (make-global '$arg7 (make-global-type #t scm-type) scm-init)
+          (make-global '$return-sp (make-global-type #t 'i32) '((i32.const 0))))))
+
+(define standard-func-types
+  (list (make-type '$kvarargs kvarargs-sig)))
+
+(define standard-heap-types
+  (letrec-syntax
+      ((struct-field (syntax-rules (mut)
+                       ((_ name (mut type))
+                        (make-field 'name #t type))
+                       ((_ name type)
+                        (make-field 'name #f type))))
+       (struct-type (syntax-rules ()
+                      ((_ (field spec ...) ...)
+                       (make-struct-type (list (struct-field field spec ...) ...)))))
+       (struct* (syntax-rules ()
+                  ((_ (name) (field spec ...) ...)
+                   (make-type 'name
+                              (struct-type (field spec ...) ...)))
+                  ((_ (name super ...) (field spec ...) ...)
+                   (make-type 'name
+                              (make-sub-type
+                               '(super ...)
+                               (struct-type (field spec ...) ...))))))
+       (struct (syntax-rules ()
+                 ((_ (name super ...) (field spec ...) ...)
+                  (struct* (name super ...)
+                           ($hash (mut 'i32))
+                           (field spec ...) ...)))))
+    (list
+     (make-type '$raw-bitvector (make-array-type #t 'i32))
+     (make-type '$raw-bytevector (make-array-type #t 'i8))
+     (make-type '$raw-scmvector (make-array-type #t scm-type))
+     ;; In theory we could just include those members of the rec group
+     ;; that the program needs, but to allow interoperability with
+     ;; separately-compiled modules, we'll just put in the whole rec
+     ;; group if any member is needed.
+     (make-rec-group
+      (list
+       (struct ($heap-object))
+       (struct ($extern-ref $heap-object)
+               ($val (make-ref-type #f 'extern)))
+       (struct ($bignum $heap-object)
+               ($val (make-ref-type #f 'extern)))
+       (struct ($flonum $heap-object)
+               ($val 'f64))
+       (struct ($complex $heap-object)
+               ($real 'f64)
+               ($imag 'f64))
+       (struct ($fraction $heap-object)
+               ($num scm-type)
+               ($denom scm-type))
+       (struct ($pair $heap-object)
+               ($car (mut scm-type))
+               ($cdr (mut scm-type)))
+       (struct ($mutable-pair $pair)
+               ($car (mut scm-type))
+               ($cdr (mut scm-type)))
+       (struct ($vector $heap-object)
+               ($vals (make-ref-type #f '$raw-scmvector)))
+       (struct ($mutable-vector $vector)
+               ($vals (make-ref-type #f '$raw-scmvector)))
+       (struct ($bytevector $heap-object)
+               ($vals (make-ref-type #f '$raw-bytevector)))
+       (struct ($mutable-bytevector $bytevector)
+               ($vals (make-ref-type #f '$raw-bytevector)))
+       (struct ($bitvector $heap-object)
+               ($len 'i32)
+               ($vals (make-ref-type #f '$raw-bitvector)))
+       (struct ($mutable-bitvector $bitvector)
+               ($len 'i32)
+               ($vals (make-ref-type #f '$raw-bitvector)))
+       (struct ($string $heap-object)
+               ($str (mut (make-ref-type #f 'string))))
+       (struct ($mutable-string $string)
+               ($str (mut (make-ref-type #f 'string))))
+       (struct ($proc $heap-object)
+               ($func (make-ref-type #f '$kvarargs)))
+       (struct ($symbol $heap-object)
+               ($name (make-ref-type #f '$string)))
+       (struct ($keyword $heap-object)
+               ($name (make-ref-type #f '$symbol)))
+       (struct ($variable $heap-object)
+               ($val (mut scm-type)))
+       (struct ($atomic-box $heap-object)
+               ($val (mut scm-type)))
+       (struct ($hash-table $heap-object)
+               ($size (make-ref-type #f 'i31))
+               ($buckets (make-ref-type #f '$vector)))
+       (struct ($weak-table $heap-object)
+               ($val (make-ref-type #f 'extern)))
+       (struct ($fluid $heap-object)
+               ($init scm-type))
+       (struct ($dynamic-state $heap-object)
+               ($val (make-ref-type #f 'extern)))
+       (struct ($syntax $heap-object)
+               ($expr scm-type)
+               ($wrap scm-type)
+               ($module scm-type)
+               ($source scm-type))
+       (struct* ($port-type)
+                ($name (make-ref-type #f 'string))
+                ;; in guile these are (port, bv, start, count) -> size_t
+                ($read (make-ref-type #t '$proc)) ;; could have a more refined type
+                ($write (make-ref-type #t '$proc))
+                ($seek (make-ref-type #t '$proc)) ;; (port, offset, whence) -> offset
+                ($close (make-ref-type #t '$proc)) ;; (port) -> ()
+                ($get-natural-buffer-sizes (make-ref-type #t '$proc)) ;; port -> (rdsz, wrsz)
+                ($random-access? (make-ref-type #t '$proc))  ;; port -> bool
+                ($input-waiting (make-ref-type #t '$proc))   ;; port -> bool
+                ($truncate (make-ref-type #t '$proc)) ;; (port, length) -> ()
+                ;; Guile also has GOOPS classes here.
+                )
+       (struct ($port $heap-object)
+               ($pt (make-ref-type #f '$port-type))
+               ($stream (mut scm-type))
+               ($file_name (mut scm-type))
+               ($position (mut (make-ref-type #f '$mutable-pair)))
+               ($read_buf (mut scm-type))           ;; A 5-vector
+               ($write_buf (mut scm-type))          ;; A 5-vector
+               ($write_buf_aux (mut scm-type))      ;; A 5-vector
+               ($read_buffering (mut 'i32))
+               ($refcount (mut 'i32))
+               ($rw_random (mut 'i8))
+               ($properties (mut scm-type)))
+       (struct ($struct $heap-object)
+               ;; Vtable link is mutable so that we can tie the knot for
+               ;; top types.
+               ($vtable (mut (make-ref-type #t '$vtable))))
+       (struct ($vtable $struct)
+               ($vtable (mut (make-ref-type #t '$vtable)))
+               ($field0 (mut scm-type))
+               ($field1 (mut scm-type))
+               ($field2 (mut scm-type))
+               ($field3 (mut scm-type))))))))
+
+(define standard-lib
+  (list (make-func '$pop-return!
+                   (make-type-use #f (make-func-sig
+                                      '()
+                                      (list (make-ref-type #f '$kvarargs))))
+                   '()
+                   `((global.get $return-sp)
+                     (i32.const 1)
+                     (i32.sub)
+                     (global.set $return-sp)
+                     (global.get $return-sp)
+                     (table.get $return-stack)))))
+
 (define (lower-to-wasm cps)
-  ;; for each function,
-  ;;   split into blocks.
-  ;;   blocks already sorted topologically because of renumbering.
-  ;;   create map of var -> defs.
-  ;;   create set of multiply-used defs.
-  ;;   define set of stack-allocated defs, initially empty.
-  ;;   then in post-order,
-  ;;     for each block,
-  ;;       for each instruction in reverse order,
-  ;;         collect operands:
-  ;;           either on stack if used-once, def in same block, def commutes
-  ;;           or local-ref
-  ;;         emit wasm instrs for cps op, with operands
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
   (define strings '())
   (define heap-constants '())
+  (define (func-label k) (string->symbol (format #f "$f~a" k)))
   (define funcs
     (intmap-map
      (lambda (kfun body)
@@ -77,16 +300,18 @@
            (string->symbol (format #f "$l~a" label)))
          (define (wrap-loop expr label)
            (if (loop-cont? label)
-               `(loop ,(loop-label label) ,expr)
+               `(loop ,(loop-label label) #f ,expr)
                expr))
          (define (var-label var) (string->symbol (format #f "$v~a" var)))
          (define (local.get var) `(local.get ,(var-label var)))
          (define (local.set var) `(local.set ,(var-label var)))
+         (define (local-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
+         (define (global-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
          (define (arg-ref idx)
-           (if (< idx 3)
-               `(local.get ,(string->symbol (format #f "$arg~a" idx)))
-               `(array.get $argv (global.get $argv) (i32.const ,(- idx 3)))))
-         (define (func-label k) (string->symbol (format #f "$f~a" k)))
+           (cond
+            ((< idx 3) `(local.get ,(local-arg-label idx)))
+            ((< idx 8) `(global.get ,(global-arg-label idx)))
+            (else `(table.get $argv (i32.const ,(- idx 8))))))
          (define (compile-tail exp)
            (define (pass-abi-arguments args)
              (cons
@@ -95,30 +320,35 @@
                 (match args
                   (()
                    (if (< idx 3)
-                       (cons '(i31.new (i32.const 0))
+                       (append '((i32.const 0)
+                                 (i31.new))
                              (lp args (1+ idx)))
                        '()))
                   ((arg . args)
-                   (if (< idx 3)
-                       (cons (local.get arg)
-                             (lp args (1+ idx)))
-                       (cons `(array.set $argv (global.get $argv)
-                                         (i32.const ,(- idx 3))
-                                         ,(local.get arg))
-                             (lp args (1+ idx)))))))))
+                   (cons (cond
+                          ((< idx 3) (local.get arg))
+                          ((< idx 8)
+                           `(global.set ,(global-arg-label idx)
+                                        ,(local.get arg)))
+                          (else
+                           `(table.set $argv (i32.const ,(- idx 8))
+                                       ,(local.get arg))))
+                         (lp args (1+ idx))))))))
            (match exp
              (($ $call proc args)
-              `(return_call_ref ,@(pass-abi-arguments args)
-                                (struct.get $proc 1
-                                            (ref.cast $proc
-                                                      ,(local.get proc)))))
+              `(,@(pass-abi-arguments args)
+                ,(local.get proc)
+                (ref.cast $proc)
+                (struct.get $proc 1)
+                (return_call_ref)))
              (($ $calli args callee)
               ;; This is a return.
-              `(return_call_ref ,@(pass-abi-arguments args) ,(local.get callee)))
+              `(,@(pass-abi-arguments args)
+                ,(local.get callee)
+                (return_call_ref)))
              (($ $callk k proc args)
-              `(return_call ,(func-label k)
-                            ,@(map local.get
-                                   (if proc (cons proc args) args))))))
+              `(,@(map local.get (if proc (cons proc args) args))
+                (return_call ,(func-label k))))))
          (define (compile-values exp)
            (define (fixnum? val)
              (and (exact-integer? val)
@@ -126,10 +356,11 @@
            (match exp
              (($ $const val)
               (match val
-                ((? fixnum?) `(i31.new (i32.const ,(ash val 1))))
+                ((? fixnum?) `((i32.const ,(ash val 1))
+                               (i31.new)))
                 (_ (error "unimplemented constant" val))))
              (($ $primcall 'restore1 'ptr ())
-              `(call $pop-return!))
+              `((call $pop-return!)))
              (_
               (error "unimplemented!" exp))))
          (define (compile-receive exp req rest kargs)
@@ -178,7 +409,7 @@
                (intset-filter merge-cont? (intmap-ref dom-children label)))
              (node-within label children ctx))
            (if (loop-cont? label)
-               `(loop ,(code-for-label (push-loop label ctx)))
+               `((loop #f #f ,(code-for-label (push-loop label ctx))))
                (code-for-label ctx)))
          (define (do-branch pred succ ctx)
            (cond
@@ -188,13 +419,12 @@
              (match ctx
                ((next-label . stack)
                 (if (eqv? succ next-label)
-                    '(nop)
-                    `(br ,(lookup-label succ ctx))))))
+                    '()
+                    `((br ,(lookup-label succ ctx)))))))
             (else
              ;; Otherwise render successor inline.
              (do-tree succ ctx))))
          (define (node-within label ys ctx)
-           (pk 'node-within label ys)
            (call-with-values (lambda () (intset-pop ys))
              (lambda (ys y)
                (match y
@@ -208,17 +438,15 @@
                           (($ $ktail)
                            (compile-tail exp))
                           (($ $kargs _ vars)
-                           `(begin
-                              ,(compile-values exp)
-                              ,@(reverse (map local.set vars))
-                              ,(do-branch label k ctx)))
+                           `(,@(compile-values exp)
+                             ,@(reverse (map local.set vars))
+                             ,@(do-branch label k ctx)))
                           (($ $kreceive ($ $arity req () rest () #f) kargs)
                            (compile-receive exp req rest kargs))))
                        (($ $branch kf kt src op param args)
-                        `(if ,(compile-test op param args)
-                             (then
-                              ,(do-branch label kt (cons 'if-then-else ctx)))
-                             (else
+                        `(,@(compile-test op param args)
+                          (if #f #f
+                              ,(do-branch label kt (cons 'if-then-else ctx))
                               ,(do-branch label kf (cons 'if-then-else ctx)))))
                        (($ $switch kf kt* src arg)
                         (error "switch unimplemented"))
@@ -231,9 +459,9 @@
                     (($ $kfun src meta self ktail kentry)
                      (if self
                          ;; only if referenced?
-                         `(begin
-                            (,@(local.set self) ,(arg-ref 0))
-                            ,(do-branch label kentry ctx))
+                         `(,(arg-ref 0)
+                           ,(local.set self)
+                           ,@(do-branch label kentry ctx))
                          (do-tree kentry ctx)))
                     (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
                         kbody kalt)
@@ -242,63 +470,387 @@
                      (when (not (null? kw)) (error "kwargs unimplemented"))
                      (when (not (null? opt)) (error "optargs unimplemented"))
                      (when rest (error "rest args unimplemented"))
-                     `(if (i32.eq (local.get $nargs) (i32.const ,(1+ (length req))))
-                          (then ,@(map (lambda (arg idx)
-                                         `(,@(local.set arg) ,(arg-ref (1+ idx))))
-                                       (iota (length req)))
-                                ,(do-branch label kbody ctx))
-                          (else (unreachable))))
+                     (match (intmap-ref cps kbody)
+                       (($ $kargs names vars)
+                        `((local.get $nargs)
+                          (i32.const ,(1+ (length req)))
+                          (i32.eq)
+                          (if #f #f
+                              (,@(append-map (lambda (arg idx)
+                                               `(,(arg-ref (1+ idx))
+                                                 ,(local.set arg)))
+                                             vars (iota (length req)))
+                               ,@(do-branch label kbody ctx))
+                              ((unreachable)))))))
                     (($ $ktail)
-                     '(nop))))
+                     '())))
                  (y
-                  `(begin
-                     (block ,(node-within label ys (push-block label ctx)))
-                     ,(do-tree y ctx)))))))
-         (define (sanitize-one x)
-           (match x
-             (('begin expr ...)
-              (match (sanitize-sequence expr)
-                (() '(nop))
-                ((expr) expr)
-                (exprs `(begin . ,exprs))))
-             (('if test ... ('then t ...) ('else f ...))
-              `(if ,@(sanitize-sequence test)
-                   (then ,@(sanitize-sequence t))
-                   (else ,@(sanitize-sequence f))))
-             (('block expr ...) `(block ,@(sanitize-sequence expr)))
-             (('loop expr ...) `(loop ,@(sanitize-sequence expr)))
-             (expr expr)))
-         (define (sanitize-sequence xs)
-           (match xs
-             (() '())
-             ((('nop) . xs) (sanitize-sequence xs))
-             ((('begin . body) . xs)
-              (sanitize-sequence (append body xs)))
-             ((x . xs)
-              (cons (sanitize-one x)
-                    (sanitize-sequence xs)))))
-         (define code (sanitize-one (do-tree kfun (make-ctx #f '()))))
+                  `((block #f #f
+                           ,(node-within label ys (push-block label ctx)))
+                    ,@(do-tree y ctx)))))))
+         (define code (do-tree kfun (make-ctx #f '())))
          (define (type-for-repr repr)
            (match repr
-             ('scm '(ref eq))
+             ('scm scm-type)
              ('f64 'f64)
              ((or 's64 'u64) 'i64)
-             ('ptr '(func (param i32 (ref eq) (ref eq) (ref eq))))))
+             ('ptr (make-ref-type #f '$kvarargs))))
          (define locals
-           (intmap-fold (lambda (var repr out)
-                          (cons `(local ,(var-label var)
-                                        ,(type-for-repr repr))
-                                out))
-                        (compute-var-representations cps) '()))
-         `(func (param $nargs i32)
-                (param $arg0 (ref eq))
-                (param $arg1 (ref eq))
-                (param $arg2 (ref eq))
-                ,@locals
-                ,code)))
+           (intmap-fold-right (lambda (var repr out)
+                                (cons (make-local (var-label var)
+                                                  (type-for-repr repr))
+                                      out))
+                              (compute-var-representations cps) '()))
+         ;; FIXME: Here attach a name, other debug info to the function
+         (make-func (func-label kfun)
+                    (make-type-use '$kvarargs kvarargs-sig)
+                    locals
+                    code)))
      (compute-reachable-functions cps 0)))
-  (intmap-fold (lambda (kfun fun) (pretty-print fun) (values)) funcs)
-  funcs)
+  (define (fold-instructions f body seed)
+    (define (visit* body seed)
+      (fold1 visit1 body seed))
+    (define (visit1 inst seed)
+      (let ((seed (f inst seed)))
+        (match inst
+          (((or 'block 'loop) label type insts)
+           (visit* insts seed))
+          (('if label type consequent alternate)
+           (visit* alternate (visit* consequent seed)))
+          (('try label type body catches catch-all)
+           (let ((seed (if catch-all (visit* catch-all seed) seed)))
+             (fold1 visit* catches (visit* body seed))))
+          (('try_delegate label type body handler)
+           (visit* body seed))
+          (_ seed))))
+    (visit* body seed))
+  (define-syntax-rule (simple-lookup candidates (pat test) ...)
+    (let lp ((candidates candidates))
+      (match candidates
+        (() #f)
+        (((and candidate pat) . candidates)
+         (if test candidate (lp candidates)))
+        ...)))
+  (define (function-locally-bound? label funcs)
+    (let/ec return
+      (intmap-fold (lambda (id func)
+                     (match func
+                       (($ <func> id) (if (eqv? label id) (return #t))))
+                     (values))
+                   funcs)
+      #f))
+  (define (compute-imports funcs)
+    (define (add-import import imports)
+      (define (lookup name imports)
+        (simple-lookup
+         imports
+         (($ <import> mod name 'func id) (eqv? id name))))
+      (match (lookup import imports)
+        (#f (match (lookup import standard-imports)
+              (#f (error "unknown import" import))
+              (import (cons import imports))))
+        (_ imports)))
+    (intmap-fold
+     (lambda (id func imports)
+       (match func
+         (($ <func> id type locals body)
+          (fold-instructions
+           (lambda (inst imports)
+             (match inst
+               (((or 'call 'return_call) label)
+                (if (function-locally-bound? label funcs)
+                    imports
+                    (add-import label imports)))
+               (_ imports)))
+           body imports))))
+     funcs '()))
+  (define (compute-tables funcs)
+    (define (add-table table tables)
+      (define (lookup name tables)
+        (simple-lookup
+         tables
+         (($ <table> id) (eqv? id name))))
+      (match (lookup table tables)
+        (#f (match (lookup table standard-tables)
+              (#f (error "unknown table" table))
+              (table (cons table tables))))
+        (_ tables)))
+    (intmap-fold
+     (lambda (id func tables)
+       (match func
+         (($ <func> id type locals body)
+          (fold-instructions
+           (lambda (inst tables)
+             (match inst
+               (((or 'table.get 'table.set
+                     'table.grow 'table.size 'table.fill)
+                 table)
+                (add-table table tables))
+               (('table.init elem table)
+                (add-table table tables))
+               (('table.copy dst src)
+                (add-table dst (add-table src tables)))
+               (('call_indirect table type)
+                (add-table table tables))
+               (_ tables)))
+           body tables))))
+     funcs '()))
+  (define (compute-memories funcs)
+    '())
+  (define (compute-globals funcs)
+    (define (add-global global globals)
+      (define (lookup name globals)
+        (simple-lookup
+         globals
+         (($ <global> id) (eqv? id name))))
+      (match (lookup global globals)
+        (#f (match (lookup global standard-globals)
+              (#f (error "unknown global" global))
+              (global (cons global globals))))
+        (_ globals)))
+    (intmap-fold
+     (lambda (id func globals)
+       (match func
+         (($ <func> id type locals body)
+          (fold-instructions
+           (lambda (inst globals)
+             (match inst
+               (((or 'global.get 'global.set) global)
+                (add-global global globals))
+               (_ globals)))
+           body globals))))
+     funcs '()))
+  (define (compute-exports funcs)
+    ;; those funcs with export meta
+    '())
+  (define (compute-elems funcs)
+    ;; declarative elem segment
+    '())
+  (define (compute-datas funcs)
+    '())
+  (define (compute-tags funcs)
+    '())
+  (define (compute-strings funcs)
+    ;; Resolver will handle it.
+    '())
+  (define (compute-custom funcs)
+    '())
+  (define (compute-types funcs imports tables globals elems tags)
+    (define (lookup-type name types)
+      (simple-lookup
+       types
+       (($ <type> id) (eqv? id name))
+       (($ <rec-group> rec-types) (lookup-type name rec-types))))
+    (define (add-heap-type type types)
+      (define (revisit-heap-type type types)
+        (match type
+          (($ <array-type> mutable? type)
+           (add-val-type type types))
+          (($ <struct-type> fields)
+           (fold1 (lambda (field)
+                    (match field
+                      (($ <field> id mutable? type)
+                       (add-val-type type types))))
+                  fields types))
+          (($ <sub-type> supers type)
+           (revisit-heap-type type (fold1 add-heap-type supers types)))
+          (($ <rec-group> rec-types)
+           (fold1 revisit-heap-type rec-types types))
+          (($ <type> id type)
+           (revisit-heap-type type types))))
+      (match type
+        ((or 'func 'extern 'any 'eq 'i31 'noextern 'nofunc 'struct 'array 'none
+             'string 'stringview_wtf8 'stringview_wtf16 'stringview_iter)
+         types)
+        (_
+         (match (lookup-type type types)
+           (#f (match (lookup-type type standard-heap-types)
+                 (#f (add-func-type type types))
+                 (type (revisit-heap-type
+                        type
+                        (cons type standard-heap-types)))))
+           (type types)))))
+    (define (add-func-type type types)
+      (define (revisit-func-type type types)
+        (match type
+          (($ <type> _ ($ <func-sig> params results))
+           (fold1 (lambda (param types)
+                    (match param
+                      (($ <param> id type)
+                       (add-val-type type types))))
+                  params
+                  (fold1 add-val-type results types)))))
+      (match (lookup-type type types)
+        (#f (match (lookup-type type standard-func-types)
+              (#f (error "unknown func type" type))
+              (type (revisit-func-type
+                     type
+                     (cons type standard-heap-types)))))
+        (type types)))
+    (define (add-type-use type types)
+      (match type
+        (($ <type-use> idx sig)
+         ;; recurse into sig?
+         (if (symbol? idx)
+             (add-func-type idx types)
+             types))))
+    (define (add-val-type type types)
+      (match type
+        ((or 'i32 'i64 'f32 'f64 'v128
+             'funcref 'externref 'anyref 'eqref 'i31ref
+             'nullexternref 'nullfuncref
+             'structref 'arrayref
+             'nullref
+             'stringref
+             'stringview_wtf8ref 'stringview_wtf16ref 'stringview_iterref)
+         types)
+        (($ <ref-type> nullable? ht)
+         (add-heap-type ht types))))
+    (define (add-types-for-body body types)
+      (fold-instructions
+       (lambda (inst types)
+         (match inst
+           (((or 'block 'loop 'if 'try 'try_delegate) label type . _)
+            (if type
+                (add-type-use type types)
+                types))
+           (((or 'call_indirect 'return_call_indirect) table type)
+            (add-type-use type types))
+           (((or 'call_ref 'return_call_ref) table type)
+            (add-type-use type types))
+           (('select type ...)
+            (fold1 add-val-type type types))
+           (('ref.null type)
+            (add-heap-type type types))
+           (((or 'struct.get 'struct.get_s 'struct.get_u
+                 'struct.set) type field)
+            (add-heap-type type types))
+           (((or 'struct.new 'struct.new_default
+                 'array.new 'array.new_default
+                 'array.get 'array.get_s 'array.get_u
+                 'array.set) type)
+            (add-heap-type type types))
+           (('array.copy dst src)
+            (add-heap-type dst (add-heap-type src types)))
+           (((or 'array.new_data 'array.new_elem) type _)
+            (add-heap-type type types))
+           (((or 'ref.test 'ref.cast) nullable? type)
+            (add-heap-type type types))
+           (_ types)))
+       body types))
+    (define (add-types-for-function func types)
+      (match func
+        (($ <func> id type locals body)
+         (add-types-for-body
+          body
+          (fold1 (lambda (local types)
+                   (match local
+                     (($ <local> id type) (add-val-type type types))))
+                 locals
+                 (add-type-use type types))))))
+    (define (add-types-for-import import types)
+      (match import
+        (($ <import> mod name 'func id type)
+         (add-type-use type types))
+        (($ <import> mod name 'table id ($ <table-type> limits type))
+         (add-val-type type types))
+        (($ <import> mod name 'memory id type)
+         types)
+        (($ <import> mod name 'global id ($ <global-type> mutable? type))
+         (add-val-type type types)))
+      types)
+    (define (add-types-for-table table types)
+      (match table
+        (($ <table> id ($ <table-type> limits type) init)
+         (add-val-type type
+                       (if init
+                           (add-types-for-body init types)
+                           types)))))
+    (define (add-types-for-global global types)
+      (match global
+        (($ <global> id ($ <global-type> mutable? type) init)
+         (add-val-type type (add-types-for-body init types)))))
+    (define (add-types-for-elem elem types)
+      (match elem
+        (($ <elem> id mode table type offset inits)
+         (let* ((types (fold1 add-types-for-body inits types))
+                (types (add-val-type type types)))
+           (if offset
+               (add-types-for-body offset types)
+               types)))))
+    (define (add-types-for-tag tag types)
+      (match tag
+        (($ <tag> id type)
+         (add-type-use type types))))
+    (intmap-fold
+     (lambda (id func types) (add-types-for-function func types))
+     funcs
+     (fold1 add-types-for-import imports
+            (fold1 add-types-for-table tables
+                   (fold1 add-types-for-global globals
+                          (fold1 add-types-for-elem elems
+                                 (fold1 add-types-for-tag tags '())))))))
+  (define (add-init-func funcs)
+    funcs)
+  (define (add-low-level-runtime funcs)
+    (define (add-runtime name runtime)
+      (define (lookup name funcs)
+        (simple-lookup funcs (($ <func> id) (eqv? id name))))
+      (let ((str (and (symbol? name) (symbol->string name))))
+        (cond
+         ((and str (string-prefix? "$f" str)
+               (and=> (string->number (substring str 2))
+                      (lambda (label)
+                        (intmap-ref funcs label (lambda (_) #f)))))
+          runtime)
+         (else
+          (match (lookup name runtime)
+            (#f (match (lookup name standard-lib)
+                  (#f runtime)
+                  (func (visit-func func (cons func runtime)))))
+            (_ runtime))))))
+    (define (visit-func func runtime)
+      (match func
+        (($ <func> id type locals body)
+         (fold-instructions
+          (lambda (inst runtime)
+            (match inst
+              (((or 'call 'return_call) f)
+               (add-runtime f runtime))
+              (_ runtime)))
+          body runtime))))
+    (define runtime
+      (intmap-fold
+       (lambda (id func runtime) (visit-func func runtime))
+       funcs
+       '()))
+    (fold1 (lambda (func funcs)
+             (intmap-add funcs (1+ (intmap-prev funcs)) func))
+           runtime funcs))
+  (let ((funcs (add-init-func (add-low-level-runtime funcs))))
+    (define imports (compute-imports funcs))
+    (define tables (compute-tables funcs))
+    (define memories '())
+    (define globals (compute-globals funcs))
+    (define exports (compute-exports funcs))
+    (define start (func-label (intmap-next funcs)))
+    (define elems (compute-elems funcs))
+    (define datas (compute-datas funcs))
+    (define tags (compute-tags funcs))
+    (define strings (compute-strings funcs))
+    (define custom (compute-custom funcs))
+    (define types (compute-types funcs imports tables globals elems tags))
+    (for-each pk
+              (list types imports
+                    (intmap-fold-right (lambda (kfun func funcs) (cons func funcs))
+                                       funcs '())
+                    tables memories globals exports
+                    start elems datas tags strings custom))
+    (make-wasm types imports
+               (intmap-fold-right (lambda (kfun func funcs) (cons func funcs))
+                                  funcs '())
+               tables memories globals exports
+               start elems datas tags strings custom)))
 
 (define* (compile-to-wasm input-file output-file #:key
                           (from (current-language))
@@ -329,11 +881,13 @@
       (define cps (compile-to-cps in))
       (dump cps)
       (let ((wasm (lower-to-wasm cps)))
-        wasm
+        (dump-wasm wasm)
         #;
-        (call-with-output-file output-file
-          (lambda (out)
-            (write-wasm wasm out)))))))
+        (let ((bytes (assemble-wasm (resolve-wasm wasm))))
+          (call-with-output-file output-file
+            (lambda (out)
+              (put-bytevector out bytes))))
+        ))))
 
 (define (main args)
   (match args

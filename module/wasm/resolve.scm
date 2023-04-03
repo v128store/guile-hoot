@@ -44,20 +44,21 @@
       (() s0)
       ((elt . l) (lp l (f elt s0))))))
 
+(define (make-name-store)
+  (let ((count 0)
+        (ids (make-hash-table)))
+    (values (lambda (id)
+              (let ((idx count))
+                (set! count (1+ count))
+                (when id (hashq-set! ids id idx))
+                idx))
+            (lambda (id)
+              (cond
+               ((exact-integer? id) id)
+               ((hashq-ref ids id))
+               (else (error "unbound identifier" id)))))))
+
 (define (resolve-wasm mod)
-  (define (make-name-store)
-    (let ((count 0)
-          (ids (make-hash-table)))
-      (values (lambda (id)
-                (let ((idx count))
-                  (set! count (1+ count))
-                  (when id (hashq-set! ids id idx))
-                  idx))
-              (lambda (id)
-                (cond
-                 ((exact-integer? id) id)
-                 ((hashq-ref ids id))
-                 (else (error "unbound identifier" id)))))))
   (define-values (add-type-id! resolve-type) (make-name-store))
   (define-values (add-func-id! resolve-func) (make-name-store))
   (define-values (add-table-id! resolve-table) (make-name-store))
@@ -66,6 +67,7 @@
   (define-values (add-elem-id! resolve-elem) (make-name-store))
   (define-values (add-data-id! resolve-data) (make-name-store))
   (define-values (add-tag-id! resolve-tag) (make-name-store))
+
   (define struct-fields (make-hash-table))
   (define (add-struct-field! struct-id struct-idx field-id)
     (match (hashq-ref struct-fields struct-idx)
@@ -82,6 +84,7 @@
     (match (hashq-ref struct-fields struct-id-or-idx)
       ((add-id! . resolve-id)
        (resolve-id field))))
+
   (define interned-strings (make-hash-table))
   (define interned-string-count 0)
   (define (intern-string string)
@@ -90,6 +93,7 @@
           (hash-set! interned-strings string idx)
           (set! interned-string-count (1+ idx))
           idx)))
+
   (define (find-type pred types)
     (let lp ((types types) (idx 0))
       (define (visit-base rec supers type-id type-idx type)
@@ -166,7 +170,7 @@
                    (if catch-all
                        (adjoin-type-uses-from-body catch-all types)
                        types))))
-          (('try label type body handler)
+          (('try_delegate label type body handler)
            (adjoin-type-uses-from-body
             body
             (adjoin-type-use-for-block-type type types)))
@@ -265,6 +269,9 @@
          (_ (resolve-val-type type))))
 
      (define (resolve-type-use x)
+       ;; Transform symbolic or anonymous type uses to indexed type
+       ;; uses.  No need to resolve value types for params or results;
+       ;; that's the job for `visit-type`.
        (define (lookup-type-use params results)
          (or (find-type (type-use-matcher params results) types)
              (error "unreachable")))
@@ -279,11 +286,13 @@
                                       def-sig
                                       use-sig)))))
               (or (lookup-type-use params results))))))
+
      (define (resolve-block-type x)
        (match x
          (($ <type-use> #f ($ <func-sig> () (or () (_))))
           x)
          (_ (resolve-type-use x))))
+
      (define (resolve-instructions insts locals labels)
        (define (resolve-label label)
          (match label
@@ -316,21 +325,96 @@
             `(if ,label ,(resolve-block-type type)
                  ,(resolve-instructions consequent locals labels)
                  ,(resolve-instructions alternate locals labels))))
-         (((and inst (or 'br 'br_if)) label)
+         (('try label type body catches catch-all)
+          (let ((labels (cons label labels)))
+            `(try ,label ,(resolve-block-type type)
+                  ,(resolve-instructions body locals labels)
+                  ,(map (lambda (body)
+                          (resolve-instructions body locals labels))
+                        catches)
+                  ,(and catch-all
+                        (resolve-instructions catch-all locals labels)))))
+         (('try_delegate label type body handler)
+          (let ((labels (cons label labels)))
+            `(try_delegate ,label ,(resolve-block-type type)
+                           ,(resolve-instructions body locals labels)
+                           ,(resolve-label handler))))
+         (((and inst (or 'throw 'rethrow)) tag) `(,inst ,(resolve-tag tag)))
+         (((and inst (or 'br 'br_if 'br_on_null 'br_on_non_null)) label)
           `(,inst ,(resolve-label label)))
          (('br_table targets default)
           `(br_table ,(map resolve-label targets) ,(resolve-label default)))
-         (('call label)
-          `(call ,(resolve-func label)))
+         (((and inst (or 'call 'return_call)) label)
+          `(,inst ,(resolve-func label)))
          (('call_indirect table type)
           `(call_indirect ,(resolve-table table) ,(resolve-type-use type)))
+         (((and inst (or 'call_ref 'return_call_ref)) type)
+          `(,inst ,(resolve-type-use type)))
+         (('select types) `(select ,(map resolve-val-type types)))
          (((and inst (or 'local.get 'local.set 'local.tee)) local)
           `(,inst ,(resolve-local local)))
          (((and inst (or 'global.get 'global.set)) global)
           `(,inst ,(resolve-global global)))
+         (((and inst (or 'table.get 'table.set)) table)
+          `(,inst ,(resolve-table table)))
+         (((and inst (or 'memory.size 'memory.grow)) mem)
+          `(,inst ,(resolve-memory mem)))
+         (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
+         (('ref.func f) `(ref.func ,(resolve-func f)))
+
+         ;; GC instructions.
+         (((and inst (or 'struct.get 'struct.get_s 'struct.get_u 'struct.set))
+           type field)
+          `(,inst ,(resolve-type type) ,(resolve-struct-field type field)))
+         (((and inst (or 'struct.new 'struct.new_default)) type)
+          `(,inst ,(resolve-type type)))
+         (((and inst (or 'array.get 'array.get_s 'array.get_u 'array.set)) type)
+          `(,inst ,(resolve-type type)))
+         (('array.new_fixed type len)
+          `(array.new_fixed ,(resolve-type type) ,len))
+         (((and inst (or 'array.new 'array.new_default)) type)
+          `(,inst ,(resolve-type type)))
+         (('array.new_data type data)
+          `(array.new_fixed ,(resolve-type type) ,(resolve-data data)))
+         (('array.new_elem type elem)
+          `(array.new_fixed ,(resolve-type type) ,(resolve-elem elem)))
+         (('array.copy dst src)
+          `(array.copy ,(resolve-type dst) ,(resolve-type src)))
+         (((and inst (or 'ref.test 'ref.cast)) nullable? ht)
+          `(,inst ,nullable? ,(resolve-heap-type ht)))
          (('string.const (? string? str))
           `(string.const ,(intern-string str)))
-         ;; fixme: tables, bulk memory, reftypes...
+         (((and inst (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8
+                         'string.new_wtf16
+                         'string.encode_utf8 'string.encode_lossy_utf8
+                         'string.encode_wtf8 'string.encode_wtf16
+                         'stringview_wtf8.encode_utf8
+                         'stringview_wtf8.encode_lossy_utf8
+                         'stringview_wtf8.encode_wtf8
+                         'stringview_wtf16.encode))
+           mem)
+          `(,inst ,(resolve-memory mem)))
+
+         ;; Misc instructions.
+         (('memory.init data mem)
+          `(memory.init ,(resolve-data data) ,(resolve-memory mem)))
+         (('data.drop data)
+          `(data.drop ,(resolve-data data)))
+         (('memory.copy dst src)
+          `(memory.copy ,(resolve-memory dst) ,(resolve-memory src)))
+         (('memory.fill mem)
+          `(memory.fill ,(resolve-memory mem)))
+         (('table.init elem table)
+          `(table.init ,(resolve-elem elem) ,(resolve-table table)))
+         (('elem.drop elem)
+          `(elem.drop ,(resolve-elem elem)))
+         (('table.copy dst src)
+          `(table.copy ,(resolve-table dst) ,(resolve-table src)))
+         (((and inst (or 'table.grow 'table.size 'table.fill)) table)
+          `(,inst ,(resolve-table table)))
+         
+         ;; Not yet implemented: simd mem ops, atomic mem ops.
+
          (inst inst))
         insts))
 

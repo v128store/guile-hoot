@@ -470,7 +470,8 @@
      (define (visit-elem elem)
        (match elem
          (($ <elem> id mode table type offset init)
-          (make-elem id mode (and table (resolve-table table)) type
+          (make-elem id mode (and table (resolve-table table))
+                     (resolve-val-type type)
                      (resolve-instructions offset '() '())
                      (map (lambda (init)
                             (resolve-instructions init '() '()))
@@ -487,11 +488,15 @@
        (and start (resolve-func start)))
 
      (define (visit-func func)
+       (define (visit-local local)
+         (match local
+           (($ <local> id type)
+            (make-local id (resolve-val-type type)))))
        (match func
          (($ <func> id type locals body)
           (match (resolve-type-use type)
             ((and type ($ <type-use> _ ($ <func-sig> params _)))
-             (make-func id type locals
+             (make-func id type (map visit-local locals)
                         (resolve-instructions body
                                               (append params locals)
                                               '())))))))
@@ -499,23 +504,21 @@
      (define (visit-table table)
        (match table
          (($ <table> id type init)
-          ;; FIXME: resolve (ref $foo)
-          (make-table id type (and init (resolve-instructions init '() '()))))))
+          (make-table id (resolve-val-type type)
+                      (and init (resolve-instructions init '() '()))))))
 
      (define (visit-memory mem) mem)
 
      (define (visit-global global)
        (match global
          (($ <global> id type init)
-          ;; fixme: resolve type
-          (make-global id type (resolve-instructions init '() '())))))
+          (make-global id (resolve-val-type type)
+                       (resolve-instructions init '() '())))))
 
      (define (visit-tag tag)
        (match tag
          (($ <tag> id type)
           (make-tag id (resolve-type-use type)))))
-
-     ;; FIXME: reftypes means we have to resolve types in more places
 
      (let ((types (map visit-type types))
            (imports (map visit-import imports))

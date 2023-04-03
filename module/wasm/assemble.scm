@@ -745,19 +745,35 @@
        (define (lookup-or-intern-func-sig! params results)
          (let lp ((types types) (idx 0))
            (define param-type (match-lambda (($ <param> id type) type)))
+           (define (visit-base type idx)
+             (match sig
+               (($ <func-sig> params' results')
+                (and (equal? (map param-type params)
+                             (map param-type params'))
+                     (equal? results results')
+                     idx))
+               ((or ($ <struct-type>) ($ <array-type>)) #f)))
+           (define (visit-sub type idx)
+             (match type
+               (($ <sub-type> supers type)
+                (visit-base type idx))
+               (type (visit-base type idx))))
+           (define (visit-rec types idx)
+             (match types
+               (() #f)
+               ((type . types)
+                (or (visit-sub type idx)
+                    (visit-rec types (1+ idx))))))
            (match types
              (()
               (intern-func-sig! params results)
               (add-type-id! #f))
-             ((($ <type> id sig) . types)
-              (match sig
-                (($ <func-sig> params' results')
-                 (if (and (equal? (map param-type params)
-                                  (map param-type params'))
-                          (equal? results results'))
-                     idx
-                     (lp types (1+ idx))))
-                (_ (lp types (1+ idx))))))))
+             ((($ <rec-group> sub-types) . types)
+              (or (visit-rec sub-types idx)
+                  (lp types (+ idx (length sub-stypes)))))
+             ((($ <type> id type) . types)
+              (or (visit-sub type idx)
+                  (lp types (1+ idx)))))))
        (match x
          (($ <type-use> idx (and use-sig ($ <func-sig> params results)))
           (if idx

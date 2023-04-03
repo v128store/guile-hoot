@@ -44,6 +44,12 @@
 ;; strings have guile string syntax; bytevectors also for data.  could
 ;; write standard-compliant parser instead (port from wassemble).
 
+(define (fold1 f l s0)
+  (let lp ((l l) (s0 s0))
+    (match l
+      (() s0)
+      ((elt . l) (lp l (f elt s0))))))
+
 (define (natural-alignment inst)
   (case inst
     ((i32.load8_s
@@ -619,7 +625,7 @@
                     elems datas tags strings custom))))))
 
 (define (resolve-wasm mod)
-  (define-syntax-rule (make-name-store)
+  (define (make-name-store)
     (let ((count 0)
           (ids (make-hash-table)))
       (values (lambda (id)
@@ -664,9 +670,103 @@
           (hash-set! interned-strings string idx)
           (set! interned-string-count (1+ idx))
           idx)))
+  (define (find-type pred types)
+    (let lp ((types types) (idx 0))
+      (define (visit-base rec supers type-id type-idx type)
+        (pred rec type-id type-idx supers type))
+      (define (visit-sub rec type-id type-idx type)
+        (match type
+          (($ <sub-type> supers type)
+           (visit-base rec supers type-id type-idx type))
+          (_ (visit-base rec '()  type-id type-idx type))))
+      (match types
+        (() #f)
+        ((($ <rec-group> (subtypes)) . types)
+         (let ((rec idx))
+           (let lp ((subtypes subtypes) (idx idx))
+             (match subtypes
+               (() (lp types idx))
+               ((($ <type> id subtype) . subtypes)
+                (or (visit-sub rec id idx subtype)
+                    (lp subtypes (1+ idx))))))))
+        ((($ <type> id type) . types)
+         (or (visit-sub idx id idx type)
+             (lp types (1+ idx)))))))
+
+  (define (type-use-matcher params results)
+    (define param-type (match-lambda (($ <param> id type) type)))
+    (lambda (rec type-id type-idx supers type)
+      (and (null? supers)
+           (match type
+             (($ <func-sig> params' results')
+              (and (equal? (map param-type params)
+                           (map param-type params'))
+                   (equal? results results')
+                   (make-type-use type-idx type)))
+             (_ #f)))))
+
+  (define (adjoin-types-from-type-uses types funcs imports tags)
+    (define (adjoin-type-use type types)
+      (match type
+        (($ <type-use> #f ($ <func-sig> params results))
+         (if (find-type (type-use-matcher params results) types)
+             types
+             (append types
+                     (list (make-type #f (make-func-sig params results))))))
+        (($ <type-use>) types)))
+    (define (adjoin-type-uses-from-import import types)
+      (match import
+        (($ <import> mod name 'func id type)
+         (adjoin-type-use type types))
+        (($ <import>) #f)))
+    (define (adjoin-type-uses-from-tag tag types)
+      (match tag
+        (($ <tag> id type) (adjoin-type-use type types))))
+    (define (adjoin-type-uses-from-func func types)
+      (define (adjoin-type-use-for-block-type x types)
+        (match x
+          (($ <type-use> #f ($ <func-sig> () (or () (_))))
+           types)
+          (_ (adjoin-type-use x types))))
+      (define (adjoin-type-uses-for-inst inst types)
+        (match inst
+          (((or 'block 'loop) label type body)
+           (fold1 adjoin-type-uses-for-inst body
+                  (adjoin-type-use-for-block-type type types)))
+          (('if label type consequent alternate)
+           (adjoin-type-uses-from-body
+            consequent
+            (adjoin-type-uses-from-body
+             alternate
+             (adjoin-type-use-for-block-type type types))))
+          (('try label type body catches catch-all)
+           (fold1 adjoin-type-uses-from-body (append body catches)
+                  (adjoin-type-use-for-block-type
+                   type
+                   (if catch-all
+                       (adjoin-type-uses-from-body catch-all types)
+                       types))))
+          (('try label type body handler)
+           (adjoin-type-uses-from-body
+            body
+            (adjoin-type-use-for-block-type type types)))
+          (((or 'call_indirect 'return_call_indirect) table type)
+           (adjoin-type-use type types))
+          (_ types)))
+      (define (adjoin-type-uses-from-body insts types)
+        (fold1 adjoin-type-uses-for-inst insts types))
+      (match func
+        (($ <func> id type locals body)
+         (adjoin-type-uses-from-body body (adjoin-type-use type types)))))
+    (fold1 adjoin-type-uses-from-func funcs
+           (fold1 adjoin-type-uses-from-tag tags
+                  (fold1 adjoin-type-uses-from-import imports types))))
+
   (match mod
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> %types imports funcs tables memories globals exports start
         elems datas tags strings custom)
+     (define types (adjoin-types-from-type-uses %types funcs imports tags))
+
      (for-each (match-lambda (($ <type> id type) (add-type-id! id))
                              (($ <rec-group> (($ <type> id type) ...))
                               (for-each add-type-id! id)))
@@ -700,80 +800,54 @@
                               (add-tag-id! id)))
                tags)
      (for-each intern-string strings)
-
-     (let add-struct-fields ((types types) (idx 0))
-       (define (visit-base type-id type-idx type)
-         (match type
-           (($ <struct-type> (($ <field> id mutable? type) ...))
-            (for-each (lambda (field-id)
+     (find-type (lambda (rec type-id type-idx supers type)
+                  (match type
+                    (($ <struct-type>
+                        (($ <field> field-id mutable? type) ...))
+                     (for-each
+                      (lambda (field-id)
                         (add-struct-field! type-id type-idx field-id))
-                      id))
-           ((or ($ <func-sig>) ($ <array-type>))
-            #f)))
-       (define (visit-sub type-id type-idx type)
-         (match type
-           (($ <sub-type> supers type)
-            (visit-base type-id type-idx type))
-           (_ (visit-base type-id type-idx type))))
-       (match types
-         (() #f)
-         ((($ <rec-group> subtypes) . types)
-          (add-struct-fields (append subtypes types) idx))
-         ((($ <type> id type) . types)
-          (visit-sub id idx type)
-          (add-struct-fields types (1+ idx)))))
+                      field-id))
+                    (_ (values)))
+                  #t)
+                types)
 
      (define (type-by-idx idx)
-       (let lp ((types types) (idx idx))
-         (match types
-           (() #f)
-           ((($ <rec-group> subtypes) . types)
-            (let ((sublen (length subtypes)))
-              (if (< idx sublen)
-                  (lp subtypes idx)
-                  (lp types (- idx sublen)))))
-           ((type . types)
-            (if (zero? idx)
-                type
-                (lp types (1- idx)))))))
+       (or (find-type (lambda (rec type-id type-idx supers type)
+                        (and (eqv? type-idx idx)
+                             type))
+                      types)
+           (error "unknown type" idx)))
+
+     (define (resolve-heap-type ht)
+       (match ht
+         ((or 'func 'extern
+              'any 'eq 'i31 'noextern 'nofunc 'struct 'array 'none
+              'string 'stringview_wtf8 'stringview_wtf16 'stringview_iter)
+          ht)
+         (_ (resolve-type ht))))
+
+     (define (resolve-val-type vt)
+       (match vt
+         ((or 'i32 'i64 'f32 'f64 'v128
+              'funcref 'externref 'anyref 'eqref 'i31ref
+              'nullexternref 'nullfuncref
+              'structref 'arrayref 'nullref
+              'stringref
+              'stringview_wtf8ref 'stringview_wtf16ref 'stringview_iterref)
+          vt)
+         (($ <ref-type> nullable? ht)
+          (make-ref-type nullable? (resolve-heap-type ht)))))
+
+     (define (resolve-storage-type type)
+       (match type
+         ((or 'i8 'i16) type)
+         (_ (resolve-val-type type))))
 
      (define (resolve-type-use x)
-       (define (intern-func-sig! params results)
-         (set! types
-               (append! types
-                        (list (make-type #f (make-func-sig params results))))))
-       (define (lookup-or-intern-func-sig! params results)
-         (let lp ((types types) (idx 0))
-           (define param-type (match-lambda (($ <param> id type) type)))
-           (define (visit-base type idx)
-             (match sig
-               (($ <func-sig> params' results')
-                (and (equal? (map param-type params)
-                             (map param-type params'))
-                     (equal? results results')
-                     idx))
-               ((or ($ <struct-type>) ($ <array-type>)) #f)))
-           (define (visit-sub type idx)
-             (match type
-               (($ <sub-type> supers type)
-                (visit-base type idx))
-               (type (visit-base type idx))))
-           (define (visit-rec types idx)
-             (match types
-               (() #f)
-               ((type . types)
-                (or (visit-sub type idx)
-                    (visit-rec types (1+ idx))))))
-           (match types
-             (()
-              (intern-func-sig! params results)
-              (add-type-id! #f))
-             ((($ <rec-group> sub-types) . types)
-              (or (visit-rec sub-types idx)
-                  (lp types (+ idx (length sub-stypes)))))
-             ((($ <type> id type) . types)
-              (or (visit-sub type idx)
-                  (lp types (1+ idx)))))))
+       (define (lookup-type-use params results)
+         (or (find-type (type-use-matcher params results) types)
+             (error "unreachable")))
        (match x
          (($ <type-use> idx (and use-sig ($ <func-sig> params results)))
           (if idx
@@ -784,8 +858,7 @@
                                   (if (and (null? params) (null? results))
                                       def-sig
                                       use-sig)))))
-              (make-type-use (lookup-or-intern-func-sig! params results)
-                             use-sig)))))
+              (or (lookup-type-use params results))))))
      (define (resolve-block-type x)
        (match x
          (($ <type-use> #f ($ <func-sig> () (or () (_))))
@@ -841,6 +914,38 @@
          (inst inst))
         insts))
 
+     (define (visit-type type)
+       (define (resolve-param param)
+         (match param
+           (($ <param> id type)
+            (make-param id (resolve-val-type type)))))
+       (define (resolve-field field)
+         (match field
+           (($ <field> id mutable? type)
+            (make-field id mutable? (resolve-storage-type type)))))
+       (define (resolve-base type)
+         (match type
+           (($ <func-sig> params results)
+           (make-func-sig (map resolve-param params)
+                          (map resolve-val-type results)))
+           (($ <array-type> mutable? type)
+            (make-array-type mutable? (resolve-storage-type type)))
+           (($ <struct-type> fields)
+            (make-struct-type (map resolve-field fields)))))
+       (define (resolve-sub type)
+         (match type
+           (($ <type> id type)
+            (make-type id
+                       (match type
+                         (($ <sub-type> supers type)
+                          (make-sub-type (map resolve-heap-type supers)
+                                         (resolve-base type)))
+                         (_ (resolve-base type)))))))
+       (match type
+         (($ <rec-group> sub-types)
+          (make-rec-group (map resolve-sub sub-types)))
+         (_ (resolve-sub type))))
+
      (define (visit-import import)
        (match import
          (($ <import> mod name 'func id type)
@@ -880,11 +985,9 @@
      (define (visit-func func)
        (match func
          (($ <func> id type locals body)
-          (match type
-            (($ <type-use> _ ($ <func-sig> params _))
-             (make-func id
-                        (resolve-type-use type)
-                        locals
+          (match (resolve-type-use type)
+            ((and type ($ <type-use> _ ($ <func-sig> params _)))
+             (make-func id type locals
                         (resolve-instructions body
                                               (append params locals)
                                               '())))))))
@@ -903,10 +1006,6 @@
           ;; fixme: resolve type
           (make-global id type (resolve-instructions init '() '())))))
 
-     (define (visit-type type)
-       ;; for now no reftypes
-       type)
-
      (define (visit-tag tag)
        (match tag
          (($ <tag> id type)
@@ -914,10 +1013,8 @@
 
      ;; FIXME: reftypes means we have to resolve types in more places
 
-     ;; Resolving any inline (param ...) (result ...) type definition
-     ;; may cause a new type to be added.  For that reason, put off
-     ;; resolving types until after resolving other productions.
-     (let ((imports (map visit-import imports))
+     (let ((types (map visit-type types))
+           (imports (map visit-import imports))
            (exports (map visit-export exports))
            (elems (map visit-elem elems))
            (datas (map visit-data datas))
@@ -931,10 +1028,9 @@
                          (sort (hash-map->list cons interned-strings)
                                (match-lambda*
                                 (((s1 . idx1) (s2 . idx2)) (< idx1 idx2)))))))
-       (make-wasm (map visit-type types)
-                  imports funcs tables memories globals exports start
+       (make-wasm types imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))
-  
+
 (define (assemble-wasm wasm)
   (define (put-uleb port val)
     (let lp ((val val))
@@ -968,11 +1064,11 @@
   (define (emit-vec port items emit)
     (emit-u32 port (length items))
     (for-each (lambda (item) (emit port item)) items))
-  
+
   (define (emit-vec/u8 port bv)
     (emit-u32 port (bytevector-length bv))
     (put-bytevector port bv))
-  
+
   (define (emit-heap-type port ht)
     (match ht
       ((and (? exact-integer?) (not (? negative?))) (put-sleb port ht))
@@ -1075,7 +1171,7 @@
 
   (define (emit-instruction port inst)
     (define (bad-instruction) (error "bad instruction" inst))
-                  
+
     (define-values (op args)
       (match inst
         ((op args ...) (values op args))
@@ -1514,7 +1610,7 @@
       ('table.fill                         (emit-misc-idx #x11))
 
       (_ (bad-instruction))))
-  
+
   (define (emit-instructions port insts)
     (for-each (lambda (inst) (emit-instruction port inst)) insts))
 
@@ -1709,14 +1805,14 @@
                     (call-with-output-bytevector
                      (lambda (port)
                        (emit-vec port items emit-item))))))
-  
+
   (match wasm
     (($ <wasm> types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (call-with-output-bytevector
       (lambda (port)
         (put-bytevector port #vu8(#x00 #x61 #x73 #x6d)) ;; "\0asm"
-        (put-bytevector port #vu8(1 0 0 0)) ;; version
+        (put-bytevector port #vu8(1 0 0 0))             ;; version
         (emit-vec-section port 1 types emit-type-def)
         (emit-vec-section port 2 imports emit-import)
         (emit-vec-section port 3 funcs emit-func-decl)

@@ -105,14 +105,14 @@
           (_ (visit-base rec '()  type-id type-idx type))))
       (match types
         (() #f)
-        ((($ <rec-group> (subtypes)) . types)
+        ((($ <rec-group> subtypes) . types)
          (let ((rec idx))
-           (let lp ((subtypes subtypes) (idx idx))
+           (let lp2 ((subtypes subtypes) (idx idx))
              (match subtypes
                (() (lp types idx))
                ((($ <type> id subtype) . subtypes)
                 (or (visit-sub rec id idx subtype)
-                    (lp subtypes (1+ idx))))))))
+                    (lp2 subtypes (1+ idx))))))))
         ((($ <type> id type) . types)
          (or (visit-sub idx id idx type)
              (lp types (1+ idx)))))))
@@ -278,13 +278,11 @@
        (match x
          (($ <type-use> idx (and use-sig ($ <func-sig> params results)))
           (if idx
-              (let ((idx (resolve-type idx)))
-                (match (type-by-idx idx)
-                  (($ <type> _ def-sig)
-                   (make-type-use idx
-                                  (if (and (null? params) (null? results))
-                                      def-sig
-                                      use-sig)))))
+              (let ((def-sig (type-by-idx (resolve-type idx))))
+                (make-type-use idx
+                               (if (and (null? params) (null? results))
+                                   def-sig
+                                   use-sig)))
               (or (lookup-type-use params results))))))
 
      (define (resolve-block-type x)
@@ -503,16 +501,18 @@
 
      (define (visit-table table)
        (match table
-         (($ <table> id type init)
-          (make-table id (resolve-val-type type)
+         (($ <table> id ($ <table-type> limits type) init)
+          (make-table id
+                      (make-table-type limits (resolve-val-type type))
                       (and init (resolve-instructions init '() '()))))))
 
      (define (visit-memory mem) mem)
 
      (define (visit-global global)
        (match global
-         (($ <global> id type init)
-          (make-global id (resolve-val-type type)
+         (($ <global> id ($ <global-type> mutable? type) init)
+          (make-global id
+                       (make-global-type mutable? (resolve-val-type type))
                        (resolve-instructions init '() '())))))
 
      (define (visit-tag tag)

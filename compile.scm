@@ -17,6 +17,7 @@
              (language cps dump)
              (language cps utils)
              (wasm assemble)
+             (wasm resolve)
              (wasm dump)
              (wasm types))
 
@@ -40,6 +41,8 @@
     (#f (values set #f))
     (i (values (intset-remove set i) i))))
 
+(define void-block-type (make-type-use #f (make-func-sig '() '())))
+
 ;; Codegen improvements:
 ;;
 ;; 1. Eliminating directly-used locals.  Compute a set of variables that
@@ -60,46 +63,52 @@
                        (make-param '$arg0 scm-type)
                        (make-param '$arg1 scm-type)
                        (make-param '$arg2 scm-type))'()))
-(define standard-imports
-  (list
-   (make-import "rt" "get_argument" 'func '$get-argument
-                (make-func-sig (list (make-param #f 'i32))
-                               (list scm-type)))
-   (make-import "rt" "prepare_return_values" 'func '$prepare-return-values
-                (make-func-sig (list (make-param #f 'i32)) '()))
-   (make-import "rt" "set_return_value" 'func '$set-return-value
-                (make-func-sig (list (make-param #f 'i32)
-                                     (make-param #f scm-type))
-                               '()))
-   
-   (make-import "rt" "bignum_from_i64" 'func '$bignum-from-i64
-                (make-func-sig '(i64)
-                               (list (make-ref-type #f 'extern))))
-   (make-import "rt" "bignum_from_u64" 'func '$bignum-from-u64
-                (make-func-sig '(i64)
-                               (list (make-ref-type #f 'extern))))
-   (make-import "rt" "bignum_is_i64" 'func '$bignum-is-i64
-                (make-func-sig (list (make-ref-type #f 'extern))
-                               '(i32)))
-   (make-import "rt" "bignum_is_u64" 'func '$bignum-is-u64
-                (make-func-sig (list (make-ref-type #f 'extern))
-                               '(i32)))
-   (make-import "rt" "bignum_get_i64" 'func '$bignum-get-i64
-                (make-func-sig (list (make-ref-type #f 'extern))
-                               '(i64)))
-   (make-import "rt" "make_weak_map" 'func '$make-weak-map
-                (make-func-sig '()
-                               (list (make-ref-type #f 'extern))))
-   (make-import "rt" "weak_map_get" 'func '$weak-map-get
-                (make-func-sig (list (make-ref-type #f 'extern))
-                               (list scm-type)))
-   (make-import "rt" "weak_map_set" 'func '$weak-map-set
-                (make-func-sig (list (make-ref-type #f 'extern)
-                                     scm-type scm-type)
-                               '()))
-   (make-import "rt" "weak_map_delete" 'func '$weak-map-delete
-                (make-func-sig (list (make-ref-type #f 'extern) scm-type)
-                               '(i32)))))
+
+(let-syntax
+    ((imported-function-type
+      (syntax-rules (=>)
+        ((_ (param-type ...) => (result-type ...))
+         (make-type-use #f (make-func-sig (list (make-param #f param-type)
+                                                ...)
+                                          (list result-type ...)))))))
+  
+  (define standard-imports
+    (list
+     (make-import "rt" "get_argument" 'func '$get-argument
+                  (imported-function-type ('i32) => (scm-type)))
+     (make-import "rt" "prepare_return_values" 'func '$prepare-return-values
+                  (imported-function-type ('i32) => ()))
+     (make-import "rt" "set_return_value" 'func '$set-return-value
+                  (imported-function-type ('i32 scm-type) => ()))
+     
+     (make-import "rt" "bignum_from_i64" 'func '$bignum-from-i64
+                  (imported-function-type ('i64)
+                                          => ((make-ref-type #f 'extern))))
+     (make-import "rt" "bignum_from_u64" 'func '$bignum-from-u64
+                  (imported-function-type ('i64)
+                                          => ((make-ref-type #f 'extern))))
+     (make-import "rt" "bignum_is_i64" 'func '$bignum-is-i64
+                  (imported-function-type ((make-ref-type #f 'extern))
+                                          => ('i32)))
+     (make-import "rt" "bignum_is_u64" 'func '$bignum-is-u64
+                  (imported-function-type ((make-ref-type #f 'extern))
+                                          => ('i32)))
+     (make-import "rt" "bignum_get_i64" 'func '$bignum-get-i64
+                  (imported-function-type ((make-ref-type #f 'extern))
+                                          => ('i64)))
+     (make-import "rt" "make_weak_map" 'func '$make-weak-map
+                  (imported-function-type ()
+                                          => ((make-ref-type #f 'extern))))
+     (make-import "rt" "weak_map_get" 'func '$weak-map-get
+                  (imported-function-type ((make-ref-type #f 'extern))
+                                          => (scm-type)))
+     (make-import "rt" "weak_map_set" 'func '$weak-map-set
+                  (imported-function-type ((make-ref-type #f 'extern)
+                                           scm-type scm-type)
+                                          => ()))
+     (make-import "rt" "weak_map_delete" 'func '$weak-map-delete
+                  (imported-function-type ((make-ref-type #f 'extern) scm-type)
+                                          => ('i32))))))
 
 (define standard-tables
   (list (make-table '$argv
@@ -300,7 +309,7 @@
            (string->symbol (format #f "$l~a" label)))
          (define (wrap-loop expr label)
            (if (loop-cont? label)
-               `(loop ,(loop-label label) #f ,expr)
+               `(loop ,(loop-label label) ,void-block-type ,expr)
                expr))
          (define (var-label var) (string->symbol (format #f "$v~a" var)))
          (define (local.get var) `(local.get ,(var-label var)))
@@ -445,7 +454,7 @@
                            (compile-receive exp req rest kargs))))
                        (($ $branch kf kt src op param args)
                         `(,@(compile-test op param args)
-                          (if #f #f
+                          (if #f ,void-block-type
                               ,(do-branch label kt (cons 'if-then-else ctx))
                               ,(do-branch label kf (cons 'if-then-else ctx)))))
                        (($ $switch kf kt* src arg)
@@ -475,7 +484,7 @@
                         `((local.get $nargs)
                           (i32.const ,(1+ (length req)))
                           (i32.eq)
-                          (if #f #f
+                          (if #f ,void-block-type
                               (,@(append-map (lambda (arg idx)
                                                `(,(arg-ref (1+ idx))
                                                  ,(local.set arg)))
@@ -485,7 +494,7 @@
                     (($ $ktail)
                      '())))
                  (y
-                  `((block #f #f
+                  `((block #f ,void-block-type
                            ,(node-within label ys (push-block label ctx)))
                     ,@(do-tree y ctx)))))))
          (define code (do-tree kfun (make-ctx #f '())))
@@ -880,7 +889,7 @@
       (set-port-encoding! in (or (file-encoding in) "UTF-8"))
       (define cps (compile-to-cps in))
       (dump cps)
-      (let ((wasm (lower-to-wasm cps)))
+      (let ((wasm (resolve-wasm (lower-to-wasm cps))))
         (dump-wasm wasm)
         #;
         (let ((bytes (assemble-wasm (resolve-wasm wasm))))

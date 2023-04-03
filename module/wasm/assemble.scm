@@ -723,18 +723,32 @@
           (visit-sub id idx type)
           (add-struct-fields types (1+ idx)))))
 
+     (define (type-by-idx idx)
+       (let lp ((types types) (idx idx))
+         (match types
+           (() #f)
+           ((($ <rec-group> subtypes) . types)
+            (let ((sublen (length subtypes)))
+              (if (< idx sublen)
+                  (lp subtypes idx)
+                  (lp types (- idx sublen)))))
+           ((type . types)
+            (if (zero? idx)
+                type
+                (lp types (1- idx)))))))
+
      (define (resolve-type-use x)
-       (define (intern-func-sig/idx! params results idx)
-         (set! types
-               (cons (make-type #f (make-func-sig params results)) types)))
        (define (intern-func-sig! params results)
+         (set! types
+               (append! types
+                        (list (make-type #f (make-func-sig params results))))))
+       (define (lookup-or-intern-func-sig! params results)
          (let lp ((types types) (idx 0))
            (define param-type (match-lambda (($ <param> id type) type)))
            (match types
              (()
-              (let ((idx (add-type-id! #f)))
-                (intern-func-sig/idx! params results idx)
-                idx))
+              (intern-func-sig! params results)
+              (add-type-id! #f))
              ((($ <type> id sig) . types)
               (match sig
                 (($ <func-sig> params' results')
@@ -748,13 +762,13 @@
          (($ <type-use> idx (and use-sig ($ <func-sig> params results)))
           (if idx
               (let ((idx (resolve-type idx)))
-                (match (list-ref types idx)
+                (match (type-by-idx idx)
                   (($ <type> _ def-sig)
                    (make-type-use idx
                                   (if (and (null? params) (null? results))
                                       def-sig
                                       use-sig)))))
-              (make-type-use (intern-func-sig! params results)
+              (make-type-use (lookup-or-intern-func-sig! params results)
                              use-sig)))))
      (define (resolve-block-type x)
        (match x

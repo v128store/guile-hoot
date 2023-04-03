@@ -17,8 +17,9 @@
              (language cps dump)
              (language cps utils)
              (wasm assemble)
-             (wasm resolve)
              (wasm dump)
+             (wasm resolve)
+             (wasm parse)
              (wasm types))
 
 (define (invert-tree parents)
@@ -349,12 +350,12 @@
                 ,(local.get proc)
                 (ref.cast $proc)
                 (struct.get $proc 1)
-                (return_call_ref)))
+                (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
              (($ $calli args callee)
               ;; This is a return.
               `(,@(pass-abi-arguments args)
                 ,(local.get callee)
-                (return_call_ref)))
+                (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
              (($ $callk k proc args)
               `(,@(map local.get (if proc (cons proc args) args))
                 (return_call ,(func-label k))))))
@@ -842,19 +843,13 @@
     (define memories '())
     (define globals (compute-globals funcs))
     (define exports (compute-exports funcs))
-    (define start (func-label (intmap-next funcs)))
+    (define start #f)
     (define elems (compute-elems funcs))
     (define datas (compute-datas funcs))
     (define tags (compute-tags funcs))
     (define strings (compute-strings funcs))
     (define custom (compute-custom funcs))
     (define types (compute-types funcs imports tables globals elems tags))
-    (for-each pk
-              (list types imports
-                    (intmap-fold-right (lambda (kfun func funcs) (cons func funcs))
-                                       funcs '())
-                    tables memories globals exports
-                    start elems datas tags strings custom))
     (make-wasm types imports
                (intmap-fold-right (lambda (kfun func funcs) (cons func funcs))
                                   funcs '())
@@ -890,18 +885,19 @@
       (define cps (compile-to-cps in))
       (dump cps)
       (let ((wasm (resolve-wasm (lower-to-wasm cps))))
+        (format #t "\n\nThe wasm we are going to emit:\n")
         (dump-wasm wasm)
-        #;
-        (let ((bytes (assemble-wasm (resolve-wasm wasm))))
+        (let ((bytes (assemble-wasm wasm)))
           (call-with-output-file output-file
             (lambda (out)
-              (put-bytevector out bytes))))
-        ))))
+              (put-bytevector out bytes))))))))
 
 (define (main args)
   (match args
     ((_ in out)
-     (compile-to-wasm in out))
+     (compile-to-wasm in out)
+     (format #t "\n\nParsing the wasm we emitted:\n")
+     (dump-wasm (call-with-input-file out parse-wasm)))
     ((arg0 . _)
      (format (current-error-port) "usage: ~a INPUT-FILE OUTPUT-FILE\n" arg0)
      (exit 1))))

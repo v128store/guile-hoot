@@ -278,18 +278,24 @@
        (match x
          (($ <type-use> idx (and use-sig ($ <func-sig> params results)))
           (if idx
-              (let ((def-sig (type-by-idx (resolve-type idx))))
-                (make-type-use idx
-                               (if (and (null? params) (null? results))
-                                   def-sig
-                                   use-sig)))
+              (let ((idx (resolve-type idx)))
+                (let ((def-sig (type-by-idx idx)))
+                  (make-type-use idx
+                                 (if (and (null? params) (null? results))
+                                     def-sig
+                                     use-sig))))
               (or (lookup-type-use params results))))))
+
+     (define (resolve-type-use-as-idx x)
+       (match (resolve-type-use x)
+         (($ <type-use> idx func-sig)
+          idx)))
 
      (define (resolve-block-type x)
        (match x
          (($ <type-use> #f ($ <func-sig> () (or () (_))))
           x)
-         (_ (resolve-type-use x))))
+         (_ (resolve-type-use-as-idx x))))
 
      (define (resolve-instructions insts locals labels)
        (define (resolve-label label)
@@ -345,9 +351,9 @@
          (((and inst (or 'call 'return_call)) label)
           `(,inst ,(resolve-func label)))
          (('call_indirect table type)
-          `(call_indirect ,(resolve-table table) ,(resolve-type-use type)))
+          `(call_indirect ,(resolve-table table) ,(resolve-type-use-as-idx type)))
          (((and inst (or 'call_ref 'return_call_ref)) type)
-          `(,inst ,(resolve-type-use type)))
+          `(,inst ,(resolve-type-use-as-idx type)))
          (('select types) `(select ,(map resolve-val-type types)))
          (((and inst (or 'local.get 'local.set 'local.tee)) local)
           `(,inst ,(resolve-local local)))
@@ -493,7 +499,7 @@
        (match func
          (($ <func> id type locals body)
           (match (resolve-type-use type)
-            ((and type ($ <type-use> _ ($ <func-sig> params _)))
+            ((and type ($ <type-use> idx ($ <func-sig> params _)))
              (make-func id type (map visit-local locals)
                         (resolve-instructions body
                                               (append params locals)

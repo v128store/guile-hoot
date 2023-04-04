@@ -94,29 +94,6 @@
           (set! interned-string-count (1+ idx))
           idx)))
 
-  (define (find-type pred types)
-    (let lp ((types types) (idx 0))
-      (define (visit-base rec supers type-id type-idx type)
-        (pred rec type-id type-idx supers type))
-      (define (visit-sub rec type-id type-idx type)
-        (match type
-          (($ <sub-type> supers type)
-           (visit-base rec supers type-id type-idx type))
-          (_ (visit-base rec '()  type-id type-idx type))))
-      (match types
-        (() #f)
-        ((($ <rec-group> subtypes) . types)
-         (let ((rec idx))
-           (let lp2 ((subtypes subtypes) (idx idx))
-             (match subtypes
-               (() (lp types idx))
-               ((($ <type> id subtype) . subtypes)
-                (or (visit-sub rec id idx subtype)
-                    (lp2 subtypes (1+ idx))))))))
-        ((($ <type> id type) . types)
-         (or (visit-sub idx id idx type)
-             (lp types (1+ idx)))))))
-
   (define (type-use-matcher params results)
     (define param-type (match-lambda (($ <param> id type) type)))
     (lambda (rec type-id type-idx supers type)
@@ -142,7 +119,7 @@
       (match import
         (($ <import> mod name 'func id type)
          (adjoin-type-use type types))
-        (($ <import>) #f)))
+        (($ <import>) types)))
     (define (adjoin-type-uses-from-tag tag types)
       (match tag
         (($ <tag> id type) (adjoin-type-use type types))))
@@ -179,6 +156,8 @@
           (_ types)))
       (define (adjoin-type-uses-from-body insts types)
         (fold1 adjoin-type-uses-for-inst insts types))
+      (pk func)
+      (for-each pk types)
       (match func
         (($ <func> id type locals body)
          (adjoin-type-uses-from-body body (adjoin-type-use type types)))))
@@ -458,7 +437,14 @@
        (match import
          (($ <import> mod name 'func id type)
           (make-import mod name 'func id (resolve-type-use type)))
-         (_ import)))
+         (($ <import> mod name 'global id ($ <global-type> mutable? type))
+          (make-import mod name 'global id
+                       (make-global-type mutable? (resolve-val-type type))))
+         ((and import ($ <import> mod name 'memory))
+          import)
+         (($ <import> mod name 'table id ($ <table-type> limits type))
+          (make-import mod name 'table id
+                       (make-table-type limits (resolve-val-type type))))))
 
      (define (visit-export export)
        (match export

@@ -22,6 +22,7 @@
 ;;; Code:
 
 (define-module (wasm types)
+  #:use-module (ice-9 match)
   #:export (<wasm> make-wasm
             <param> make-param
             <func-sig> make-func-sig
@@ -48,7 +49,9 @@
             <table> make-table
             <memory> make-memory
             <global> make-global
-            <custom> make-custom))
+            <custom> make-custom
+
+            find-type))
 
 (define-syntax define-simple-record-type
   (lambda (x)
@@ -96,3 +99,26 @@
   (<memory> id type)
   (<global> id type init)
   (<custom> name bytes))
+
+(define (find-type pred types)
+  (let lp ((types types) (idx 0))
+    (define (visit-base rec supers type-id type-idx type)
+      (pred rec type-id type-idx supers type))
+    (define (visit-sub rec type-id type-idx type)
+      (match type
+        (($ <sub-type> supers type)
+         (visit-base rec supers type-id type-idx type))
+        (_ (visit-base rec '()  type-id type-idx type))))
+    (match types
+      (() #f)
+      ((($ <rec-group> subtypes) . types)
+       (let ((rec idx))
+         (let lp2 ((subtypes subtypes) (idx idx))
+           (match subtypes
+             (() (lp types idx))
+             ((($ <type> id subtype) . subtypes)
+              (or (visit-sub rec id idx subtype)
+                  (lp2 subtypes (1+ idx))))))))
+      ((($ <type> id type) . types)
+       (or (visit-sub idx id idx type)
+           (lp types (1+ idx)))))))

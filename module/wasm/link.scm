@@ -306,7 +306,7 @@
                                     (fold1 visit-elem elems
                                            (reverse imports))))))))
 
-     (define (compute-funcs funcs exports)
+     (define (compute-funcs funcs tables globals exports elems)
        (define (add-func name funcs)
          (define (lookup name funcs)
            (simple-lookup funcs (($ <func> id) (eqv? id name))))
@@ -315,24 +315,48 @@
                  (#f funcs)
                  (func (visit-func func (cons func funcs)))))
            (_ funcs)))
+       (define (visit-body body funcs)
+         (fold-instructions
+          (lambda (inst funcs)
+            (match inst
+              (((or 'call 'return_call 'ref.func) f)
+               (add-func f funcs))
+              (_ funcs)))
+          body funcs))
        (define (visit-func func funcs)
          (match func
            (($ <func> id type locals body)
-            (fold-instructions
-             (lambda (inst funcs)
-               (match inst
-                 (((or 'call 'return_call 'ref.func) f)
-                  (add-func f funcs))
-                 (_ funcs)))
-             body funcs))))
+            (visit-body body funcs))))
+       (define (visit-table table funcs)
+         (match table
+           (($ <table> id type init)
+            (if init
+                (visit-body init funcs)
+                funcs))))
+       (define (visit-global global funcs)
+         (match global
+           (($ <global> id type init)
+            (visit-body init funcs))))
        (define (visit-export export funcs)
          (match export
            (($ <export> name kind id)
             (if (eq? kind 'func)
                 (add-func id funcs)
                 funcs))))
-       (reverse (fold1 visit-func funcs
-                       (fold1 visit-export exports (reverse funcs)))))
+       (define (visit-elem elem funcs)
+         (match elem
+           (($ <elem> id mode table type offset inits)
+            (let ((funcs (fold1 visit-body inits funcs)))
+              (if offset
+                  (visit-body offset funcs)
+                  funcs)))))
+       (reverse
+        (fold1 visit-func funcs
+               (fold1 visit-table tables
+                      (fold1 visit-global globals
+                             (fold1 visit-export exports
+                                    (fold1 visit-elem elems
+                                           (reverse funcs))))))))
 
      (define (compute-tables funcs tables exports)
        (define (add-table table tables)
@@ -435,9 +459,10 @@
         ;; the stdlib.  These fragments may be locally defined or
         ;; imported (except for types which are always locally defined).
         ;;
-        ;; A table can pull in types and globals, possibly imported.
+        ;; A table can pull in types, globals, and functions, possibly
+        ;; imported.
         ;;
-        ;; A global can pull in types and globals, possibly imported.
+        ;; A global can pull in types, globals, and functions, possibly imported.
         ;;
         ;; An elem can pull in types and globals, possibly imported.
         ;;
@@ -447,16 +472,21 @@
         ;;
         ;; A type can pull in other types.
         ;;
-        ;; Therefore, we can allow pieces of the stdlib to lazily pull
-        ;; in other pieces of the stdlib if we compute the different
-        ;; pulled-in module components in this order: funcs, tables,
-        ;; globals, imports, types.
-        (let* ((funcs (compute-funcs funcs exports))
-               (tables (compute-tables funcs tables exports))
-               (globals (compute-globals funcs tables globals exports elems))
-               (imports (compute-imports imports funcs tables globals exports
-                                         elems))
-               (types (compute-types types imports funcs tables globals elems
-                                     tags)))
-          (make-wasm types imports funcs tables memories globals exports
-                     start elems datas tags strings custom)))))))
+        ;; Therefore, to allow pieces of the stdlib to lazily pull in
+        ;; other pieces of the stdlib, we do a fixed-point on the set of
+        ;; funcs, tables, and globals, then we compute imports and
+        ;; types.
+        (let fixpoint ((funcs funcs) (tables tables) (globals globals))
+          (let* ((funcs' (compute-funcs funcs tables globals exports elems))
+                 (tables' (compute-tables funcs' tables exports))
+                 (globals' (compute-globals funcs' tables' globals exports elems)))
+            (if (and (= (length funcs') (length funcs))
+                     (= (length tables') (length tables))
+                     (= (length globals') (length globals)))
+                (let ((imports (compute-imports imports funcs tables globals
+                                                exports elems))
+                      (types (compute-types types imports funcs tables globals
+                                            elems tags)))
+                  (make-wasm types imports funcs tables memories globals exports
+                             start elems datas tags strings custom))
+                (fixpoint funcs' tables' globals')))))))))

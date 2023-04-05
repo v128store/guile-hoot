@@ -280,7 +280,11 @@
                        (i32.sub)
                        (global.set $return-sp)
                        (global.get $return-sp)
-                       (table.get $return-stack)))))
+                       (table.get $return-stack)))
+          (make-func '$unreachable
+                     (make-type-use '$kvarargs kvarargs-sig)
+                     '()
+                     `(unreachable))))
 
   (define tables
     (list (make-table '$argv
@@ -292,7 +296,7 @@
                       (make-table-type
                        (make-limits 0 #f)
                        (make-ref-type #f '$kvarargs))
-                      #f)))
+                      '((ref.func $unreachable)))))
 
   (define memories '())
 

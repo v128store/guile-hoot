@@ -47,6 +47,7 @@
   (intmap-fold-right (lambda (k v out) (cons (f k v) out)) map '()))
 
 (define void-block-type (make-type-use #f (make-func-sig '() '())))
+(define i32-block-type (make-type-use #f (make-func-sig '() '(i32))))
 
 ;; Codegen improvements:
 ;;
@@ -78,7 +79,9 @@
           (make-export "$arg7" 'global '$arg7)
           (make-export "$argv" 'table '$argv)
           (make-export "$return-sp" 'global '$return-sp)
-          (make-export "$return-stack" 'table '$return-stack)))
+          (make-export "$return-stack" 'table '$return-stack)
+          (make-export "$string->symbol" 'func '$string->symbol)
+          (make-export "$symbol->keyword" 'func '$symbol->keyword)))
   (define (add-export export exports)
     (cons export exports))
   (match wasm
@@ -270,18 +273,101 @@
                                           => ('i32)))))
 
   (define funcs
-    (list (make-func '$pop-return!
-                     (make-type-use #f (make-func-sig
-                                        '()
-                                        (list (make-ref-type #f '$kvarargs))))
-                     '()
-                     `((global.get $return-sp)
-                       (i32.const 1)
-                       (i32.sub)
-                       (global.set $return-sp)
-                       (global.get $return-sp)
-                       (table.get $return-stack)
-                       (ref.as_non_null)))))
+    (list (make-func
+           '$pop-return!
+           (make-type-use #f (make-func-sig
+                              '()
+                              (list (make-ref-type #f '$kvarargs))))
+           '()
+           `((global.get $return-sp)
+             (i32.const 1)
+             (i32.sub)
+             (global.set $return-sp)
+             (global.get $return-sp)
+             (table.get $return-stack)
+             (ref.as_non_null)))
+          (make-func
+           '$integer-hash
+           (make-type-use #f (make-func-sig
+                              (list (make-param '$v 'i32))
+                              (list 'i32)))
+           '()
+           '((local.get 0) (i32.const 61) (i32.xor)
+             (local.get 0) (i32.const 16) (i32.shr_u)
+             (i32.xor) (local.set 0)
+             (local.get 0)
+             (local.get 0) (i32.const 3) (i32.shl)
+             (i32.add) (local.set 0)
+             (local.get 0)
+             (local.get 0) (i32.const 4) (i32.shr_u)
+             (i32.xor) (local.set 0)
+             (local.get 0)
+             (i32.const #x27d4eb2d)
+             (i32.mul) (local.set 0)
+             (local.get 0)
+             (local.get 0) (i32.const 15) (i32.shr_u)
+             (i32.xor)))
+          (make-func
+           '$finish-heap-object-hash
+           (make-type-use #f (make-func-sig
+                              (list (make-param '$hash 'i32))
+                              '(i32)))
+           '()
+           `((local.get 0)
+             (call $integer-hash)
+             (local.tee 0)
+             (if #f ,i32-block-type
+                 ((local.get 0))
+                 ((i32.const 42)
+                  (call $integer-hash)))))
+          (make-func
+           '$string-hash
+           (make-type-use #f (make-func-sig
+                              (list
+                               (make-param '$str (make-ref-type #f 'string)))
+                              '(i32)))
+           (list (make-local '$iter (make-ref-type #f 'stringview_iter))
+                 (make-local '$hash 'i32)
+                 (make-local '$codepoint 'i32))
+           `((local.get $str)
+             (string.as_iter)
+             (local.set $iter)
+             (block
+              $done ,void-block-type
+              ((loop $lp ,void-block-type
+                     ((local.get $iter)
+                      (stringview_iter.next)
+                      (local.set $codepoint)
+                      (i32.const -1) (local.get $codepoint) (i32.eq)
+                      (br_if $done)
+                      (local.get $hash) (i32.const 31) (i32.mul)
+                      (local.get $codepoint)
+                      (i32.add)
+                      (local.set $hash)
+                      (br $lp)))))
+             (local.get $hash)))
+          (make-func
+           '$string->symbol
+           (make-type-use #f (make-func-sig
+                              (list
+                               (make-param '$str (make-ref-type #f 'string)))
+                              (list (make-ref-type #f '$symbol))))
+           '()
+           ;; FIXME: intern into symtab.  This is getting excruciating
+           `((local.get 0) (call $string-hash) (call $finish-heap-object-hash)
+             (local.get 0) (struct.new $string)
+             (struct.new $symbol)))
+          (make-func
+           '$symbol->keyword
+           (make-type-use #f (make-func-sig
+                              (list
+                               (make-param '$sym (make-ref-type #f '$symbol)))
+                              (list (make-ref-type #f '$keyword))))
+           '()
+           ;; FIXME: intern into kwtab.
+           `((local.get 0) (struct.get $symbol 0) (call $finish-heap-object-hash)
+             (local.get 0)
+             (struct.new $keyword)))))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.

@@ -85,16 +85,20 @@
             types)
            (($ <ref-type> nullable? ht)
             (visit-heap-type ht types))))
+       (define (visit-storage-type type types)
+         (match type
+           ((or 'i8 'i16) types)
+           (_ (visit-val-type type types))))
        (define (visit-type type types)
          (define (visit-base type types)
            (match type
              (($ <array-type> mutable? type)
-              (visit-val-type type types))
+              (visit-storage-type type types))
              (($ <struct-type> fields)
-              (fold1 (lambda (field)
+              (fold1 (lambda (field types)
                        (match field
                          (($ <field> id mutable? type)
-                          (visit-val-type type types))))
+                          (visit-storage-type type types))))
                      fields types))
              (($ <func-sig> params results)
               (fold1 (lambda (param types)

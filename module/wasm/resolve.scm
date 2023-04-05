@@ -81,9 +81,11 @@
       ((add-id! . resolve-id)
        (add-id! field-id))))
   (define (resolve-struct-field struct-id-or-idx field)
-    (match (hashq-ref struct-fields struct-id-or-idx)
-      ((add-id! . resolve-id)
-       (resolve-id field))))
+    (if (exact-integer? field)
+        field
+        (match (hashq-ref struct-fields struct-id-or-idx)
+          ((add-id! . resolve-id)
+           (resolve-id field)))))
 
   (define interned-strings (make-hash-table))
   (define interned-string-count 0)

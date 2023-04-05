@@ -43,6 +43,9 @@
     (#f (values set #f))
     (i (values (intset-remove set i) i))))
 
+(define (intmap-map->list f map)
+  (intmap-fold-right (lambda (k v out) (cons (f k v) out)) map '()))
+
 (define void-block-type (make-type-use #f (make-func-sig '() '())))
 
 ;; Codegen improvements:
@@ -338,253 +341,260 @@
   (define strings '())
   (define heap-constants '())
   (define (func-label k) (string->symbol (format #f "$f~a" k)))
-  (define funcs
-    (intmap-map
-     (lambda (kfun body)
-       (let ((cps (intmap-select cps body)))
-         (define preds (compute-predecessors cps kfun))
-         (define idoms (compute-idoms cps kfun))
-         (define dom-children (invert-tree idoms))
-         (define (merge-cont? label)
-           (let lp ((preds (intmap-ref preds label))
-                    (has-forward-in-edge? #f))
-             (match preds
-               (() #f)
-               ((pred . preds)
-                (if (< pred label)
-                    (or has-forward-in-edge?
-                        (lp preds #t))
-                    (lp preds has-forward-in-edge?))))))
-         (define (loop-cont? label)
-           (or-map (lambda (pred) (<= label pred))
-                   (intmap-ref preds label)))
-         (define (loop-label label)
-           (string->symbol (format #f "$l~a" label)))
-         (define (wrap-loop expr label)
-           (if (loop-cont? label)
-               `(loop ,(loop-label label) ,void-block-type ,expr)
-               expr))
-         (define (var-label var) (string->symbol (format #f "$v~a" var)))
-         (define (local.get var) `(local.get ,(var-label var)))
-         (define (local.set var) `(local.set ,(var-label var)))
-         (define (local-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
-         (define (global-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
-         (define (arg-ref idx)
-           (cond
-            ((< idx 3) `(local.get ,(local-arg-label idx)))
-            ((< idx 8) `(global.get ,(global-arg-label idx)))
-            (else `(table.get $argv (i32.const ,(- idx 8))))))
-         (define (compile-tail exp)
-           (define (pass-abi-arguments args)
-             (cons
-              `(i32.const ,(length args))
-              (let lp ((args args) (idx 0))
-                (match args
-                  (()
-                   (if (< idx 3)
-                       (append '((i32.const 0)
-                                 (i31.new))
-                             (lp args (1+ idx)))
-                       '()))
-                  ((arg . args)
-                   (cons (cond
-                          ((< idx 3) (local.get arg))
-                          ((< idx 8)
-                           `(global.set ,(global-arg-label idx)
-                                        ,(local.get arg)))
-                          (else
-                           `(table.set $argv (i32.const ,(- idx 8))
-                                       ,(local.get arg))))
-                         (lp args (1+ idx))))))))
-           (match exp
-             (($ $call proc args)
-              `(,@(pass-abi-arguments args)
-                ,(local.get proc)
-                (ref.cast $proc)
-                (struct.get $proc 1)
-                (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
-             (($ $calli args callee)
-              ;; This is a return.
-              `(,@(pass-abi-arguments args)
-                ,(local.get callee)
-                (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
-             (($ $callk k proc args)
-              `(,@(map local.get (if proc (cons proc args) args))
-                (return_call ,(func-label k))))))
-         (define (compile-values exp)
-           (define (fixnum? val)
-             (and (exact-integer? val)
-                  (<= (ash -1 -29) val (1- (ash 1 29)))))
-           (match exp
-             (($ $const val)
-              (match val
-                ((? fixnum?) `((i32.const ,(ash val 1))
-                               (i31.new)))
-                (_ (error "unimplemented constant" val))))
-             (($ $primcall 'restore1 'ptr ())
-              `((call $pop-return!)))
-             (_
-              (error "unimplemented!" exp))))
-         (define (compile-receive exp req rest kargs)
-           (match exp
-             (_
-              (error "unimplemented!!" exp req rest kargs))))
-         (define (compile-test op param args)
-           (match op
-             (_ (error "unimplemented!!!" op param args))))
+  (define (lower-func kfun body)
+    (let ((cps (intmap-select cps body)))
+      (define preds (compute-predecessors cps kfun))
+      (define idoms (compute-idoms cps kfun))
+      (define dom-children (invert-tree idoms))
+      (define (merge-cont? label)
+        (let lp ((preds (intmap-ref preds label))
+                 (has-forward-in-edge? #f))
+          (match preds
+            (() #f)
+            ((pred . preds)
+             (if (< pred label)
+                 (or has-forward-in-edge?
+                     (lp preds #t))
+                 (lp preds has-forward-in-edge?))))))
+      (define (loop-cont? label)
+        (or-map (lambda (pred) (<= label pred))
+                (intmap-ref preds label)))
+      (define (loop-label label)
+        (string->symbol (format #f "$l~a" label)))
+      (define (wrap-loop expr label)
+        (if (loop-cont? label)
+            `(loop ,(loop-label label) ,void-block-type ,expr)
+            expr))
+      (define (var-label var) (string->symbol (format #f "$v~a" var)))
+      (define (local.get var) `(local.get ,(var-label var)))
+      (define (local.set var) `(local.set ,(var-label var)))
+      (define (local-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
+      (define (global-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
+      (define (arg-ref idx)
+        (cond
+         ((< idx 3) `(local.get ,(local-arg-label idx)))
+         ((< idx 8) `(global.get ,(global-arg-label idx)))
+         (else `(table.get $argv (i32.const ,(- idx 8))))))
+      (define (compile-tail exp)
+        (define (pass-abi-arguments args)
+          (cons
+           `(i32.const ,(length args))
+           (let lp ((args args) (idx 0))
+             (match args
+               (()
+                (if (< idx 3)
+                    (append '((i32.const 0)
+                              (i31.new))
+                            (lp args (1+ idx)))
+                    '()))
+               ((arg . args)
+                (cons (cond
+                       ((< idx 3) (local.get arg))
+                       ((< idx 8)
+                        `(global.set ,(global-arg-label idx)
+                                     ,(local.get arg)))
+                       (else
+                        `(table.set $argv (i32.const ,(- idx 8))
+                                    ,(local.get arg))))
+                      (lp args (1+ idx))))))))
+        (match exp
+          (($ $call proc args)
+           `(,@(pass-abi-arguments args)
+             ,(local.get proc)
+             (ref.cast $proc)
+             (struct.get $proc 1)
+             (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
+          (($ $calli args callee)
+           ;; This is a return.
+           `(,@(pass-abi-arguments args)
+             ,(local.get callee)
+             (return_call_ref ,(make-type-use '$kvarargs kvarargs-sig))))
+          (($ $callk k proc args)
+           `(,@(map local.get (if proc (cons proc args) args))
+             (return_call ,(func-label k))))))
+      (define (compile-values exp)
+        (define (fixnum? val)
+          (and (exact-integer? val)
+               (<= (ash -1 -29) val (1- (ash 1 29)))))
+        (match exp
+          (($ $const val)
+           (match val
+             ((? fixnum?) `((i32.const ,(ash val 1))
+                            (i31.new)))
+             (_ (error "unimplemented constant" val))))
+          (($ $primcall 'restore1 'ptr ())
+           `((call $pop-return!)))
+          (_
+           (error "unimplemented!" exp))))
+      (define (compile-receive exp req rest kargs)
+        (match exp
+          (_
+           (error "unimplemented!!" exp req rest kargs))))
+      (define (compile-test op param args)
+        (match op
+          (_ (error "unimplemented!!!" op param args))))
          
-         ;; See "Beyond Relooper: Recursive Translation of Unstructured
-         ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP
-         ;; 2022.
-         (define (make-ctx next-label stack) (cons next-label stack))
-         (define (push-loop label ctx)
-           (match ctx
-             ((next-label . stack)
-              (make-ctx label
-                        (acons 'loop-headed-by label stack)))))
-         (define (push-block label ctx)
-           (match ctx
-             ((next-label . stack)
-              (make-ctx label
-                        (acons 'block-followed-by label stack)))))
-         (define (push-if label ctx)
-           (match ctx
-             ((next-label . stack)
-              (make-ctx next-label (cons 'if-then-else stack)))))
-         (define (lookup-label k ctx)
-           (match ctx
-             ((next-label . stack)
-              (let lp ((stack stack) (depth 0))
-                (match stack
-                  (('if-then-else . stack) (lp stack (1+ depth)))
-                  ((((or 'loop-headed-by 'block-followed-by) label) . stack)
-                   (if (eqv? label k)
-                       depth
-                       (lp stack (1+ depth))))
-                  (_ (error "block label not found" k)))))))
+      ;; See "Beyond Relooper: Recursive Translation of Unstructured
+      ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP
+      ;; 2022.
+      (define (make-ctx next-label stack) (cons next-label stack))
+      (define (push-loop label ctx)
+        (match ctx
+          ((next-label . stack)
+           (make-ctx label
+                     (acons 'loop-headed-by label stack)))))
+      (define (push-block label ctx)
+        (match ctx
+          ((next-label . stack)
+           (make-ctx label
+                     (acons 'block-followed-by label stack)))))
+      (define (push-if label ctx)
+        (match ctx
+          ((next-label . stack)
+           (make-ctx next-label (cons 'if-then-else stack)))))
+      (define (lookup-label k ctx)
+        (match ctx
+          ((next-label . stack)
+           (let lp ((stack stack) (depth 0))
+             (match stack
+               (('if-then-else . stack) (lp stack (1+ depth)))
+               ((((or 'loop-headed-by 'block-followed-by) label) . stack)
+                (if (eqv? label k)
+                    depth
+                    (lp stack (1+ depth))))
+               (_ (error "block label not found" k)))))))
 
-         (define (do-tree label ctx)
-           (define (code-for-label ctx)
-             ;; here if label is a switch we node-within all children
-             ;; instead of only merge nodes.
-             (define children
-               (intset-filter merge-cont? (intmap-ref dom-children label)))
-             (node-within label children ctx))
-           (if (loop-cont? label)
-               `((loop #f #f ,(code-for-label (push-loop label ctx))))
-               (code-for-label ctx)))
-         (define (do-branch pred succ ctx)
-           (cond
-            ((or (<= succ pred)
-                 (merge-cont? succ))
-             ;; Backward branch or branch to merge: jump.
-             (match ctx
-               ((next-label . stack)
-                (if (eqv? succ next-label)
-                    '()
-                    `((br ,(lookup-label succ ctx)))))))
-            (else
-             ;; Otherwise render successor inline.
-             (do-tree succ ctx))))
-         (define (node-within label ys ctx)
-           (call-with-values (lambda () (intset-pop ys))
-             (lambda (ys y)
-               (match y
-                 (#f
-                  (match (intmap-ref cps label)
-                    (($ $kargs names vars term)
-                     ;; could change to bind names at continuation?
-                     (match term
-                       (($ $continue k src exp)
-                        (match (intmap-ref cps k)
-                          (($ $ktail)
-                           (compile-tail exp))
-                          (($ $kargs _ vars)
-                           `(,@(compile-values exp)
-                             ,@(reverse (map local.set vars))
-                             ,@(do-branch label k ctx)))
-                          (($ $kreceive ($ $arity req () rest () #f) kargs)
-                           (compile-receive exp req rest kargs))))
-                       (($ $branch kf kt src op param args)
-                        `(,@(compile-test op param args)
-                          (if #f ,void-block-type
-                              ,(do-branch label kt (cons 'if-then-else ctx))
-                              ,(do-branch label kf (cons 'if-then-else ctx)))))
-                       (($ $switch kf kt* src arg)
-                        (error "switch unimplemented"))
-                       (($ $prompt k kh src escape? tag)
-                        (error "prompts should be removed by tailification?"))
-                       (($ $throw src op param args)
-                        (error "throw unimplemented"))))
-                    (($ $kreceive ($ $arity req () rest () #f) kbody)
-                     (error "kreceive unimplemented"))
-                    (($ $kfun src meta self ktail kentry)
-                     (if self
-                         ;; only if referenced?
-                         `(,(arg-ref 0)
-                           ,(local.set self)
-                           ,@(do-branch label kentry ctx))
-                         (do-tree kentry ctx)))
-                    (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
-                        kbody kalt)
-                     (when kalt (error "case-lambda unimplemented"))
-                     (when allow-other-keys? (error "allow-other-keys? unimplemented"))
-                     (when (not (null? kw)) (error "kwargs unimplemented"))
-                     (when (not (null? opt)) (error "optargs unimplemented"))
-                     (when rest (error "rest args unimplemented"))
-                     (match (intmap-ref cps kbody)
-                       (($ $kargs names vars)
-                        `((local.get $nargs)
-                          (i32.const ,(1+ (length req)))
-                          (i32.eq)
-                          (if #f ,void-block-type
-                              (,@(append-map (lambda (arg idx)
-                                               `(,(arg-ref (1+ idx))
-                                                 ,(local.set arg)))
-                                             vars (iota (length req)))
-                               ,@(do-branch label kbody ctx))
-                              ((unreachable)))))))
-                    (($ $ktail)
-                     '())))
-                 (y
-                  `((block #f ,void-block-type
-                           ,(node-within label ys (push-block label ctx)))
-                    ,@(do-tree y ctx)))))))
-         (define code (do-tree kfun (make-ctx #f '())))
-         (define (type-for-repr repr)
-           (match repr
-             ('scm scm-type)
-             ('f64 'f64)
-             ((or 's64 'u64) 'i64)
-             ('ptr (make-ref-type #f '$kvarargs))))
-         (define locals
-           (intmap-fold-right (lambda (var repr out)
-                                (cons (make-local (var-label var)
-                                                  (type-for-repr repr))
-                                      out))
-                              (compute-var-representations cps) '()))
-         ;; FIXME: Here attach a name, other debug info to the function
-         (make-func (func-label kfun)
-                    (make-type-use '$kvarargs kvarargs-sig)
-                    locals
-                    code)))
-     (compute-reachable-functions cps 0)))
-  (define types '())
-  (define imports '())
-  (define tables '())
-  (define memories '())
-  (define globals '()) ;; FIXME: heap constants
-  (define exports '())
-  (define start #f) ;; FIXME: heap constants
-  (define elems '())
-  (define datas '())
-  (define tags '())
-  (define custom '())
-  (make-wasm types imports
-             (intmap-fold-right (lambda (kfun func funcs) (cons func funcs))
-                                funcs '())
-             tables memories globals exports
-             start elems datas tags strings custom))
+      (define (do-tree label ctx)
+        (define (code-for-label ctx)
+          ;; here if label is a switch we node-within all children
+          ;; instead of only merge nodes.
+          (define children
+            (intset-filter merge-cont? (intmap-ref dom-children label)))
+          (node-within label children ctx))
+        (if (loop-cont? label)
+            `((loop #f #f ,(code-for-label (push-loop label ctx))))
+            (code-for-label ctx)))
+      (define (do-branch pred succ ctx)
+        (cond
+         ((or (<= succ pred)
+              (merge-cont? succ))
+          ;; Backward branch or branch to merge: jump.
+          (match ctx
+            ((next-label . stack)
+             (if (eqv? succ next-label)
+                 '()
+                 `((br ,(lookup-label succ ctx)))))))
+         (else
+          ;; Otherwise render successor inline.
+          (do-tree succ ctx))))
+      (define (node-within label ys ctx)
+        (call-with-values (lambda () (intset-pop ys))
+          (lambda (ys y)
+            (match y
+              (#f
+               (match (intmap-ref cps label)
+                 (($ $kargs names vars term)
+                  ;; could change to bind names at continuation?
+                  (match term
+                    (($ $continue k src exp)
+                     (match (intmap-ref cps k)
+                       (($ $ktail)
+                        (compile-tail exp))
+                       (($ $kargs _ vars)
+                        `(,@(compile-values exp)
+                          ,@(reverse (map local.set vars))
+                          ,@(do-branch label k ctx)))
+                       (($ $kreceive ($ $arity req () rest () #f) kargs)
+                        (compile-receive exp req rest kargs))))
+                    (($ $branch kf kt src op param args)
+                     `(,@(compile-test op param args)
+                       (if #f ,void-block-type
+                           ,(do-branch label kt (cons 'if-then-else ctx))
+                           ,(do-branch label kf (cons 'if-then-else ctx)))))
+                    (($ $switch kf kt* src arg)
+                     (error "switch unimplemented"))
+                    (($ $prompt k kh src escape? tag)
+                     (error "prompts should be removed by tailification?"))
+                    (($ $throw src op param args)
+                     (error "throw unimplemented"))))
+                 (($ $kreceive ($ $arity req () rest () #f) kbody)
+                  (error "kreceive unimplemented"))
+                 (($ $kfun src meta self ktail kentry)
+                  (if self
+                      ;; only if referenced?
+                      `(,(arg-ref 0)
+                        ,(local.set self)
+                        ,@(do-branch label kentry ctx))
+                      (do-tree kentry ctx)))
+                 (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
+                     kbody kalt)
+                  (when kalt (error "case-lambda unimplemented"))
+                  (when allow-other-keys? (error "allow-other-keys? unimplemented"))
+                  (when (not (null? kw)) (error "kwargs unimplemented"))
+                  (when (not (null? opt)) (error "optargs unimplemented"))
+                  (when rest (error "rest args unimplemented"))
+                  (match (intmap-ref cps kbody)
+                    (($ $kargs names vars)
+                     `((local.get $nargs)
+                       (i32.const ,(1+ (length req)))
+                       (i32.eq)
+                       (if #f ,void-block-type
+                           (,@(append-map (lambda (arg idx)
+                                            `(,(arg-ref (1+ idx))
+                                              ,(local.set arg)))
+                                          vars (iota (length req)))
+                            ,@(do-branch label kbody ctx))
+                           ((unreachable)))))))
+                 (($ $ktail)
+                  '())))
+              (y
+               `((block #f ,void-block-type
+                        ,(node-within label ys (push-block label ctx)))
+                 ,@(do-tree y ctx)))))))
+      (define code (do-tree kfun (make-ctx #f '())))
+      (define (type-for-repr repr)
+        (match repr
+          ('scm scm-type)
+          ('f64 'f64)
+          ((or 's64 'u64) 'i64)
+          ('ptr (make-ref-type #f '$kvarargs))))
+      (define locals
+        (intmap-fold-right (lambda (var repr out)
+                             (cons (make-local (var-label var)
+                                               (type-for-repr repr))
+                                   out))
+                           (compute-var-representations cps) '()))
+      ;; FIXME: Here attach a name, other debug info to the function
+      (make-func (func-label kfun)
+                 (make-type-use '$kvarargs kvarargs-sig)
+                 locals
+                 code)))
+
+  (define (compute-globals funcs)
+    ;; Assume that the first function is the "load" function.
+    (list (make-global '$load
+                       (make-global-type #f (make-ref-type #f '$kvarargs))
+                       `((ref.func ,(match funcs
+                                      ((($ <func> id) . _) id)))))))
+
+  (define (compute-exports)
+    (list (make-export "$load" 'global '$load)))
+
+  (let* ((funcs
+          (intmap-map->list lower-func (compute-reachable-functions cps 0)))
+         (types '())
+         (imports '())
+         (tables '())
+         (memories '())
+         (globals (compute-globals funcs)) ;; FIXME: heap constants
+         (exports (compute-exports))
+         (start #f) ;; FIXME: heap constants
+         (elems '())
+         (datas '())
+         (tags '())
+         (custom '()))
+    (make-wasm types imports funcs tables memories globals exports
+               start elems datas tags strings custom)))
 
 (define* (compile-to-wasm input-file output-file #:key
                           (import-abi? #f)

@@ -25,6 +25,7 @@
 (define-module (wasm link)
   #:use-module (ice-9 match)
   #:use-module (wasm types)
+  #:use-module (wasm types)
   #:export (add-stdlib))
 
 (define (fold1 f l s0)
@@ -32,6 +33,83 @@
     (match l
       (() s0)
       ((elt . l) (lp l (f elt s0))))))
+
+(define (fold2 f l s0 s1)
+  (let lp ((l l) (s0 s0) (s1 s1))
+    (match l
+      (() (values s0 s1))
+      ((elt . l)
+       (call-with-values (lambda () (f elt s0 s1))
+         (lambda (s0 s1)
+           (lp l s0 s1)))))))
+
+(define (sort-types types)
+  (define (lookup-type name)
+    ;; Return the whole type block, so we can revisit any
+    ;; references within it.
+    (or-map (lambda (type)
+              (match type
+                (($ <type> id _) (and (eq? id name) type))
+                (($ <rec-group> (($ <type> id) ...))
+                 (and (or-map (lambda (id) (eq? id name)) id)
+                      type))))
+            types))
+  (define (visit-heap-type type order visited)
+    (match (lookup-type type)
+      (#f (values order visited))
+      (type (visit-type type order visited))))
+  (define (visit-val-type type order visited)
+    (match type
+      (($ <ref-type> nullable? ht)
+       (visit-heap-type ht order visited))
+      (_ (values order visited))))
+  (define (visit-storage-type type order visited)
+    (visit-val-type type order visited))
+  (define (visit-successors type order visited)
+    (define (visit-base type order visited)
+      (match type
+        (($ <array-type> mutable? type)
+         (visit-storage-type type order visited))
+        (($ <struct-type> fields)
+         (fold2 (lambda (field order visited)
+                  (match field
+                    (($ <field> id mutable? type)
+                     (visit-storage-type type order visited))))
+                fields order visited))
+        (($ <func-sig> params results)
+         (call-with-values (lambda ()
+                             (fold2 visit-val-type results order visited))
+           (lambda (order visited)
+             (fold2 (lambda (param order visited)
+                      (match param
+                        (($ <param> id type)
+                         (visit-val-type type order visited))))
+                    params order visited))))))
+    (define (visit-sub type order visited)
+      (match type
+        (($ <sub-type> supers type)
+         (call-with-values (lambda ()
+                             (fold2 visit-heap-type supers order visited))
+           (lambda (order visited)
+             (visit-base type order visited))))
+        (_ (visit-base type order visited))))
+    (match type
+      (($ <rec-group> (($ <type> id type) ...))
+       (fold2 visit-sub type order visited))
+      (($ <type> id type)
+       (visit-sub type order visited))))
+  (define (visit-type type order visited)
+    (if (memq type visited)
+        (values order visited)
+        (call-with-values
+            (lambda ()
+              (visit-successors type order (cons type visited)))
+          (lambda (order visited)
+            ;; After visiting successors, add label to the reverse post-order.
+            (values (cons type order) visited)))))
+  (call-with-values (lambda () (fold2 visit-type types '() '()))
+    (lambda (order visited)
+      (reverse order))))
 
 (define (add-stdlib wasm stdlib)
   (define (fold-instructions f body seed)
@@ -211,7 +289,7 @@
          (match tag
            (($ <tag> id type)
             (visit-type-use type types))))
-       (reverse
+       (sort-types
         (fold1 visit-function funcs
                (fold1 visit-import imports
                       (fold1 visit-table tables
@@ -219,7 +297,7 @@
                                     (fold1 visit-elem elems
                                            (fold1 visit-tag tags
                                                   (fold1 visit-type types
-                                                         (reverse types))))))))))
+                                                         types)))))))))
 
      (define (compute-imports imports funcs tables globals exports elems)
        (define (function-locally-bound? label)

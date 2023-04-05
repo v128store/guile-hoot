@@ -158,8 +158,6 @@
           (_ types)))
       (define (adjoin-type-uses-from-body insts types)
         (fold1 adjoin-type-uses-for-inst insts types))
-      (pk func)
-      (for-each pk types)
       (match func
         (($ <func> id type locals body)
          (adjoin-type-uses-from-body body (adjoin-type-use type types)))))

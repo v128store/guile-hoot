@@ -280,23 +280,22 @@
                        (i32.sub)
                        (global.set $return-sp)
                        (global.get $return-sp)
-                       (table.get $return-stack)))
-          (make-func '$unreachable
-                     (make-type-use '$kvarargs kvarargs-sig)
-                     '()
-                     `(unreachable))))
+                       (table.get $return-stack)
+                       (ref.as_non_null)))))
 
+  ;; Because V8 and binaryen don't really support non-nullable table
+  ;; types right now, we currently use nullable tables.  Grr.
   (define tables
     (list (make-table '$argv
                       (make-table-type
                        (make-limits 0 #f)
-                       scm-type)
-                      '((i32.const 0) i31.new))
+                       (make-ref-type #t 'eq))
+                      #f)
           (make-table '$return-stack
                       (make-table-type
                        (make-limits 0 #f)
-                       (make-ref-type #f '$kvarargs))
-                      '((ref.func $unreachable)))))
+                       (make-ref-type #t '$kvarargs))
+                      #f)))
 
   (define memories '())
 
@@ -376,9 +375,11 @@
       (define (global-arg-label idx) (string->symbol (format #f "$arg~a" idx)))
       (define (arg-ref idx)
         (cond
-         ((< idx 3) `(local.get ,(local-arg-label idx)))
-         ((< idx 8) `(global.get ,(global-arg-label idx)))
-         (else `(table.get $argv (i32.const ,(- idx 8))))))
+         ((< idx 3) `((local.get ,(local-arg-label idx))))
+         ((< idx 8) `((global.get ,(global-arg-label idx))))
+         (else `((i32.const ,(- idx 8))
+                 (table.get $argv)
+                 ref.as_non_null))))
       (define (compile-tail exp)
         (define (pass-abi-arguments args)
           (cons
@@ -526,7 +527,7 @@
                  (($ $kfun src meta self ktail kentry)
                   (if self
                       ;; only if referenced?
-                      `(,(arg-ref 0)
+                      `(,@(arg-ref 0)
                         ,(local.set self)
                         ,@(do-branch label kentry ctx))
                       (do-tree kentry ctx)))

@@ -697,8 +697,13 @@
 
   (define (emit-table port table)
     (match table
+      (($ <table> id type #f)
+       (emit-table-type port type))
       (($ <table> id type init)
-       (emit-table-type port type))))
+       (emit-u8 port #x40)
+       (emit-u8 port #x00)
+       (emit-table-type port type)
+       (emit-expr port init))))
 
   (define (emit-memory port memory)
     (match memory

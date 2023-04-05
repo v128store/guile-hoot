@@ -65,6 +65,23 @@
                        (make-param '$arg1 scm-type)
                        (make-param '$arg2 scm-type))'()))
 
+(define (export-abi wasm)
+  (define abi-exports
+    (list (make-export "arg3" 'global '$arg3)
+          (make-export "arg4" 'global '$arg4)
+          (make-export "arg5" 'global '$arg5)
+          (make-export "arg6" 'global '$arg6)
+          (make-export "arg7" 'global '$arg7)
+          (make-export "argv" 'table '$argv)))
+  (define (add-export export exports)
+    (cons export exports))
+  (match wasm
+    (($ <wasm> types imports funcs tables memories globals exports
+        start elems datas tags strings custom)
+     (make-wasm types imports funcs tables memories globals
+                (reverse (fold1 add-export abi-exports (reverse exports)))
+                start elems datas tags strings custom))))
+
 (define (compute-stdlib import-abi?)
   (define func-types
     (list (make-type '$kvarargs kvarargs-sig)))
@@ -311,7 +328,7 @@
              (if import-abi? '() globals)
              exports start elems datas tags strings custom))
 
-(define (add-stdlib wasm import-abi?)
+(define (add-stdlib wasm stdlib)
   (define (fold-instructions f body seed)
     (define (visit* body seed)
       (fold1 visit1 body seed))
@@ -336,7 +353,7 @@
         (((and candidate pat) . candidates)
          (if test candidate (lp candidates)))
         ...)))
-  (match (compute-stdlib import-abi?)
+  (match stdlib
     (($ <wasm> std-types std-imports std-funcs std-tables std-memories
         std-globals std-exports std-start std-elems std-datas std-tags
         std-strings std-custom)
@@ -495,7 +512,7 @@
                                                   (fold1 visit-type types
                                                          (reverse types))))))))))
 
-     (define (compute-imports imports funcs tables globals elems)
+     (define (compute-imports imports funcs tables globals exports elems)
        (define (function-locally-bound? label)
          (or-map (match-lambda (($ <func> id) (eqv? label id)))
                  funcs))
@@ -561,6 +578,14 @@
          (match global
            (($ <global> id type init)
             (visit-body init imports))))
+       (define (visit-export export imports)
+         (match export
+           (($ <export> name kind id)
+            (match kind
+              ('func (add-imported-func id imports))
+              ('table (add-imported-table id imports))
+              ('global (add-imported-global id imports))
+              ('memory imports)))))
        (define (visit-elem elem imports)
          (match elem
            (($ <elem> id mode table type offset inits)
@@ -572,10 +597,11 @@
         (fold1 visit-func funcs
                (fold1 visit-table tables
                       (fold1 visit-global globals
-                             (fold1 visit-elem elems
-                                    (reverse imports)))))))
+                             (fold1 visit-export exports
+                                    (fold1 visit-elem elems
+                                           (reverse imports))))))))
 
-     (define (compute-funcs funcs)
+     (define (compute-funcs funcs exports)
        (define (add-func name funcs)
          (define (lookup name funcs)
            (simple-lookup funcs (($ <func> id) (eqv? id name))))
@@ -594,9 +620,16 @@
                   (add-func f funcs))
                  (_ funcs)))
              body funcs))))
-       (reverse (fold1 visit-func funcs (reverse funcs))))
+       (define (visit-export export funcs)
+         (match export
+           (($ <export> name kind id)
+            (if (eq? kind 'func)
+                (add-func id funcs)
+                funcs))))
+       (reverse (fold1 visit-func funcs
+                       (fold1 visit-export exports (reverse funcs)))))
 
-     (define (compute-tables funcs tables)
+     (define (compute-tables funcs tables exports)
        (define (add-table table tables)
          (define (lookup name tables)
            (simple-lookup
@@ -625,9 +658,16 @@
                   (add-table table tables))
                  (_ tables)))
              body tables))))
-       (reverse (fold1 visit-func funcs (reverse tables))))
+       (define (visit-export export tables)
+         (match export
+           (($ <export> name kind id)
+            (if (eq? kind 'table)
+                (add-table id tables)
+                tables))))
+       (reverse (fold1 visit-func funcs
+                       (fold1 visit-export exports (reverse tables)))))
 
-     (define (compute-globals funcs tables globals elems)
+     (define (compute-globals funcs tables globals exports elems)
        (define (add-global global globals)
          (define (lookup name globals)
            (simple-lookup
@@ -660,6 +700,12 @@
          (match global
            (($ <global> id type init)
             (visit-body init globals))))
+       (define (visit-export export globals)
+         (match export
+           (($ <export> name kind id)
+            (if (eq? kind 'global)
+                (add-global id globals)
+                globals))))
        (define (visit-elem elem globals)
          (match elem
            (($ <elem> id mode table type offset inits)
@@ -671,12 +717,15 @@
         (fold1 visit-func funcs
                (fold1 visit-table tables
                       (fold1 visit-global globals
-                             (fold1 visit-elem elems
-                                    (reverse globals)))))))
+                             (fold1 visit-export exports
+                                    (fold1 visit-elem elems
+                                           (reverse globals))))))))
 
      (match wasm
        (($ <wasm> types imports funcs tables memories globals exports
            start elems datas tags strings custom)
+        ;; An export can pull in funcs, tables, and globals, possibly imported.
+        ;;
         ;; A function can pull in types, funcs, tables, and globals from
         ;; the stdlib.  These fragments may be locally defined or
         ;; imported (except for types which are always locally defined).
@@ -697,10 +746,11 @@
         ;; in other pieces of the stdlib if we compute the different
         ;; pulled-in module components in this order: funcs, tables,
         ;; globals, imports, types.
-        (let* ((funcs (compute-funcs funcs))
-               (tables (compute-tables funcs tables))
-               (globals (compute-globals funcs tables globals elems))
-               (imports (compute-imports imports funcs tables globals elems))
+        (let* ((funcs (compute-funcs funcs exports))
+               (tables (compute-tables funcs tables exports))
+               (globals (compute-globals funcs tables globals exports elems))
+               (imports (compute-imports imports funcs tables globals exports
+                                         elems))
                (types (compute-types types imports funcs tables globals elems
                                      tags)))
           (make-wasm types imports funcs tables memories globals exports
@@ -963,6 +1013,7 @@
 
 (define* (compile-to-wasm input-file output-file #:key
                           (import-abi? #f)
+                          (export-abi? #t)
                           (from (current-language))
                           (env (default-environment from))
                           (optimization-level (default-optimization-level))
@@ -990,7 +1041,10 @@
       (set-port-encoding! in (or (file-encoding in) "UTF-8"))
       (define cps (compile-to-cps in))
       (dump cps)
-      (let ((wasm (resolve-wasm (add-stdlib (lower-to-wasm cps) import-abi?))))
+      (let* ((wasm (lower-to-wasm cps))
+             (wasm (if export-abi? (export-abi wasm) wasm))
+             (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
+             (wasm (resolve-wasm wasm)))
         (format #t "\n\nThe wasm we are going to emit:\n")
         (dump-wasm wasm)
         (let ((bytes (assemble-wasm wasm)))

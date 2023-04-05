@@ -355,7 +355,7 @@
            '()
            ;; FIXME: intern into symtab.  This is getting excruciating
            `((local.get 0) (call $string-hash) (call $finish-heap-object-hash)
-             (local.get 0) (struct.new $string)
+             (i32.const 0) (local.get 0) (struct.new $string)
              (struct.new $symbol)))
           (make-func
            '$symbol->keyword

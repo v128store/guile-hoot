@@ -1,0 +1,78 @@
+;;; WebAssembly binary parser
+;;; Copyright (C) 2023 Igalia, S.L.
+;;;
+;;; This library is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU Lesser General Public License as
+;;; published by the Free Software Foundation, either version 3 of the
+;;; License, or (at your option) any later version.
+;;;
+;;; This library is distributed in the hope that it will be useful, but
+;;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;;; Lesser General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU Lesser General Public
+;;; License along with this program.  If not, see
+;;; <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;;;
+;;; Parser for WebAssembly binary format
+;;;
+;;; Code:
+
+(use-modules (wasm assemble)
+             (hoot compile)
+             (ice-9 binary-ports)
+             (ice-9 popen)
+             (ice-9 textual-ports)
+             (srfi srfi-64))
+
+(define d8 (or (getenv "D8") "d8"))
+
+(test-begin "test-constants")
+
+(define (unwind-protect body unwind)
+  (call-with-values
+      (lambda ()
+        (with-exception-handler
+         (lambda (exn)
+           (unwind)
+           (raise-exception exn))
+         body))
+    (lambda vals
+      (unwind)
+      (apply values vals))))
+
+(define (call-with-compiled-wasm-file wasm f)
+  (let* ((wasm-port (mkstemp "/tmp/tmp-wasm-XXXXXX"))
+         (wasm-file-name (port-filename wasm-port)))
+    (put-bytevector wasm-port (assemble-wasm wasm))
+    (close-port wasm-port)
+    (unwind-protect
+     (lambda () (f wasm-file-name))
+     (lambda () (delete-file wasm-file-name)))))
+
+(define (run-d8 . args)
+  (let* ((args (cons* "--experimental-wasm-gc"
+                     "--experimental-wasm-stringref"
+                     "--experimental-wasm-return-call"
+                     args))
+         (port (apply open-pipe* OPEN_READ d8 args))
+         (output (get-string-all port)))
+    (close-port port)
+    (string-trim-both output)))
+
+(define (compile-scheme-then-load-wasm-in-d8 constant)
+  (call-with-compiled-wasm-file
+   (compile constant)
+   (lambda (wasm-file-name)
+     (run-d8 "load-wasm-and-print.js" "--" wasm-file-name))))
+
+(define-syntax-rule (test-compilation constant repr)
+  (test-equal repr (compile-scheme-then-load-wasm-in-d8 'constant) repr))
+
+(test-compilation 42 "42")
+
+(test-end "test-constants")
+

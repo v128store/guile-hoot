@@ -107,12 +107,12 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $str (ref string)))))
+          (field $str (mut (ref string))))))
     (type $mutable-string
       (sub $string
         (struct
           (field $hash (mut i32))
-          (field $str (ref string)))))
+          (field $str (mut (ref string))))))
     (type $proc
       (sub $heap-object
         (struct
@@ -188,7 +188,7 @@
           (field $pt (ref $port-type))
           (field $stream (mut (ref eq)))
           (field $file_name (mut (ref eq)))
-          (field $position (ref $pair))
+          (field $position (ref $mutable-pair))
           (field $read_buf (mut (ref eq)))  ;; A 5-vector
           (field $write_buf (mut (ref eq))) ;; A 5-vector
           (field $write_buf_aux (mut (ref eq))) ;; A 5-vector

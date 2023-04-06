@@ -177,7 +177,7 @@
          (struct ($atomic-box $heap-object)
                  ($val (mut scm-type)))
          (struct ($hash-table $heap-object)
-                 ($size (make-ref-type #f 'i31))
+                 ($size (mut (make-ref-type #f 'i31)))
                  ($buckets (make-ref-type #f '$vector)))
          (struct ($weak-table $heap-object)
                  ($val (make-ref-type #f 'extern)))
@@ -207,7 +207,7 @@
                  ($pt (make-ref-type #f '$port-type))
                  ($stream (mut scm-type))
                  ($file_name (mut scm-type))
-                 ($position (mut (make-ref-type #f '$mutable-pair)))
+                 ($position (make-ref-type #f '$mutable-pair))
                  ($read_buf (mut scm-type))      ;; A 5-vector
                  ($write_buf (mut scm-type))     ;; A 5-vector
                  ($write_buf_aux (mut scm-type)) ;; A 5-vector

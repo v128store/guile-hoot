@@ -40,6 +40,84 @@ The name naturally flowed from there.
 
 See the [log file](design/log.md).
 
+## Try it out
+
+You need Guile from the `wip-tailify` branch.  Then you check out this
+repo:
+
+```
+$ git clone https://gitlab.com/spritely/guile-hoot-updates
+$ cd guile-hoot-updates
+$ echo 42 > 42.scm
+$ GUILE_LOAD_PATH=`pwd`/module guild compile-wasm -o 42.wasm 42.scm
+wrote `42.wasm`
+```
+
+You're done!  With the start of things, that is :)  To actually load the
+`42.wasm` you need a capable WebAssembly implementation.  By the end of
+2023 all common web browsers will have these capabilities, but currently
+we are on the bleeding edge and using development browsers.
+
+The generated WebAssembly doesn't depend on web browsers, but it does
+take some capabilities from the host system, notably the bignum
+implementation and weak maps.  For web browsers, these facilities are
+provided by [`reflect.js`](./js-runtime/reflect.js).  To help in
+adapting between JavaScript and the ABI of compiled Scheme code, there
+is an auxiliary WebAssembly module `reflect.wasm` that needs to be
+compiled from [`reflect.wat`](./js-runtime/reflect.wat).  To do that,
+check out and build the binaryen tool:
+
+```
+git clone https://github.com/WebAssembly/binaryen
+cd binaryen
+git submodule init
+git submodule update
+cmake . -DCMAKE_BUILD_TYPE=Debug
+make
+```
+
+Then back in `guile-hoot-updates`, just `make`:
+
+```
+$ make
+~/src/binaryen/bin/wasm-as --enable-gc --enable-strings --enable-tail-call --enable-reference-types --enable-bulk-memory -o js-runtime/reflect.wasm js-runtime/reflect.wat
+~/src/binaryen/bin/wasm-as --enable-gc --enable-strings --enable-tail-call --enable-reference-types --enable-bulk-memory -o examples/basic-types.wasm examples/basic-types.wat
+```
+
+Now, to load these files in V8, again you need a really recent V8.
+Probably anything since mid-March 2023 will do.  Building V8 is
+annoying.  You need to have `depot_tools` installed; see
+https://v8.dev/docs/source-code.  Once you have that see
+https://v8.dev/docs/build to build.  You will end up with a `d8` binary
+in `out/x64.release` (if you are on an x86-64 platform).
+
+If all that works you should be able to `make check`:
+
+```
+$ make check
+cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot-updates/module" /opt/guile/bin/guile test-wasm-assembler.scm
+%%%% Starting test test-wasm-assembler  (Writing full log to "test-wasm-assembler.log")
+# of expected passes      3
+cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot-updates/module" /opt/guile/bin/guile test-constants.scm
+%%%% Starting test test-constants  (Writing full log to "test-constants.log")
+WARNING: (guile-user): `compile' imported from both (system base compile) and (hoot compile)
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+V8 is running with experimental features enabled. Stability and security will suffer.
+# of expected passes      8
+cd examples/ && ~/src/v8/out/x64.release/d8 --experimental-wasm-gc --experimental-wasm-stringref --experimental-wasm-return-call basic-types.js
+V8 is running with experimental features enabled. Stability and security will suffer.
+1,#\x1,false,(),true,#<unspecified>,#eof,#<pair>,#<mutable-pair>,#<vector>,#<mutable-vector>,#<bytevector>,#<mutable-bytevector>,#<bitvector>,#<mutable-bitvector>,hello world!,#<mutable-string>,#<procedure>,#<symbol>,#<keyword>,#<variable>,#<atomic-box>,#<hash-table>,#<weak-table>,#<struct>,42.69,2147483648,42+6.9i,14/23,#<fluid>,#<dynamic-state>,#<syntax>,#<port>
+```
+
+We're working on packaging up these dependencies in Guix.  Also, we are
+working on getting compiled WebAssembly working in actual web browsers.
+
 ## GitLab CI
 
 Here's how to build a Docker image for use in GitLab CI.  Guix

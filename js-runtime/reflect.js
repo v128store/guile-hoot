@@ -232,19 +232,3 @@ async function test_load(path) {
     let reflect = await mod.reflect();
     return reflect.call(mod.get_export('$load').value)
 }
-
-// misc testing crap: needs to go elsewhere
-var waitFor;
-if (typeof drainJobQueue !== 'undefined') {
-    waitFor = function waitFor(p) { drainJobQueue(); return p; };
-} else if (typeof testRunner !== 'undefined') {
-    waitFor = function waitFor(p) {
-        testRunner.waitUntilDone();
-        return p.then(val=> { testRunner.notifyDone(); return val; },
-                      err=> { throw err });
-    };
-} else {
-    // JSC will drain promises before exiting and doesn't require a
-    // specific waiter.
-    waitFor = function waitFor(p) { return p; };
-}

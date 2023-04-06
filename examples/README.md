@@ -7,14 +7,11 @@ in the compiler, the files in this directory are still useful.
 
 ## Running checks
 
-You will need recent V8 and Binaryen.  Annoyingly and for weird reasons
-binaryen doesn't support the standard GC syntax yet, though its binaries
-are good.  For binaryen:
+You will need recent V8 and Binaryen.  For binaryen:
 
 ```
-git clone https://github.com/wingo/binaryen
+git clone https://github.com/WebAssembly/binaryen
 cd binaryen
-git checkout parse-sub
 git submodule init
 git submodule update
 cmake . -DCMAKE_BUILD_TYPE=Debug

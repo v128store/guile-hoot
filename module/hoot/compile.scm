@@ -735,6 +735,8 @@
                           (env (default-environment from))
                           (optimization-level (default-optimization-level))
                           (warning-level (default-warning-level))
+                          (dump-cps? #f)
+                          (dump-wasm? #f)
                           (opts '())
                           (canonicalization 'relative))
   (define (compile-to-cps in)
@@ -757,13 +759,15 @@
     (lambda (in)
       (set-port-encoding! in (or (file-encoding in) "UTF-8"))
       (define cps (compile-to-cps in))
-      (dump cps)
+      (when dump-cps?
+        (dump cps))
       (let* ((wasm (lower-to-wasm cps))
              (wasm (if export-abi? (export-abi wasm) wasm))
              (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
              (wasm (resolve-wasm wasm)))
-        (format #t "\n\nThe wasm we are going to emit:\n")
-        (dump-wasm wasm)
+        (when dump-wasm?
+          (format #t "\n\nThe wasm we are going to emit:\n")
+          (dump-wasm wasm))
         (let ((bytes (assemble-wasm wasm)))
           (call-with-output-file output-file
             (lambda (out)

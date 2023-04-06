@@ -69,6 +69,12 @@
         (option '("r6rs") #f #f
 		(lambda (opt name arg result)
 		  (alist-cons 'install-r6rs? #t result)))
+        (option '("dump-wasm") #f #f
+		(lambda (opt name arg result)
+		  (alist-cons 'dump-wasm? #t result)))
+        (option '("dump-cps") #f #f
+		(lambda (opt name arg result)
+		  (alist-cons 'dump-cps? #t result)))
         (option '("r7rs") #f #f
 		(lambda (opt name arg result)
 		  (alist-cons 'install-r7rs? #t result)))
@@ -186,6 +192,8 @@ There is NO WARRANTY, to the extent permitted by law.~%"))
          (help?           (assoc-ref options 'help?))
          (warning-level   (assoc-ref options 'warning-level))
          (optimization-level (assoc-ref options 'optimization-level))
+         (dump-wasm?      (assoc-ref options 'dump-wasm?))
+         (dump-cps?       (assoc-ref options 'dump-cps?))
          (compile-opts    `(#:warnings
                             ,(assoc-ref options 'warnings)
                             ,@(append-map
@@ -217,6 +225,11 @@ Compile the Guile source file FILE into a WebAssembly module file.
                        reader options, and load paths are adapted for
                        specific Scheme standards; see \"R6RS Support\"
                        and \"R7RS Support\" in the manual, for full details
+
+  --dump-cps           print a debugging representation of the low-level
+                       CPS code, before generating WebAssembly
+  --dump-wasm          print a debugging representation of the generated
+                       WebAssembly code
 
   -f, --from=LANG      specify a source language other than `scheme'
 
@@ -250,6 +263,8 @@ Report bugs to <~A>.~%"
                           #:from from
                           #:warning-level warning-level
                           #:optimization-level optimization-level
+                          #:dump-cps? dump-cps?
+                          #:dump-wasm? dump-wasm?
                           #:opts compile-opts))
        (format #t "wrote `~A'\n" output-file))
       (_ (fail "multiple input files not supported")))))

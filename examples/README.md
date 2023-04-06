@@ -1,4 +1,11 @@
-# Running checks
+# This directory is going away
+
+In this directory we were testing manual compilations of Scheme to wasm.
+Now that we have the compiler working, this is no longer necessary and
+these files will bitrot.  But, until we have all data types implemented
+in the compiler, the files in this directory are still useful.
+
+## Running checks
 
 You will need recent V8 and Binaryen.  Annoyingly and for weird reasons
 binaryen doesn't support the standard GC syntax yet, though its binaries

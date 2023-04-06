@@ -1,27 +1,53 @@
-(use-modules (ice-9 binary-ports)
-             (ice-9 control)
-             (ice-9 format)
-             (ice-9 match)
-             (ice-9 pretty-print)
-             ((srfi srfi-1) #:select (append-map))
-             (system base compile)
-             (system base language)
-             (language cps)
-             (language cps intset)
-             (language cps intmap)
-             (language cps tailify)
-             (language cps verify)
-             (language cps renumber)
-             (language cps dce)
-             (language cps simplify)
-             (language cps dump)
-             (language cps utils)
-             (wasm assemble)
-             (wasm dump)
-             (wasm link)
-             (wasm resolve)
-             (wasm parse)
-             (wasm types))
+;;; WebAssembly linker
+;;; Copyright (C) 2023 Igalia, S.L.
+;;;
+;;; This library is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU Lesser General Public License as
+;;; published by the Free Software Foundation, either version 3 of the
+;;; License, or (at your option) any later version.
+;;;
+;;; This library is distributed in the hope that it will be useful, but
+;;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;;; Lesser General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU Lesser General Public
+;;; License along with this program.  If not, see
+;;; <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;;;
+;;; Linker for WebAssembly, to augment a wasm module by pulling in
+;;; missing definitions from a standard library.
+;;;
+;;; Code:
+
+(define-module (hoot compile)
+  #:use-module (ice-9 binary-ports)
+  #:use-module (ice-9 control)
+  #:use-module (ice-9 format)
+  #:use-module (ice-9 match)
+  #:use-module (ice-9 pretty-print)
+  #:use-module ((srfi srfi-1) #:select (append-map))
+  #:use-module (system base compile)
+  #:use-module (system base language)
+  #:use-module (language cps)
+  #:use-module (language cps intset)
+  #:use-module (language cps intmap)
+  #:use-module (language cps tailify)
+  #:use-module (language cps verify)
+  #:use-module (language cps renumber)
+  #:use-module (language cps dce)
+  #:use-module (language cps simplify)
+  #:use-module (language cps dump)
+  #:use-module (language cps utils)
+  #:use-module (wasm assemble)
+  #:use-module (wasm dump)
+  #:use-module (wasm link)
+  #:use-module (wasm resolve)
+  #:use-module (wasm parse)
+  #:use-module (wasm types)
+  #:export (compile-to-wasm))
 
 (define (invert-tree parents)
   (intmap-fold
@@ -742,17 +768,3 @@
           (call-with-output-file output-file
             (lambda (out)
               (put-bytevector out bytes))))))))
-
-(define (main args)
-  (match args
-    ((_ in out)
-     (compile-to-wasm in out)
-     (format #t "\n\nParsing the wasm we emitted:\n")
-     (dump-wasm (call-with-input-file out parse-wasm)))
-    ((arg0 . _)
-     (format (current-error-port) "usage: ~a INPUT-FILE OUTPUT-FILE\n" arg0)
-     (exit 1))))
-
-(when (batch-mode?)
-  (main (program-arguments))
-  (exit 0))

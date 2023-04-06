@@ -96,6 +96,12 @@
           (set! interned-string-count (1+ idx))
           idx)))
 
+  (define functions-used-as-values (make-hash-table))
+  (define (record-function-used-as-value idx)
+    (unless (exact-integer? idx) (error "expected resolved idx"))
+    (hashv-set! functions-used-as-values idx #t)
+    idx)
+
   (define (type-use-matcher params results)
     (define param-type (match-lambda (($ <param> id type) type)))
     (lambda (rec type-id type-idx supers type)
@@ -343,7 +349,8 @@
          (((and inst (or 'memory.size 'memory.grow)) mem)
           `(,inst ,(resolve-memory mem)))
          (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
-         (('ref.func f) `(ref.func ,(resolve-func f)))
+         (('ref.func f) `(ref.func ,(record-function-used-as-value
+                                     (resolve-func f))))
 
          ;; GC instructions.
          (((and inst (or 'struct.get 'struct.get_s 'struct.get_u 'struct.set))
@@ -457,6 +464,21 @@
          (($ <export> name 'global id)
           (make-export name 'global (resolve-global id)))))
 
+     (define (strip-declarative-segments elems)
+       (filter (match-lambda
+                (($ <elem> id mode) (not (eq? mode 'declarative))))
+               elems))
+     (define (add-declarative-segment elems)
+       (match (sort (hash-map->list (lambda (k v) k) functions-used-as-values)
+                    <)
+         (() elems)
+         (funcs
+          (let ((declarative (make-elem #f 'declarative #f 'funcref #f
+                                        (map (lambda (func-idx)
+                                               `((ref.func ,func-idx)))
+                                             funcs))))
+            (append elems (list declarative))))))
+
      (define (visit-elem elem)
        (match elem
          (($ <elem> id mode table type offset init)
@@ -515,17 +537,19 @@
      (let ((types (map visit-type types))
            (imports (map visit-import imports))
            (exports (map visit-export exports))
-           (elems (map visit-elem elems))
+           (%elems (map visit-elem (strip-declarative-segments elems)))
            (datas (map visit-data datas))
            (start (visit-start start))
            (funcs (map visit-func funcs))
            (tables (map visit-table tables))
            (memories (map visit-memory memories))
            (globals (map visit-global globals))
-           (tags (map visit-tag tags))
-           (strings (map car
-                         (sort (hash-map->list cons interned-strings)
-                               (match-lambda*
-                                (((s1 . idx1) (s2 . idx2)) (< idx1 idx2)))))))
+           (tags (map visit-tag tags)))
+       (define strings
+         (map car
+              (sort (hash-map->list cons interned-strings)
+                    (match-lambda*
+                     (((s1 . idx1) (s2 . idx2)) (< idx1 idx2))))))
+       (define elems (add-declarative-segment %elems))
        (make-wasm types imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))

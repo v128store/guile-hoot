@@ -259,13 +259,14 @@ Report bugs to <~A>.~%"
       (() (fail "missing input file"))
       ((input-file)
        (with-fluids ((*current-warning-prefix* ""))
-         (compile-to-wasm input-file output-file
-                          #:from from
-                          #:warning-level warning-level
-                          #:optimization-level optimization-level
-                          #:dump-cps? dump-cps?
-                          #:dump-wasm? dump-wasm?
-                          #:opts compile-opts))
+         (compile-file input-file
+                       #:output-file output-file
+                       #:from from
+                       #:warning-level warning-level
+                       #:optimization-level optimization-level
+                       #:dump-cps? dump-cps?
+                       #:dump-wasm? dump-wasm?
+                       #:opts compile-opts))
        (format #t "wrote `~A'\n" output-file))
       (_ (fail "multiple input files not supported")))))
 

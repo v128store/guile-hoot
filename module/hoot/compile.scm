@@ -29,7 +29,11 @@
   #:use-module (ice-9 match)
   #:use-module (ice-9 pretty-print)
   #:use-module ((srfi srfi-1) #:select (append-map))
-  #:use-module (system base compile)
+  #:use-module ((system base compile)
+                #:select ((read-and-compile . %read-and-compile)
+                          (compile . %compile)
+                          default-warning-level
+                          default-optimization-level))
   #:use-module (system base language)
   #:use-module (language cps)
   #:use-module (language cps intset)
@@ -47,7 +51,9 @@
   #:use-module (wasm resolve)
   #:use-module (wasm parse)
   #:use-module (wasm types)
-  #:export (compile-to-wasm))
+  #:export (read-and-compile
+            compile-file
+            compile))
 
 (define (invert-tree parents)
   (intmap-fold
@@ -728,26 +734,16 @@
                tables memories globals exports
                start elems datas tags strings custom)))
 
-(define* (compile-to-wasm input-file output-file #:key
-                          (import-abi? #f)
-                          (export-abi? #t)
-                          (from (current-language))
-                          (env (default-environment from))
-                          (optimization-level (default-optimization-level))
-                          (warning-level (default-warning-level))
-                          (dump-cps? #f)
-                          (dump-wasm? #f)
-                          (opts '())
-                          (canonicalization 'relative))
-  (define (compile-to-cps in)
-    ;; FIXME: Right now the tree-il->cps phase will expand
-    ;; primitives to Guile VM primitives, e.g. including
-    ;; `heap-object?` and so on.  We need to instead expand into
-    ;; more wasm-appropriate primitives, at some point anyway.
-    (define cps
-      (read-and-compile in #:env env #:from from #:to 'cps
-                        #:optimization-level optimization-level
-                        #:warning-level warning-level))
+(define* (high-level-cps->wasm cps #:key
+                               (import-abi? #f)
+                               (export-abi? #t)
+                               (env #f)
+                               (optimization-level #f)
+                               (warning-level #f)
+                               (dump-cps? #f)
+                               (dump-wasm? #f)
+                               (opts '()))
+  (define (lower-and-tailify cps)
     (define lower-cps
       (let ((make-lower (language-lowerer (lookup-language 'cps))))
         (make-lower optimization-level opts)))
@@ -755,19 +751,98 @@
     (define tailified (tailify lowered-cps))
     (verify tailified)
     (renumber (simplify (eliminate-dead-code tailified))))
+  (let ((cps (lower-and-tailify cps)))
+    (when dump-cps?
+      (dump cps))
+    (let* ((wasm (lower-to-wasm cps))
+           (wasm (if export-abi? (export-abi wasm) wasm))
+           (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
+           (wasm (resolve-wasm wasm)))
+      (when dump-wasm?
+        (format #t "\n\nThe wasm we are going to emit:\n")
+        (dump-wasm wasm))
+      wasm)))
+
+(define* (compile exp #:key
+                  (import-abi? #f)
+                  (export-abi? #t)
+                  (from (current-language))
+                  (env (default-environment from))
+                  (optimization-level (default-optimization-level))
+                  (warning-level (default-warning-level))
+                  (dump-cps? #f)
+                  (dump-wasm? #f)
+                  (opts '()))
+  ;; FIXME: Right now the tree-il->cps phase will expand primitives to
+  ;; Guile VM primitives, e.g. including `heap-object?` and so on.  We
+  ;; need to instead expand into more wasm-appropriate primitives, at
+  ;; some point anyway.
+  (define cps
+    (%compile exp #:env env #:from from #:to 'cps
+              #:optimization-level optimization-level
+              #:warning-level warning-level))
+  (high-level-cps->wasm cps
+                        #:import-abi? import-abi?
+                        #:export-abi? export-abi?
+                        #:env env
+                        #:optimization-level optimization-level
+                        #:warning-level warning-level
+                        #:dump-cps? dump-cps?
+                        #:dump-wasm? dump-wasm?
+                        #:opts opts))
+
+(define* (read-and-compile port #:key
+                           (import-abi? #f)
+                           (export-abi? #t)
+                           (from (current-language))
+                           (env (default-environment from))
+                           (optimization-level (default-optimization-level))
+                           (warning-level (default-warning-level))
+                           (dump-cps? #f)
+                           (dump-wasm? #f)
+                           (opts '()))
+  ;; FIXME: Right now the tree-il->cps phase will expand primitives to
+  ;; Guile VM primitives, e.g. including `heap-object?` and so on.  We
+  ;; need to instead expand into more wasm-appropriate primitives, at
+  ;; some point anyway.
+  (define cps
+    (%read-and-compile port #:env env #:from from #:to 'cps
+                       #:optimization-level optimization-level
+                       #:warning-level warning-level))
+  (high-level-cps->wasm cps
+                        #:import-abi? import-abi?
+                        #:export-abi? export-abi?
+                        #:env env
+                        #:optimization-level optimization-level
+                        #:warning-level warning-level
+                        #:dump-cps? dump-cps?
+                        #:dump-wasm? dump-wasm?
+                        #:opts opts))
+
+(define* (compile-file input-file #:key
+                       (output-file (error "missing output file"))
+                       (import-abi? #f)
+                       (export-abi? #t)
+                       (from (current-language))
+                       (env (default-environment from))
+                       (optimization-level (default-optimization-level))
+                       (warning-level (default-warning-level))
+                       (dump-cps? #f)
+                       (dump-wasm? #f)
+                       (opts '()))
   (call-with-input-file input-file
     (lambda (in)
       (set-port-encoding! in (or (file-encoding in) "UTF-8"))
-      (define cps (compile-to-cps in))
-      (when dump-cps?
-        (dump cps))
-      (let* ((wasm (lower-to-wasm cps))
-             (wasm (if export-abi? (export-abi wasm) wasm))
-             (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
-             (wasm (resolve-wasm wasm)))
-        (when dump-wasm?
-          (format #t "\n\nThe wasm we are going to emit:\n")
-          (dump-wasm wasm))
+      (let ((wasm (read-and-compile in
+                                    #:import-abi? import-abi?
+                                    #:export-abi? export-abi?
+                                    #:from from
+                                    #:env env
+                                    #:optimization-level optimization-level
+                                    #:warning-level warning-level
+                                    #:dump-cps? dump-cps?
+                                    #:dump-wasm? dump-wasm?
+                                    #:opts opts)))
         (let ((bytes (assemble-wasm wasm)))
           (call-with-output-file output-file
             (lambda (out)

@@ -160,9 +160,10 @@ class SchemeReflector {
 
     call(func, ...args) {
         let api = this.#instance.exports;
-        let argv = api.make_vector(args.length, api.scm_false());
+        let argv = api.make_vector(args.length + 1, api.scm_false());
+        api.vector_set(argv, 0, func);
         for (let [idx, arg] of args.entries())
-            api.vector_set(argv, idx, this.#to_scm(arg));
+            api.vector_set(argv, idx + 1, this.#to_scm(arg));
         argv = api.call(func, argv);
         let results = [];
         for (let idx = 0; idx < api.vector_length(argv); idx++)
@@ -239,7 +240,7 @@ if (typeof drainJobQueue !== 'undefined') {
 } else if (typeof testRunner !== 'undefined') {
     waitFor = function waitFor(p) {
         testRunner.waitUntilDone();
-        return p.then(testRunner.notifyDone,
+        return p.then(val=> { testRunner.notifyDone(); return val; },
                       err=> { throw err });
     };
 } else {

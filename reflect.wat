@@ -421,8 +421,13 @@
     (struct.get $pair 2 (local.get $v)))
 
   (func $push-return (param $k (ref $kvarargs))
-    (table.set $return-stack (global.get $return-sp) (local.get $k))
-    (global.set $return-sp (i32.add (global.get $return-sp) (i32.const 1))))
+    (local $sp i32)
+    (local.set $sp (global.get $return-sp))
+    (if (i32.eq (table.size $return-stack) (local.get $sp))
+        (then (call $grow-return-stack
+                    (i32.add (i32.const 16) (local.get $sp)))))
+    (table.set $return-stack (local.get $sp) (local.get $k))
+    (global.set $return-sp (i32.add (local.get $sp) (i32.const 1))))
   (func $pop-return (result (ref $kvarargs))
     (global.set $return-sp (i32.sub (global.get $return-sp) (i32.const 1)))
     (ref.as_non_null (table.get $return-stack (global.get $return-sp))))

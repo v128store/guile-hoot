@@ -661,30 +661,45 @@
                  locals
                  code)))
 
-  (define (compute-globals funcs)
-    ;; Assume that the first function is the "load" function.
+  (define (compute-globals)
+    ;; FIXME: heap constants
     (list (make-global '$load
-                       (make-global-type #f (make-ref-type #f '$kvarargs))
-                       `((ref.func ,(match funcs
-                                      ((($ <func> id) . _) id)))))))
+                       (make-global-type #t scm-type)
+                       `((i32.const 0) (i31.new)))))
 
   (define (compute-exports)
     (list (make-export "$load" 'global '$load)))
 
+  (define (compute-start-function funcs)
+    (define load-function-id
+      (match funcs
+        ;; Assume that the first function is the "load" function.
+        ((($ <func> id) . _) id)))
+    (make-func '$start
+               void-block-type
+               '()
+               `((i32.const 0)
+                 (ref.func ,load-function-id)
+                 (struct.new $proc)
+                 (global.set $load))))
+
   (let* ((funcs
           (intmap-map->list lower-func (compute-reachable-functions cps 0)))
+         (start-func (compute-start-function funcs))
          (types '())
          (imports '())
          (tables '())
          (memories '())
-         (globals (compute-globals funcs)) ;; FIXME: heap constants
+         (globals (compute-globals))
          (exports (compute-exports))
-         (start #f) ;; FIXME: heap constants
+         (start '$start)
          (elems '())
          (datas '())
          (tags '())
          (custom '()))
-    (make-wasm types imports funcs tables memories globals exports
+    (make-wasm types imports
+               (cons start-func funcs)
+               tables memories globals exports
                start elems datas tags strings custom)))
 
 (define* (compile-to-wasm input-file output-file #:key

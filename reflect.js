@@ -229,7 +229,7 @@ class SchemeModule {
 async function test_load(path) {
     let mod = await SchemeModule.fetch_and_instantiate(path);
     let reflect = await mod.reflect();
-    return reflect.call(mod.get_export('$load'))
+    return reflect.call(mod.get_export('$load').value)
 }
 
 // misc testing crap: needs to go elsewhere

@@ -118,6 +118,23 @@ V8 is running with experimental features enabled. Stability and security will su
 We're working on packaging up these dependencies in Guix.  Also, we are
 working on getting compiled WebAssembly working in actual web browsers.
 
+## The shape of things
+
+In the end we expect to be able to compile Scheme programs to single
+WebAssembly files.  To deploy on web browsers there will be an
+associated JavaScript module.  Some  non-web targets are hosted by
+JavaScript implementations (e.g. node.js); those are similar to web
+browsers.  Otherwise on WASI hosts we expect to have a WASI-specific
+support module.
+
+The minimal compiled module size is a little less than a kilobyte of
+wasm, uncompressed.  The auxiliary WebAssembly module to do impedance
+matching with JavaScript is another three kilobytes uncompressed, and
+the generic JS library is another 250 lines of unminified JS.  As we
+implement more of Scheme, we hope to preserve this "small programs
+compile to small files" property, rather than having every compiled
+program include the whole of Guile's standard library.
+
 ## GitLab CI
 
 Here's how to build a Docker image for use in GitLab CI.  Guix

@@ -544,6 +544,12 @@
            (match val
              ((? fixnum?) `((i32.const ,(ash val 1))
                             (i31.new)))
+             (#f `((i32.const 1) (i31.new)))
+             ((? (lambda (x) (eq? x #nil))) `((i32.const 5) (i31.new)))
+             ((? (lambda (x) (eq? x '()))) `((i32.const 13) (i31.new)))
+             (#t `((i32.const 17) (i31.new)))
+             ((? unspecified?) `((i32.const 33) (i31.new)))
+             ((? eof-object?) `((i32.const 41) (i31.new)))
              (_ (error "unimplemented constant" val))))
           (($ $primcall 'restore1 'ptr ())
            `((call $pop-return!)))

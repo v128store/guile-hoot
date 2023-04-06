@@ -69,11 +69,18 @@
    (lambda (wasm-file-name)
      (run-d8 "load-wasm-and-print.js" "--" wasm-file-name))))
 
-(define-syntax-rule (test-compilation constant repr)
-  (test-equal repr (compile-scheme-then-load-wasm-in-d8 'constant) repr))
+(define-syntax-rule (test-compilation expr repr)
+  (test-equal repr repr (compile-scheme-then-load-wasm-in-d8 'expr)))
 
 (test-compilation 42 "42")
 (test-compilation 100 "100")
+(test-compilation -1 "-1")
+(test-compilation #f "false")
+(test-compilation '#nil "#nil")
+(test-compilation '() "()")
+(test-compilation #t "true")
+(test-compilation (if #f #f) "#<unspecified>")
+;(test-compilation the-eof-object "#<eof>")
 
 (test-end "test-constants")
 

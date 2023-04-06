@@ -3,5 +3,4 @@ default:
 
 test:
   script:
-    - cd test
     - make check

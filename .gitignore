@@ -1,3 +1,4 @@
 /test/*.log
 /js-runtime/reflect.wasm
 /examples/basic-types.wasm
+/test-wasm-assembler.log

@@ -128,6 +128,21 @@ eager "instruction explosion" of CPS primitives in `(language tree-il
 compile-cps)` to primitives that correspond to the native Guile VM
 rather than what we will use in wasm.
 
+### 2023-04-06
+
+Aaaaaaahhhhh, finally:
+
+```
+guild compile-wasm -o 42.wasm 42.scm
+wrote `42.wasm`
+```
+
+We also have a new [reflect.wat](../js-runtime/reflect.wat) /
+[reflect.js](../js-runtime/reflect.js) run-time library to allow these
+WebAssembly files to be loaded in web browsers or other places where you
+have a JavaScript implementation with a capable WebAssembly
+implementation.
+
 ## The near future
 
 Some good starter tasks for new contributors:
@@ -140,24 +155,22 @@ Some good starter tasks for new contributors:
    `basic-test.wasm`, parse to records via `parse-wasm`, then take it to
    wat and then back to wasm and binary.
    
- - The assembler should create "declarative" element segment for any
-   function mentioned by a `ref.func`.  The engine uses this to know how
-   to generate code for these functions.  See for example how there is
-   no declarative element segment in basic-types.wat, but the wasm file
-   is generated with one.
+ - It would be nice to add a "symbolizer" pass for parsed wasm files.
+   That way you can write some of the standard library in wat, use
+   binaryen to compile, optimize, and validate it, and when you want to
+   pull in parts of the standard library you can just parse the compiled
+   wasm via `compute-stdlib` in `(hoot compile)`.  To do this though,
+   intramodule references need to be symbolic (by-name) rather than by
+   index, to allow the module to be picked apart and combined with the
+   generated wasm.
 
  - The [WebAssembly tool
    conventions](https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md)
    define a way to serialize names to object files.  Probably we should
    do this, for debuggability.
 
-The broader picture is that we have two sides of a bridge and now just
-have to build the bridge itself.  On one side, we have
-[tailified](https://lists.gnu.org/archive/html/guile-devel/2021-06/msg00005.html)
-CPS (see also
-[tailify.scm](http://git.savannah.gnu.org/cgit/guile.git/tree/module/language/cps/tailify.scm?h=wip-tailify)).
-
-On the other side, we have the calling convention of wasm/gc.  Happily
-we now also have tail calls, so no need for trampolines.  So next up is
-creating a compiler to go from minimal Scheme snippets to wasm, through
-tailified CPS.
+ - Currently the subset of the Scheme language that is supported is
+   basically nothing -- just a minimal subset of the constants.  We need
+   to expand this.  See [(hoot compile)](../module/hoot/compile.scm),
+   anywhere it says "unimplemented", and add tests to
+   [`test-constants.scm`](../test/test-constants.scm).

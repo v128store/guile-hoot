@@ -73,6 +73,7 @@
   (test-equal repr (compile-scheme-then-load-wasm-in-d8 'constant) repr))
 
 (test-compilation 42 "42")
+(test-compilation 100 "100")
 
 (test-end "test-constants")
 

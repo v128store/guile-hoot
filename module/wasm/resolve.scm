@@ -551,5 +551,8 @@
                     (match-lambda*
                      (((s1 . idx1) (s2 . idx2)) (< idx1 idx2))))))
        (define elems (add-declarative-segment %elems))
-       (make-wasm types imports funcs tables memories globals exports start
+       ;; Reverse TYPES so that its order corresponds to the indices
+       ;; assigned by `add-id!'.
+       (make-wasm (reverse types)
+                  imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))

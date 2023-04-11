@@ -111,7 +111,7 @@
               (and (equal? (map param-type params)
                            (map param-type params'))
                    (equal? results results')
-                   (make-type-use type-idx type)))
+                   (make-type-use type-idx (make-func-sig params results))))
              (_ #f)))))
 
   (define (adjoin-types-from-type-uses types funcs imports tags)

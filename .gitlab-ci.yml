@@ -3,4 +3,6 @@ default:
 
 test:
   script:
-    - make check
+    - export FLAGS="BINARYEN=/bin V8=/bin"
+    - make $FLAGS
+    - make check $FLAGS

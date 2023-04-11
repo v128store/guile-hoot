@@ -49,4 +49,4 @@ if (args.length != 1) {
 }
 
 load('reflect.js');
-waitFor(test_load(args[0]).then(log));
+waitFor(test_load(args[0]).then(log).catch(log));

@@ -104,15 +104,12 @@
 
   (define (type-use-matcher params results)
     (define param-type (match-lambda (($ <param> id type) type)))
-    (define param-id (match-lambda (($ <param> id type) id)))
     (lambda (rec type-id type-idx supers type)
       (and (null? supers)
            (match type
              (($ <func-sig> params' results')
               (and (equal? (map param-type params)
                            (map param-type params'))
-                   (equal? (map param-id params)
-                           (map param-id params'))
                    (equal? results results')
                    (make-type-use type-idx type)))
              (_ #f)))))

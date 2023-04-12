@@ -79,6 +79,7 @@
 (test-compilation '#nil "#nil")
 (test-compilation '() "()")
 (test-compilation #t "true")
+(test-compilation #\a "#\\x61")
 (test-compilation (if #f #f) "#<unspecified>")
 ;(test-compilation the-eof-object "#<eof>")
 

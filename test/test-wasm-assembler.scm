@@ -59,5 +59,15 @@
 (test-equal "basic types reassembly"
             basic-types.wasm/2 basic-types.wasm/3)
 
+;; Test type resolution for functions with similar signatures
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 6 1 96 1 127 1 127 3 3 2 0 0 10 11 2 4 0 32
+        0 11 4 0 32 0 11)
+ (module
+  (func $a (param $x i32) (result i32)
+        (local.get $x))
+  (func $b (param $y i32) (result i32)
+        (local.get $y))))
+
 (test-end "test-wasm-assembler")
 

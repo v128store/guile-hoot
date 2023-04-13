@@ -19,7 +19,7 @@ top_srcdir=$(shell pwd)
 guile_load_path=$(top_srcdir)/module$(if $(GUILE_LOAD_PATH),:$(GUILE_LOAD_PATH),)
 
 all: $(OBJECTS)
-check: $(CHECKS)
+check: $(OBJECTS) $(CHECKS)
 
 $(OBJECTS): %.wasm: %.wat
 	$(WASM_AS) -o $@ $<

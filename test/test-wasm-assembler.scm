@@ -69,5 +69,36 @@
   (func $b (param $y i32) (result i32)
         (local.get $y))))
 
+;; Test vector instructions
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 8 1 6 0 65 23 253
+        15 11)
+ (module (func (result v128) (i8x16.splat (i32.const 23)))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 8 1 6 0 65 23 253
+        16 11)
+ (module (func (result v128) (i16x8.splat (i32.const 23)))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 8 1 6 0 65 23 253
+        17 11)
+ (module (func (result v128) (i32x4.splat (i32.const 23)))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 8 1 6 0 66 23 253
+        18 11)
+ (module (func (result v128) (i64x2.splat (i64.const 23)))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 11 1 9 0 67 208
+        15 73 64 253 19 11)
+ (module (func (result v128) (f32x4.splat (f32.const 3.14159)))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 123 3 2 1 0 10 15 1 13 0 68 110
+        134 27 240 249 33 9 64 253 20 11)
+ (module (func (result v128) (f64x2.splat (f64.const 3.14159)))))
+
 (test-end "test-wasm-assembler")
 

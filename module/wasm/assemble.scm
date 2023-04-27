@@ -332,7 +332,7 @@
          (emit-u32 port idx0)
          (emit-u32 port idx1))
         (_ (bad-instruction))))
-    (define (emit-vector-splat code)
+    (define (emit-simd-splat code)
       (match args
         (()
          (emit-u8 port #xfd)
@@ -607,12 +607,12 @@
       ('string.encode_wtf8_array           (emit-gc #xb7))
 
       ;; Vector opcodes.
-      ('i8x16.splat                        (emit-vector-splat #x0f))
-      ('i16x8.splat                        (emit-vector-splat #x10))
-      ('i32x4.splat                        (emit-vector-splat #x11))
-      ('i64x2.splat                        (emit-vector-splat #x12))
-      ('f32x4.splat                        (emit-vector-splat #x13))
-      ('f64x2.splat                        (emit-vector-splat #x14))
+      ('i8x16.splat                        (emit-simd-splat #x0f))
+      ('i16x8.splat                        (emit-simd-splat #x10))
+      ('i32x4.splat                        (emit-simd-splat #x11))
+      ('i64x2.splat                        (emit-simd-splat #x12))
+      ('f32x4.splat                        (emit-simd-splat #x13))
+      ('f64x2.splat                        (emit-simd-splat #x14))
 
       ;; Misc opcodes.
       ('i32.trunc_sat_f32_s                (emit-misc #x00))

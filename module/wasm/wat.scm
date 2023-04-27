@@ -148,8 +148,7 @@
       (_ (error "bad reftype" x))))
   (define (parse-val-type x)
     (match x
-      ((or 'i32 'i64 'f32 'f64) x)
-      ('v128 x)
+      ((or 'i32 'i64 'f32 'f64 'v128) x)
       ((or 'funcref 'externref ('ref _)) x)
       (_ (error "bad valtype" x))))
   (define (parse-params x)

@@ -142,18 +142,26 @@
                (reverse exports) start (reverse elems)
                (reverse datas) (reverse tags) strings '()))
 
+  (define (parse-heap-type x)
+    (match x
+      ((or 'func 'extern (? id-or-idx?)) x)
+      (_ (error "bad heaptype" x))))
   (define (parse-ref-type x)
     (match x
-      ((or 'funcref 'externref ('ref _)) x)
+      ((or 'funcref 'externref) x)
+      (('ref 'null ht) (make-ref-type #t (parse-heap-type ht)))
+      (('ref ht) (make-ref-type #f (parse-heap-type ht)))
       (_ (error "bad reftype" x))))
   (define (parse-val-type x)
     (match x
       ((or 'i32 'i64 'f32 'f64 'v128) x)
-      ((or 'funcref 'externref ('ref _)) x)
+      ((or 'funcref 'externref) x)
+      (('ref 'null ht) (make-ref-type #t (parse-heap-type ht)))
+      (('ref ht) (make-ref-type #f (parse-heap-type ht)))
       (_ (error "bad valtype" x))))
   (define (parse-params x)
     (match x
-      (((? id? id) vt) (list (make-param id vt)))
+      (((? id? id) vt) (list (make-param id (parse-val-type vt))))
       ((vt ...) (map (lambda (vt) (make-param #f (parse-val-type vt))) vt))))
   (define (parse-results x)
     (match x
@@ -221,7 +229,7 @@
   (define (parse-type x)
     (define (parse-prim-type x)
       (match x
-        (('func . sig) (parse-func-sig x))
+        (('func . sig) (parse-func-sig sig))
         (('array . sig) (parse-array-type sig))
         (('struct . sig) (parse-struct-type sig))))
     (match x
@@ -349,6 +357,10 @@
          `(,@args ,tag ,@(unfold-mem-arg mem-arg))))
       (((and tag (or 'i32.const 'i64.const 'f32.const 'f64.const)) val . insts)
        `(,@insts ,tag ,val))
+      (('ref.func id . args)
+       `(,@args ref.func ,id))
+      (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
       ((tag . args)
        `(,@args ,tag))))
   (define (parse-block x block-kind)
@@ -394,6 +406,10 @@
             (when (eq? block-kind 'body)
               (error "unexpected 'end'"))
             (values (reverse out) in))
+           ('ref.func
+            (match in
+              (((? id-or-idx? id) . in)
+               (lp/inst in `(,inst ,id)))))
            ((or 'br 'br_if 'call 'local.get 'local.set 'local.tee 'global.get
                 'global.set)
             (let-values (((idx in) (parse-id-or-idx in)))
@@ -436,6 +452,10 @@
             (match in
               (((? real? const) . in)
                (lp/inst in `(,inst ,(exact->inexact const))))))
+           ((or 'call_ref 'return_call_ref)
+            (match in
+              (((? id-or-idx? id) . in)
+               (lp/inst in `(,inst ,id)))))
            (_
             (lp/inst in inst)))))))
   (define (parse-offset x)

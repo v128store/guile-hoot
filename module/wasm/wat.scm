@@ -361,6 +361,8 @@
        `(,@args ref.func ,id))
       (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
+      (((and tag (or 'ref.null 'ref.as_non_null)) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
       ((tag . args)
        `(,@args ,tag))))
   (define (parse-block x block-kind)
@@ -453,6 +455,10 @@
               (((? real? const) . in)
                (lp/inst in `(,inst ,(exact->inexact const))))))
            ((or 'call_ref 'return_call_ref)
+            (match in
+              (((? id-or-idx? id) . in)
+               (lp/inst in `(,inst ,id)))))
+           ((or 'ref.null 'ref.as_non_null)
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))

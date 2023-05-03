@@ -216,6 +216,10 @@
                (fold1 visit-val-type type types))
               (('ref.null type)
                (visit-heap-type type types))
+              (('ref.as_non_null type)
+               (visit-heap-type type types))
+              (('ref.as_null type)
+               (visit-heap-type type types))
               (((or 'struct.get 'struct.get_s 'struct.get_u
                     'struct.set) type field)
                (visit-heap-type type types))

@@ -348,7 +348,8 @@
           `(,inst ,(resolve-table table)))
          (((and inst (or 'memory.size 'memory.grow)) mem)
           `(,inst ,(resolve-memory mem)))
-         (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
+         (('ref.null ht) `(ref.null ,(resolve-local ht)))
+         (('ref.as_non_null ht) `(ref.as_non_null ,(resolve-local ht)))
          (('ref.func f) `(ref.func ,(record-function-used-as-value
                                      (resolve-func f))))
 

@@ -97,11 +97,13 @@ class Bitvector extends HeapObject {
         return out;
     }
 }
-class MutableBitvector extends Bitvector { toString() { return "#<mutable-bitvector>"; } }
+class MutableBitvector extends Bitvector {
+    toString() { return "#<mutable-bitvector>"; }
+}
 
 class MutableString extends HeapObject {
     toString() { return "#<mutable-string>"; }
-    repr() { return this.reflector.get_string(this); }
+    repr() { return this.reflector.string_value(this); }
 }
 
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }

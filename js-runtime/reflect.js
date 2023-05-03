@@ -65,7 +65,9 @@ class Vector extends HeapObject {
         return out;
     }
 }
-class MutableVector extends Vector { toString() { return "#<mutable-vector>"; } }
+class MutableVector extends Vector {
+    toString() { return "#<mutable-vector>"; }
+}
 
 class Bytevector extends HeapObject {
     toString() { return "#<bytevector>"; }
@@ -80,9 +82,21 @@ class Bytevector extends HeapObject {
         return out;
     }
 }
-class MutableBytevector extends Bytevector { toString() { return "#<mutable-bytevector>"; } }
+class MutableBytevector extends Bytevector {
+    toString() { return "#<mutable-bytevector>"; }
+}
 
-class Bitvector extends HeapObject { toString() { return "#<bitvector>"; } }
+class Bitvector extends HeapObject {
+    toString() { return "#<bitvector>"; }
+    repr() {
+        let len = this.reflector.bitvector_length(this);
+        let out = '#*';
+        for (let i = 0; i < len; i++) {
+            out += this.reflector.bitvector_ref(this, i) ? '1' : '0';
+        }
+        return out;
+    }
+}
 class MutableBitvector extends Bitvector { toString() { return "#<mutable-bitvector>"; } }
 class MutableString extends HeapObject { toString() { return "#<mutable-string>"; } }
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
@@ -227,6 +241,13 @@ class SchemeReflector {
     }
     bytevector_ref(x, i) {
         return this.#instance.exports.bytevector_ref(x.obj, i);
+    }
+
+    bitvector_length(x) {
+        return this.#instance.exports.bitvector_length(x.obj);
+    }
+    bitvector_ref(x, i) {
+        return this.#instance.exports.bitvector_ref(x.obj, i) == 1;
     }
 }
 

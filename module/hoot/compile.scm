@@ -515,6 +515,26 @@
                   (array.new_fixed $raw-bytevector ,(bytevector-length x))
                   (struct.new $bytevector))
                 '()))
+      ((? bitvector?)
+       ;; FIXME: Probably we should put the initializers in the data
+       ;; section instead of using new_fixed.
+       (intern! (make-ref-type #f '$bitvector)
+                `((i32.const ,(hashq-constant x))
+                  (i32.const ,(bitvector-length x))
+                  ,@(let* ((u32v (uniform-array->bytevector x))
+                           (u32len (/ (bytevector-length u32v) 4)))
+                      (unless (eq? (native-endianness) (endianness little))
+                        (error "unsupported"))
+                      (let lp ((i 0))
+                        (if (< i u32len)
+                            (cons `(i32.const
+                                    ,(bytevector-s32-native-ref u32v i))
+                                  (lp (+ i 4)))
+                            '())))
+                  (array.new_fixed $raw-bitvector
+                                   ,(ash (+ 31 (bitvector-length x)) -5))
+                  (struct.new $bitvector))
+                '()))
       (_ (error "unrecognized constant" x))))
   (define (compile-heap-constant val)
     (let ((name (or (hash-ref heap-constant-names val)

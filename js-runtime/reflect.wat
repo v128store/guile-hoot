@@ -461,6 +461,18 @@
         (param $vec (ref $bytevector)) (result i32)
     (array.len (struct.get $bytevector $vals (local.get $vec))))
 
+  (func $bitvector-ref (export "bitvector_ref")
+        (param $vec (ref $bitvector)) (param $i i32) (result i32)
+    (i32.and
+     (i32.shr_u
+      (array.get $raw-bitvector (struct.get $bitvector $vals (local.get $vec))
+                 (i32.shr_u (local.get $i) (i32.const 5)))
+      (local.get $i))
+     (i32.const 1)))
+  (func $bitvector-length (export "bitvector_length")
+        (param $vec (ref $bitvector)) (result i32)
+    (struct.get $bitvector $len (local.get $vec)))
+
   (global $return-values (mut (ref null $raw-scmvector)) (ref.null $raw-scmvector))
 
   (func $save-values-and-return-to-host (param $nargs i32)

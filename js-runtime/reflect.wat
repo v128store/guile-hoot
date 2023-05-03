@@ -449,6 +449,18 @@
         (param $vec (ref $vector)) (result i32)
     (array.len (struct.get $vector $vals (local.get $vec))))
 
+  (func $bytevector-set (export "bytevector_set")
+        (param $vec (ref $mutable-bytevector)) (param $i i32) (param $val i32)
+    (array.set $raw-bytevector (struct.get $mutable-bytevector $vals (local.get $vec))
+               (local.get $i) (local.get $val)))
+  (func $bytevector-ref (export "bytevector_ref")
+        (param $vec (ref $bytevector)) (param $i i32) (result i32)
+    (array.get $raw-bytevector (struct.get $bytevector $vals (local.get $vec))
+               (local.get $i)))
+  (func $bytevector-length (export "bytevector_length")
+        (param $vec (ref $bytevector)) (result i32)
+    (array.len (struct.get $bytevector $vals (local.get $vec))))
+
   (global $return-values (mut (ref null $raw-scmvector)) (ref.null $raw-scmvector))
 
   (func $save-values-and-return-to-host (param $nargs i32)

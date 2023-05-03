@@ -67,8 +67,21 @@ class Vector extends HeapObject {
 }
 class MutableVector extends Vector { toString() { return "#<mutable-vector>"; } }
 
-class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
+class Bytevector extends HeapObject {
+    toString() { return "#<bytevector>"; }
+    repr() {
+        let len = this.reflector.bytevector_length(this);
+        let out = '#vu8(';
+        for (let i = 0; i < len; i++) {
+            if (i) out += ' ';
+            out += repr(this.reflector.bytevector_ref(this, i));
+        }
+        out += ')';
+        return out;
+    }
+}
 class MutableBytevector extends Bytevector { toString() { return "#<mutable-bytevector>"; } }
+
 class Bitvector extends HeapObject { toString() { return "#<bitvector>"; } }
 class MutableBitvector extends Bitvector { toString() { return "#<mutable-bitvector>"; } }
 class MutableString extends HeapObject { toString() { return "#<mutable-string>"; } }
@@ -207,6 +220,13 @@ class SchemeReflector {
     vector_length(x) { return this.#instance.exports.vector_length(x.obj); }
     vector_ref(x, i) {
         return this.#to_js(this.#instance.exports.vector_ref(x.obj, i));
+    }
+
+    bytevector_length(x) {
+        return this.#instance.exports.bytevector_length(x.obj);
+    }
+    bytevector_ref(x, i) {
+        return this.#instance.exports.bytevector_ref(x.obj, i);
     }
 }
 

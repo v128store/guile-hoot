@@ -86,6 +86,8 @@
 (test-compilation '(1 2 3 4) "(1 2 3 4)")
 (test-compilation '#() "#()")
 (test-compilation '#(3 10 (42)) "#(3 10 (42))")
+(test-compilation '#vu8() "#vu8()")
+(test-compilation '#vu8(3 10 42) "#vu8(3 10 42)")
 
 (test-end "test-constants")
 

@@ -84,6 +84,8 @@
 ;(test-compilation the-eof-object "#<eof>")
 (test-compilation '(1 . 2) "(1 . 2)")
 (test-compilation '(1 2 3 4) "(1 2 3 4)")
+(test-compilation '#() "#()")
+(test-compilation '#(3 10 (42)) "#(3 10 (42))")
 
 (test-end "test-constants")
 

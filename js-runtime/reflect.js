@@ -52,8 +52,21 @@ class Pair extends HeapObject {
 }
 class MutablePair extends Pair { toString() { return "#<mutable-pair>"; } }
 
-class Vector extends HeapObject { toString() { return "#<vector>"; } }
+class Vector extends HeapObject {
+    toString() { return "#<vector>"; }
+    repr() {
+        let len = this.reflector.vector_length(this);
+        let out = '#(';
+        for (let i = 0; i < len; i++) {
+            if (i) out += ' ';
+            out += repr(this.reflector.vector_ref(this, i));
+        }
+        out += ')';
+        return out;
+    }
+}
 class MutableVector extends Vector { toString() { return "#<mutable-vector>"; } }
+
 class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
 class MutableBytevector extends Bytevector { toString() { return "#<mutable-bytevector>"; } }
 class Bitvector extends HeapObject { toString() { return "#<bitvector>"; } }
@@ -190,6 +203,11 @@ class SchemeReflector {
 
     car(x) { return this.#to_js(this.#instance.exports.car(x.obj)); }
     cdr(x) { return this.#to_js(this.#instance.exports.cdr(x.obj)); }
+
+    vector_length(x) { return this.#instance.exports.vector_length(x.obj); }
+    vector_ref(x, i) {
+        return this.#to_js(this.#instance.exports.vector_ref(x.obj, i));
+    }
 }
 
 class SchemeModule {

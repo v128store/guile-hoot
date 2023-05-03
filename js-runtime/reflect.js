@@ -34,13 +34,13 @@ class HeapObject {
     constructor(obj) { this.obj = obj; }
 }
 class Pair extends HeapObject { toString() { return "#<pair>"; } }
-class MutablePair extends HeapObject { toString() { return "#<mutable-pair>"; } }
+class MutablePair extends Pair { toString() { return "#<mutable-pair>"; } }
 class Vector extends HeapObject { toString() { return "#<vector>"; } }
-class MutableVector extends HeapObject { toString() { return "#<mutable-vector>"; } }
+class MutableVector extends Vector { toString() { return "#<mutable-vector>"; } }
 class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
-class MutableBytevector extends HeapObject { toString() { return "#<mutable-bytevector>"; } }
+class MutableBytevector extends Bytevector { toString() { return "#<mutable-bytevector>"; } }
 class Bitvector extends HeapObject { toString() { return "#<bitvector>"; } }
-class MutableBitvector extends HeapObject { toString() { return "#<mutable-bitvector>"; } }
+class MutableBitvector extends Bitvector { toString() { return "#<mutable-bitvector>"; } }
 class MutableString extends HeapObject { toString() { return "#<mutable-string>"; } }
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
 class Sym extends HeapObject { toString() { return "#<symbol>"; } }

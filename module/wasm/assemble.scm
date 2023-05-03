@@ -65,10 +65,15 @@
       (bytevector-u32-set! bv 0 val (endianness little))
       (put-bytevector port bv)))
 
+  (define (->s32 val)
+    (if (< val (ash 1 31)) val (- val (ash 1 32))))
+  (define (->s64 val)
+    (if (< val (ash 1 63)) val (- val (ash 1 64))))
+
   (define (emit-u8 port val) (put-u8 port val))
   (define (emit-u32 port val) (put-uleb port val))
-  (define (emit-s32 port val) (put-sleb port val))
-  (define (emit-s64 port val) (put-sleb port val))
+  (define (emit-s32 port val) (put-sleb port (->s32 val)))
+  (define (emit-s64 port val) (put-sleb port (->s64 val)))
   (define (emit-f32 port val) (put-bytevector port (f32vector val)))
   (define (emit-f64 port val) (put-bytevector port (f64vector val)))
 

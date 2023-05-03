@@ -83,7 +83,7 @@
 (test-compilation (if #f #f) "#<unspecified>")
 ;(test-compilation the-eof-object "#<eof>")
 (test-compilation '(1 . 2) "(1 . 2)")
-(test-compilation '(1 2 3) "(1 2 3)")
+(test-compilation '(1 2 3 4) "(1 2 3 4)")
 
 (test-end "test-constants")
 

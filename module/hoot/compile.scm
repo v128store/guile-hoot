@@ -455,12 +455,73 @@
              (if import-abi? '() globals)
              exports start elems datas tags strings custom))
 
+;; Thomas Wang's 32-bit integer hasher, from
+;; http://www.cris.com/~Ttwang/tech/inthash.htm.
+(define (hash-i32 i)
+  ;; 32-bit hash
+  (define (i32 i) (logand i #xffffffff))
+  (let* ((i (i32 i))
+         (i (i32 (logxor (logxor i 61) (ash i -16))))
+         (i (i32 (+ i (i32 (ash i 3)))))
+         (i (i32 (logxor i (ash i -4))))
+         (i (i32 (* i #x27d4eb2d))))
+    (i32 (logxor i (ash i -15)))))
+(define (hashq-constant x)
+  (let ((h (hash-i32 (hash x (ash 1 32)))))
+    (if (= h 0)
+        (hash-i32 42)
+        h)))
+
 (define (lower-to-wasm cps)
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
   (define strings '())
   (define heap-constants '())
+  (define heap-constant-count 0)
+  (define heap-constant-names (make-hash-table))
+  (define (intern-heap-constant! x)
+    (define (intern! type init-expr reloc-expr)
+      (let ((name (string->symbol
+                   (format #f "$constant~a" heap-constant-count))))
+        (set! heap-constant-count (1+ heap-constant-count))
+        (hash-set! heap-constant-names x name)
+        (define entry (vector name type init-expr reloc-expr))
+        (set! heap-constants (cons entry heap-constants))
+        name))
+    (match x
+      ((car . cdr)
+       (intern! (make-ref-type #f '$pair)
+                `((i32.const ,(hashq-constant x))
+                  ,@(compile-constant car)
+                  ,@(compile-constant cdr)
+                  (struct.new $pair))
+                '()))
+      (_ (error "unrecognized constant" x))))
+  (define (compile-heap-constant val)
+    (let ((name (or (hash-ref heap-constant-names val)
+                    (intern-heap-constant! val))))
+      `((global.get ,name))))
+  (define (compile-immediate-constant val)
+    (define (fixnum? val)
+      (and (exact-integer? val)
+           (<= (ash -1 -29) val (1- (ash 1 29)))))
+    (match val
+      ((? fixnum?) `((i32.const ,(ash val 1))
+                     (i31.new)))
+      (#f `((i32.const 1) (i31.new)))
+      ((? (lambda (x) (eq? x #nil))) `((i32.const 5) (i31.new)))
+      ((? (lambda (x) (eq? x '()))) `((i32.const 13) (i31.new)))
+      (#t `((i32.const 17) (i31.new)))
+      ((? unspecified?) `((i32.const 33) (i31.new)))
+      ((? eof-object?) `((i32.const 41) (i31.new)))
+      ((? char?) `((i32.const ,(logior (ash (char->integer val) 2)
+                                       #b11))
+                   (i31.new)))
+      (_ #f)))
+  (define (compile-constant val)
+    (or (compile-immediate-constant val)
+        (compile-heap-constant val)))
   (define (func-label k) (string->symbol (format #f "$f~a" k)))
   (define (lower-func kfun body)
     (let ((cps (intmap-select cps body)))
@@ -536,24 +597,8 @@
            `(,@(map local.get (if proc (cons proc args) args))
              (return_call ,(func-label k))))))
       (define (compile-values exp)
-        (define (fixnum? val)
-          (and (exact-integer? val)
-               (<= (ash -1 -29) val (1- (ash 1 29)))))
         (match exp
-          (($ $const val)
-           (match val
-             ((? fixnum?) `((i32.const ,(ash val 1))
-                            (i31.new)))
-             (#f `((i32.const 1) (i31.new)))
-             ((? (lambda (x) (eq? x #nil))) `((i32.const 5) (i31.new)))
-             ((? (lambda (x) (eq? x '()))) `((i32.const 13) (i31.new)))
-             (#t `((i32.const 17) (i31.new)))
-             ((? unspecified?) `((i32.const 33) (i31.new)))
-             ((? eof-object?) `((i32.const 41) (i31.new)))
-             ((? char?) `((i32.const ,(logior (ash (char->integer val) 2)
-                                              #b11))
-                          (i31.new)))
-             (_ (error "unimplemented constant" val))))
+          (($ $const val) (compile-constant val))
           (($ $primcall 'restore1 'ptr ())
            `((call $pop-return!)))
           (_
@@ -703,10 +748,17 @@
                  code)))
 
   (define (compute-globals)
-    ;; FIXME: heap constants
-    (list (make-global '$load
-                       (make-global-type #t scm-type)
-                       `((i32.const 0) (i31.new)))))
+    (fold1 (lambda (entry globals)
+             (match entry
+               (#(name type init-expr reloc-expr)
+                (cons (make-global name
+                                   (make-global-type #f type)
+                                   init-expr)
+                      globals))))
+           heap-constants
+           (list (make-global '$load
+                              (make-global-type #t scm-type)
+                              `((i32.const 0) (i31.new))))))
 
   (define (compute-exports)
     (list (make-export "$load" 'global '$load)))

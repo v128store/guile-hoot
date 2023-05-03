@@ -48,5 +48,15 @@ if (args.length != 1) {
     _exit(1);
 }
 
+async function runTest(wasmFile) {
+    try {
+        for (let obj of await test_load(wasmFile))
+            log(repr(obj));
+    } catch (e) {
+        log(`error: ${e}`);
+        _exit(1);
+    }
+}
+
 load('reflect.js');
-waitFor(test_load(args[0]).then(log).catch(log));
+waitFor(runTest(args[0]));

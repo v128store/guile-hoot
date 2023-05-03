@@ -82,7 +82,8 @@
 (test-compilation #\a "#\\x61")
 (test-compilation (if #f #f) "#<unspecified>")
 ;(test-compilation the-eof-object "#<eof>")
-(test-compilation '(1 . 2) "#<pair>")
+(test-compilation '(1 . 2) "(1 . 2)")
+(test-compilation '(1 2 3) "(1 2 3")
 
 (test-end "test-constants")
 

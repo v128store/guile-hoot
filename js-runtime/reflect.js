@@ -31,10 +31,27 @@ class Fraction {
 }
 
 class HeapObject {
-    constructor(obj) { this.obj = obj; }
+    constructor(reflector, obj) {
+        this.reflector = reflector;
+        this.obj = obj;
+    }
+    repr() { return this.toString(); } // Default implementation.
 }
-class Pair extends HeapObject { toString() { return "#<pair>"; } }
+
+class Pair extends HeapObject {
+    toString() { return "#<pair>"; }
+    repr() {
+        let car_repr = repr(this.reflector.car(this));
+        let cdr_repr = repr(this.reflector.cdr(this));
+        if (cdr_repr == '()')
+            return `(${car_repr})`;
+        if (cdr_repr.charAt(0) == '(')
+            return `(${car_repr} ${cdr_repr.substring(1)}`;
+        return `(${car_repr} . ${cdr_repr})`;
+    }
+}
 class MutablePair extends Pair { toString() { return "#<mutable-pair>"; } }
+
 class Vector extends HeapObject { toString() { return "#<vector>"; } }
 class MutableVector extends Vector { toString() { return "#<mutable-vector>"; } }
 class Bytevector extends HeapObject { toString() { return "#<bytevector>"; } }
@@ -131,28 +148,28 @@ class SchemeReflector {
                                        api.complex_imag(scm)),
             fraction: () => new Fraction(this.#to_js(api.fraction_num(scm)),
                                          this.#to_js(api.fraction_denom(scm))),
-            pair: () => new Pair(scm),
-            'mutable-pair': () => new MutablePair(scm),
-            vector: () => new Vector(scm),
-            'mutable-vector': () => new MutableVector(scm),
-            bytevector: () => new Bytevector(scm),
-            'mutable-bytevector': () => new MutableBytevector(scm),
-            bitvector: () => new Bitvector(scm),
-            'mutable-bitvector': () => new MutableBitvector(scm),
+            pair: () => new Pair(this, scm),
+            'mutable-pair': () => new MutablePair(this, scm),
+            vector: () => new Vector(this, scm),
+            'mutable-vector': () => new MutableVector(this, scm),
+            bytevector: () => new Bytevector(this, scm),
+            'mutable-bytevector': () => new MutableBytevector(this, scm),
+            bitvector: () => new Bitvector(this, scm),
+            'mutable-bitvector': () => new MutableBitvector(this, scm),
             string: () => api.string_value(scm),
-            'mutable-string': () => new MutableString(scm),
-            procedure: () => new Procedure(scm),
-            symbol: () => new Sym(scm),
-            keyword: () => new Keyword(scm),
-            variable: () => new Variable(scm),
-            'atomic-box': () => new AtomicBox(scm),
-            'hash-table': () => new HashTable(scm),
-            'weak-table': () => new WeakTable(scm),
-            fluid: () => new Fluid(scm),
-            'dynamic-state': () => new DynamicState(scm),
-            syntax: () => new Syntax(scm),
-            port: () => new Port(scm),
-            struct: () => new Struct(scm),
+            'mutable-string': () => new MutableString(this, scm),
+            procedure: () => new Procedure(this, scm),
+            symbol: () => new Sym(this, scm),
+            keyword: () => new Keyword(this, scm),
+            variable: () => new Variable(this, scm),
+            'atomic-box': () => new AtomicBox(this, scm),
+            'hash-table': () => new HashTable(this, scm),
+            'weak-table': () => new WeakTable(this, scm),
+            fluid: () => new Fluid(this, scm),
+            'dynamic-state': () => new DynamicState(this, scm),
+            syntax: () => new Syntax(this, scm),
+            port: () => new Port(this, scm),
+            struct: () => new Struct(this, scm),
         };
         let handler = handlers[descr];
         return handler ? handler() : scm;
@@ -170,6 +187,9 @@ class SchemeReflector {
             results.push(this.#to_js(api.vector_ref(argv, idx)))
         return results;
     }
+
+    car(x) { return this.#to_js(this.#instance.exports.car(x.obj)); }
+    cdr(x) { return this.#to_js(this.#instance.exports.cdr(x.obj)); }
 }
 
 class SchemeModule {
@@ -225,6 +245,12 @@ class SchemeModule {
     async reflect() {
         return await SchemeReflector.reflect(this.exported_abi());
     }
+}
+
+function repr(obj) {
+    if (obj instanceof HeapObject)
+        return obj.repr();
+    return obj + '';
 }
 
 async function test_load(path) {

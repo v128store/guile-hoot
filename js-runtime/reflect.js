@@ -98,7 +98,12 @@ class Bitvector extends HeapObject {
     }
 }
 class MutableBitvector extends Bitvector { toString() { return "#<mutable-bitvector>"; } }
-class MutableString extends HeapObject { toString() { return "#<mutable-string>"; } }
+
+class MutableString extends HeapObject {
+    toString() { return "#<mutable-string>"; }
+    repr() { return this.reflector.get_string(this); }
+}
+
 class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
 class Sym extends HeapObject { toString() { return "#<symbol>"; } }
 class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
@@ -249,6 +254,8 @@ class SchemeReflector {
     bitvector_ref(x, i) {
         return this.#instance.exports.bitvector_ref(x.obj, i) == 1;
     }
+
+    string_value(x) { return this.#instance.exports.string_value(x.obj); }
 }
 
 class SchemeModule {

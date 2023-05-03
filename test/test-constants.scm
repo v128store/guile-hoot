@@ -92,6 +92,7 @@
 (test-compilation '#*101 "#*101")
 (test-compilation '#*100000 "#*100000")
 (test-compilation '#*0100000 "#*0100000")
+(test-compilation "foo" "foo")
 
 (test-end "test-constants")
 

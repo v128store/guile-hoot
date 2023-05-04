@@ -490,6 +490,8 @@
                   (logand #xffffffff (+ (* h 31) (char->integer ch))))
                 0
                 (symbol->string x))))
+(define (hashq-keyword x)
+  (finish-heap-object-hash (hashq-symbol (keyword->symbol x))))
 
 (define-record-type <static-procedure>
   (make-static-procedure code)
@@ -571,12 +573,21 @@
          (error "unsupported"))
        (intern! (make-ref-type #f '$symbol)
                 `((i32.const ,(hashq-symbol x))
-                  (i32.const 0)
-                  (string.const ,(symbol->string x))
-                  (struct.new $string)
+                  ,@(compile-constant (symbol->string x))
                   (struct.new $symbol))
                 (lambda (name)
                   `((call $intern-symbol! (global.get ,name))))))
+      ((? keyword?)
+       (when import-abi?
+         ;; We'd need instead to create this keyword during _start, along
+         ;; with any other constant that references it.
+         (error "unsupported"))
+       (intern! (make-ref-type #f '$keyword)
+                `((i32.const ,(hashq-keyword x))
+                  ,@(compile-constant (keyword->symbol x))
+                  (struct.new $keyword))
+                (lambda (name)
+                  `((call $intern-keyword! (global.get ,name))))))
       (_ (error "unrecognized constant" x))))
   (define (compile-heap-constant val)
     (let ((name (or (hash-ref heap-constant-names val)

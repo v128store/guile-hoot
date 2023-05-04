@@ -112,10 +112,14 @@ class Procedure extends HeapObject {
 
 class Sym extends HeapObject {
     toString() { return "#<symbol>"; }
-    repr() { return this.reflector.symbol_value(this); }
+    repr() { return this.reflector.symbol_name(this); }
 }
 
-class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
+class Keyword extends HeapObject {
+    toString() { return "#<keyword>"; }
+    repr() { return `#:${this.reflector.keyword_name(this)}`; }
+}
+
 class Variable extends HeapObject { toString() { return "#<variable>"; } }
 class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
 class HashTable extends HeapObject { toString() { return "#<hash-table>"; } }
@@ -265,7 +269,8 @@ class SchemeReflector {
     }
 
     string_value(x) { return this.#instance.exports.string_value(x.obj); }
-    symbol_value(x) { return this.#instance.exports.symbol_value(x.obj); }
+    symbol_name(x) { return this.#instance.exports.symbol_name(x.obj); }
+    keyword_name(x) { return this.#instance.exports.keyword_name(x.obj); }
 }
 
 class SchemeModule {

@@ -415,6 +415,8 @@
     (struct.get $complex 2 (local.get $v)))
   (func $string_value (export "string_value") (param $v (ref $string)) (result (ref string))
     (struct.get $string 1 (local.get $v)))
+  (func $symbol_value (export "symbol_value") (param $v (ref $symbol)) (result (ref string))
+    (call $string_value (struct.get $symbol $name (local.get $v))))
   (func $pair_car (export "car") (param $v (ref $pair)) (result (ref eq))
     (struct.get $pair 1 (local.get $v)))
   (func $pair_cdr (export "cdr") (param $v (ref $pair)) (result (ref eq))

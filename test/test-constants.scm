@@ -94,6 +94,7 @@
 (test-compilation #*0100000 "#*0100000")
 (test-compilation "foo" "foo")
 (test-compilation (lambda () 42) "#<procedure>")
+(test-compilation 'foo "foo")
 
 (test-end "test-constants")
 

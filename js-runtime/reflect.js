@@ -106,8 +106,15 @@ class MutableString extends HeapObject {
     repr() { return this.reflector.string_value(this); }
 }
 
-class Procedure extends HeapObject { toString() { return "#<procedure>"; } }
-class Sym extends HeapObject { toString() { return "#<symbol>"; } }
+class Procedure extends HeapObject {
+    toString() { return "#<procedure>"; }
+}
+
+class Sym extends HeapObject {
+    toString() { return "#<symbol>"; }
+    repr() { return this.reflector.symbol_value(this); }
+}
+
 class Keyword extends HeapObject { toString() { return "#<keyword>"; } }
 class Variable extends HeapObject { toString() { return "#<variable>"; } }
 class AtomicBox extends HeapObject { toString() { return "#<atomic-box>"; } }
@@ -258,6 +265,7 @@ class SchemeReflector {
     }
 
     string_value(x) { return this.#instance.exports.string_value(x.obj); }
+    symbol_value(x) { return this.#instance.exports.symbol_value(x.obj); }
 }
 
 class SchemeModule {

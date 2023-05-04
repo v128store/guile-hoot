@@ -387,10 +387,19 @@
                                (make-param '$str (make-ref-type #f 'string)))
                               (list (make-ref-type #f '$symbol))))
            '()
-           ;; FIXME: intern into symtab.  This is getting excruciating
            `((local.get 0) (call $string-hash) (call $finish-heap-object-hash)
              (i32.const 0) (local.get 0) (struct.new $string)
-             (struct.new $symbol)))
+             (struct.new $symbol)
+             (call $intern-symbol!)))
+          (make-func
+           '$intern-symbol!
+           (make-type-use #f (make-func-sig
+                              (list (make-param '$sym
+                                                (make-ref-type #f '$symbol)))
+                              (list (make-ref-type #f '$symbol))))
+           '()
+           ;; FIXME: Actually interning into symtab is unimplemented!
+           `((local.get 0)))
           (make-func
            '$symbol->keyword
            (make-type-use #f (make-func-sig
@@ -468,18 +477,26 @@
          (i (i32 (logxor i (ash i -4))))
          (i (i32 (* i #x27d4eb2d))))
     (i32 (logxor i (ash i -15)))))
-(define (hashq-constant x)
-  (let ((h (hash-i32 (hash x (ash 1 32)))))
+(define (finish-heap-object-hash h)
+  (let ((h (hash-i32 h)))
     (if (= h 0)
         (hash-i32 42)
         h)))
+(define (hashq-constant x)
+  (finish-heap-object-hash (hash x (ash 1 32))))
+(define (hashq-symbol x)
+  (finish-heap-object-hash
+   (string-fold (lambda (ch h)
+                  (logand #xffffffff (+ (* h 31) (char->integer ch))))
+                0
+                (symbol->string x))))
 
 (define-record-type <static-procedure>
   (make-static-procedure code)
   static-procedure?
   (code static-procedure-code))
 
-(define (lower-to-wasm cps)
+(define* (lower-to-wasm cps #:key import-abi?)
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
@@ -488,12 +505,12 @@
   (define heap-constant-count 0)
   (define heap-constant-names (make-hash-table))
   (define (intern-heap-constant! x)
-    (define (intern! type init-expr reloc-expr)
+    (define* (intern! type init-expr #:optional make-reloc)
       (let ((name (string->symbol
                    (format #f "$constant~a" heap-constant-count))))
         (set! heap-constant-count (1+ heap-constant-count))
         (hash-set! heap-constant-names x name)
-        (define entry (vector name type init-expr reloc-expr))
+        (define entry (vector name type init-expr make-reloc))
         (set! heap-constants (cons entry heap-constants))
         name))
     (match x
@@ -502,15 +519,13 @@
                 `((i32.const ,(hashq-constant x))
                   ,@(compile-constant car)
                   ,@(compile-constant cdr)
-                  (struct.new $pair))
-                '()))
+                  (struct.new $pair))))
       (#(elt ...)
        (intern! (make-ref-type #f '$vector)
                 `((i32.const ,(hashq-constant x))
                   ,@(append-map compile-constant elt)
                   (array.new_fixed $raw-scmvector ,(vector-length x))
-                  (struct.new $vector))
-                '()))
+                  (struct.new $vector))))
       ((? bytevector?)
        ;; FIXME: Probably we should put the initializers in the data
        ;; section instead of using new_fixed.
@@ -519,8 +534,7 @@
                   ,@(map (lambda (u8) `(i32.const ,u8))
                          (bytevector->u8-list x))
                   (array.new_fixed $raw-bytevector ,(bytevector-length x))
-                  (struct.new $bytevector))
-                '()))
+                  (struct.new $bytevector))))
       ((? bitvector?)
        ;; FIXME: Probably we should put the initializers in the data
        ;; section instead of using new_fixed.
@@ -539,20 +553,30 @@
                             '())))
                   (array.new_fixed $raw-bitvector
                                    ,(ash (+ 31 (bitvector-length x)) -5))
-                  (struct.new $bitvector))
-                '()))
+                  (struct.new $bitvector))))
       ((? string?)
        (intern! (make-ref-type #f '$string)
                 `((i32.const ,(hashq-constant x))
                   (string.const ,x)
-                  (struct.new $string))
-                '()))
+                  (struct.new $string))))
       (($ <static-procedure> code)
        (intern! (make-ref-type #f '$proc)
                 `((i32.const 0)
                   (ref.func ,code)
-                  (struct.new $proc))
-                '()))
+                  (struct.new $proc))))
+      ((? symbol?)
+       (when import-abi?
+         ;; We'd need instead to create this symbol during _start, along
+         ;; with any other constant that references it.
+         (error "unsupported"))
+       (intern! (make-ref-type #f '$symbol)
+                `((i32.const ,(hashq-symbol x))
+                  (i32.const 0)
+                  (string.const ,(symbol->string x))
+                  (struct.new $string)
+                  (struct.new $symbol))
+                (lambda (name)
+                  `((call $intern-symbol! (global.get ,name))))))
       (_ (error "unrecognized constant" x))))
   (define (compile-heap-constant val)
     (let ((name (or (hash-ref heap-constant-names val)
@@ -873,7 +897,7 @@
   (let ((cps (lower-and-tailify cps)))
     (when dump-cps?
       (dump cps))
-    (let* ((wasm (lower-to-wasm cps))
+    (let* ((wasm (lower-to-wasm cps #:import-abi? import-abi?))
            (wasm (if export-abi? (export-abi wasm) wasm))
            (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
            (wasm (resolve-wasm wasm)))

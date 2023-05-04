@@ -37,28 +37,34 @@
         (struct
           (field $hash (mut i32))
           (field $val (ref extern)))))
-    (type $bignum
+
+    (type $heap-number
       (sub $heap-object
+        (struct
+          (field $hash (mut i32)))))
+    (type $bignum
+      (sub $heap-number
         (struct
           (field $hash (mut i32))
           (field $val (ref extern)))))
     (type $flonum
-      (sub $heap-object
+      (sub $heap-number
         (struct
           (field $hash (mut i32))
           (field $val f64))))
     (type $complex
-      (sub $heap-object
+      (sub $heap-number
         (struct
           (field $hash (mut i32))
           (field $real f64)
           (field $imag f64))))
     (type $fraction
-      (sub $heap-object
+      (sub $heap-number
         (struct
           (field $hash (mut i32))
           (field $num (ref eq))
           (field $denom (ref eq)))))
+
     (type $pair
       (sub $heap-object
         (struct
@@ -343,8 +349,8 @@
                     (block $Lfixnum
                       (local.set $tmp (i31.get_s (ref.cast i31 (local.get $scm))))
                       (br_if $Lfixnum (i32.eqz (i32.and (local.get $tmp) (i32.const 1))))
-                      (br_if $Lchar (i32.eq (i32.and (local.get $tmp) (i32.const 2))
-                                            (i32.const 2)))
+                      (br_if $Lchar (i32.eq (i32.and (local.get $tmp) (i32.const 3))
+                                            (i32.const 3)))
                       (br_if $Lfalse (i32.eq (local.get $tmp) (i32.const 1)))
                       (br_if $Lnil (i32.eq (local.get $tmp) (i32.const 5)))
                       (br_if $Lnull (i32.eq (local.get $tmp) (i32.const 13)))

@@ -790,12 +790,25 @@
                  (($ $kreceive ($ $arity req () rest () #f) kbody)
                   (error "kreceive unimplemented"))
                  (($ $kfun src meta self ktail kentry)
-                  (if self
-                      ;; only if referenced?
-                      `(,@(arg-ref 0)
-                        ,(local.set self)
-                        ,@(do-branch label kentry ctx))
-                      (do-tree kentry ctx)))
+                  (match (intmap-ref cps kentry)
+                    (($ $kclause)
+                     ;; An arity-checking function; let the clause check
+                     ;; the arity.
+                     (if self
+                         ;; only if referenced?
+                         `(,@(arg-ref 0)
+                           ,(local.set self)
+                           ,@(do-branch label kentry ctx))
+                         (do-tree kentry ctx)))
+                    (($ $kargs names vars _)
+                     ;; A function whose callers all pass the expected
+                     ;; number of arguments.
+                     (let ((vars (if self (cons self vars) vars)))
+                       `(,@(append-map (lambda (var idx)
+                                         `(,(arg-ref idx)
+                                           ,(local.set var)))
+                                       vars (iota (length vars)))
+                         ,@(do-tree kentry ctx))))))
                  (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
                      kbody kalt)
                   (when kalt (error "case-lambda unimplemented"))

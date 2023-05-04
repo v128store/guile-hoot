@@ -696,10 +696,6 @@
            `((call $pop-return!)))
           (_
            (error "unimplemented!" exp))))
-      (define (compile-receive exp req rest kargs)
-        (match exp
-          (_
-           (error "unimplemented!!" exp req rest kargs))))
       (define (compile-test op param args)
         (match op
           (_ (error "unimplemented!!!" op param args))))
@@ -775,7 +771,7 @@
                           ,@(reverse (map local.set vars))
                           ,@(do-branch label k ctx)))
                        (($ $kreceive ($ $arity req () rest () #f) kargs)
-                        (compile-receive exp req rest kargs))))
+                        (error "kreceive should be tailified away"))))
                     (($ $branch kf kt src op param args)
                      `(,@(compile-test op param args)
                        (if #f ,void-block-type
@@ -787,8 +783,8 @@
                      (error "prompts should be removed by tailification?"))
                     (($ $throw src op param args)
                      (error "throw unimplemented"))))
-                 (($ $kreceive ($ $arity req () rest () #f) kbody)
-                  (error "kreceive unimplemented"))
+                 (($ $kreceive)
+                  (error "kreceive should be tailified away"))
                  (($ $kfun src meta self ktail kentry)
                   (match (intmap-ref cps kentry)
                     (($ $kclause)

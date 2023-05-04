@@ -694,6 +694,8 @@
                              (make-static-procedure (func-label k))))
           (($ $primcall 'restore1 'ptr ())
            `((call $pop-return!)))
+          (($ $values vals)
+           (map local.get vals))
           (_
            (error "unimplemented!" exp))))
       (define (compile-test op param args)

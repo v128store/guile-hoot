@@ -338,7 +338,7 @@
          (('call_indirect table type)
           `(call_indirect ,(resolve-table table) ,(resolve-type-use-as-idx type)))
          (((and inst (or 'call_ref 'return_call_ref)) type)
-          `(,inst ,(resolve-type-use-as-idx type)))
+          `(,inst ,(resolve-type type)))
          (('select types) `(select ,(map resolve-val-type types)))
          (((and inst (or 'local.get 'local.set 'local.tee)) local)
           `(,inst ,(resolve-local local)))

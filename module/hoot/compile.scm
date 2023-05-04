@@ -29,6 +29,7 @@
   #:use-module (ice-9 match)
   #:use-module (ice-9 pretty-print)
   #:use-module ((srfi srfi-1) #:select (append-map))
+  #:use-module (srfi srfi-9)
   #:use-module ((system base compile)
                 #:select ((read-and-compile . %read-and-compile)
                           (compile . %compile)
@@ -473,6 +474,11 @@
         (hash-i32 42)
         h)))
 
+(define-record-type <static-procedure>
+  (make-static-procedure code)
+  static-procedure?
+  (code static-procedure-code))
+
 (define (lower-to-wasm cps)
   ;; interning constants into constant table
   ;; finalizing constant table
@@ -540,6 +546,12 @@
                 `((i32.const ,(hashq-constant x))
                   (string.const ,x)
                   (struct.new $string))
+                '()))
+      (($ <static-procedure> code)
+       (intern! (make-ref-type #f '$proc)
+                `((i32.const 0)
+                  (ref.func ,code)
+                  (struct.new $proc))
                 '()))
       (_ (error "unrecognized constant" x))))
   (define (compile-heap-constant val)
@@ -643,6 +655,8 @@
       (define (compile-values exp)
         (match exp
           (($ $const val) (compile-constant val))
+          (($ $const-fun k) (compile-constant
+                             (make-static-procedure (func-label k))))
           (($ $primcall 'restore1 'ptr ())
            `((call $pop-return!)))
           (_

@@ -210,24 +210,35 @@ one data type is an `$extern-ref`.
 #### Heap numbers
 
 ```wat
-(type $bignum
+(type $heap-number
   (sub $heap-object
+    (struct
+      (field $hash (mut i32)))))
+```
+
+There is a supertype for heap numbers, in case we need to quickly check
+that a non-fixnum is indeed a number.  Then there are the concrete heap
+number types.
+
+```wat
+(type $bignum
+  (sub $heap-number
     (struct
       (field $hash (mut i32))
       (field $val (ref extern)))))
 (type $flonum
-  (sub $heap-object
+  (sub $heap-number
     (struct
       (field $hash (mut i32))
       (field $val f64))))
 (type $complex
-  (sub $heap-object
+  (sub $heap-number
     (struct
       (field $hash (mut i32))
       (field $real f64)
       (field $imag f64))))
 (type $fraction
-  (sub $heap-object
+  (sub $heap-number
     (struct
       (field $hash (mut i32))
       (field $num (ref eq))

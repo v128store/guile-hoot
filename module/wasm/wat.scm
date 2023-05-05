@@ -241,8 +241,8 @@
         (('array . sig) (parse-array-type sig))
         (('struct . sig) (parse-struct-type sig))))
     (match x
-      (('sub (? id-or-idx? id) sub)
-       (make-sub-type (list id) (parse-prim-type sub)))
+      (('sub final? (? id-or-idx? id) sub)
+       (make-sub-type final? (list id) (parse-prim-type sub)))
       (_ (parse-prim-type x))))
   (define (parse-type-def x)
     (match x

@@ -76,8 +76,8 @@
     (match type
       (($ <func-sig> params results)
        `(func ,@(params-repr params) ,@(results-repr results)))
-      (($ <sub-type> supers type)
-       `(sub ,@supers ,(type-repr type)))
+      (($ <sub-type> final? supers type)
+       `(sub ,final? ,@supers ,(type-repr type)))
       (($ <struct-type> fields)
        `(struct ,@(map field-repr fields)))
       (($ <array-type> mutable? type)

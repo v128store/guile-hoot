@@ -167,7 +167,8 @@
     (define (parse-sub-type port)
       (make-type #f (if (match-u8 port #x50)
                         (let ((supers (parse-vec port get-uleb)))
-                          (make-sub-type supers (parse-base-type port)))
+                          ;; FIXME: final? flag
+                          (make-sub-type #f supers (parse-base-type port)))
                         (parse-base-type port))))
     (define (parse-rec-group port)
       (if (match-u8 port #x4F)

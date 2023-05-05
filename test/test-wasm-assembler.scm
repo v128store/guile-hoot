@@ -100,5 +100,8 @@
         134 27 240 249 33 9 64 253 20 11)
  (module (func (result v128) (f64x2.splat (f64.const 3.14159)))))
 
+(when (and (batch-mode?) (not (test-passed?)))
+  (exit 1))
+
 (test-end "test-wasm-assembler")
 

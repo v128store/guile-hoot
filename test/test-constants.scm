@@ -96,5 +96,8 @@
 (test-compilation (lambda () 42) "#<procedure>")
 (test-compilation #:foo "#:foo")
 
+(when (and (batch-mode?) (not (test-passed?)))
+  (exit 1))
+
 (test-end "test-constants")
 

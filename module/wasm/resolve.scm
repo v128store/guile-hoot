@@ -436,8 +436,9 @@
            (($ <type> id type)
             (make-type id
                        (match type
-                         (($ <sub-type> supers type)
-                          (make-sub-type (map resolve-heap-type supers)
+                         (($ <sub-type> final? supers type)
+                          (make-sub-type final?
+                                         (map resolve-heap-type supers)
                                          (resolve-base type)))
                          (_ (resolve-base type)))))))
        (match type

@@ -78,7 +78,7 @@
                 params (fold1 visit-val-type results order)))))
     (define (visit-sub type order)
       (match type
-        (($ <sub-type> supers type)
+        (($ <sub-type> final? supers type)
          (visit-base type (fold1 visit-heap-type supers order)))
         (_ (visit-base type order))))
     (match type
@@ -171,7 +171,7 @@
                      (fold1 visit-val-type results types)))))
          (define (visit-sub type types)
            (match type
-             (($ <sub-type> supers type)
+             (($ <sub-type> final? supers type)
               (visit-base type
                           (fold1 visit-heap-type supers types)))
              (_ (visit-base type types))))

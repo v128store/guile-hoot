@@ -143,12 +143,70 @@ WebAssembly files to be loaded in web browsers or other places where you
 have a JavaScript implementation with a capable WebAssembly
 implementation.
 
+### 2023-05-05
+
+Some progress, in that the compiler now supports all kinds of constant
+literals, and we are starting to implement the different primcalls.
+Then, non-tail function calls; once that is working we'll be close to
+having a working Scheme.
+
 ## The near future
+
+### Differences from Guile's compiler backend
+
+Guile's compiler backend is oriented towards the Guile virtual machine,
+which is not the same as the WebAssembly virtual machine.  Notably, in
+WebAssembly we have these differences:
+
+  - No interior pointers
+  - All allocations and object accesses are typed
+
+#### Object initialization
+
+We can keep lowering to `scm-ref` et al when lowering Tree-IL to CPS,
+because these keep a notion of what type of object they are attached to
+and we can translate them to typed WebAssembly `struct` field access.
+But object construction is tricky; our options are:
+
+  1. Make all fields mutable (annoying), so that we can initialize with
+     a dummy value before `scm-set!` et al initialize to the correct
+     value (overhead).
+     
+  2. Somehow try to recover `cons` et al from
+     `allocate-words/immediate` + initialization sequence (tricky; will
+     we be able to do this?).
+
+  3. We avoid [instruction
+     explosion](https://wingolog.org/archives/2018/01/17/instruction-explosion-in-guile)
+     entirely.  Here we would lose out on optimizations like CSE,
+     though.
+
+For (3) we'd need to modify how Scheme programs are lowered to CPS.  We
+need this anyway; some instruction explosions just aren't appropriate
+for wasm (notably, anything related to bytevectors or strings, because
+the representations are different).  So it's thinkable.
+
+I think (2) would actually be possible and reliable, because to Scheme
+the effects of allocation and initialization are inseparable: `(cons x
+y)` requires that the effects of `x` and `y` be prior to making the
+pair, so any code motion between the `allocate-words/immediate` that
+makes the pair and the field initialization can't have any visible
+effect.  We can just trace the graph until we reach all field
+initializations.
+
+So, in the near term, we can turn exploded allocation/initialiation
+sequences into their atomic WebAssembly `struct.new` ops.  We will still
+need to change some things about the way Tree-IL lowers to CPS, though,
+and that will require some gnarliness in the higher levels of Guile's
+compiler.
+
+### Other potential starter tasks
 
 Some good starter tasks for new contributors:
 
  - The "wat" component of the assembler isn't yet updated for reference
-   types / GC.  Probably it should be.
+   types / GC.  It would be nice to fix that so that we can replace our
+   use of binaryen to use our own assembler instead.
 
  - We should have a wasm->wat serializer.  Probably a good way to test
    that the wat->wasm parser for reftypes is working: take
@@ -170,7 +228,8 @@ Some good starter tasks for new contributors:
    do this, for debuggability.
 
  - Currently the subset of the Scheme language that is supported is
-   basically nothing -- just a minimal subset of the constants.  We need
-   to expand this.  See [(hoot compile)](../module/hoot/compile.scm),
-   anywhere it says "unimplemented", and add tests to
-   [`test-constants.scm`](../test/test-constants.scm).
+   quite minimal.  We need to expand this.  See [(hoot
+   compile)](../module/hoot/compile.scm), anywhere it says
+   "unimplemented", and add tests to
+   [`test-constants.scm`](../test/test-constants.scm) or some other file
+   there.

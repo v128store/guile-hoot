@@ -701,8 +701,6 @@
           (($ $const val) (compile-constant val))
           (($ $const-fun k) (compile-constant
                              (make-static-procedure (func-label k))))
-          (($ $primcall 'restore1 'ptr ())
-           `((call $pop-return!)))
           (($ $values vals)
            (map local.get vals))
 
@@ -712,6 +710,23 @@
           (($ $primcall name param args)
            (match-primcall
             name param args
+
+            ;; These are the primcalls inserted by tailification to
+            ;; handle stack-allocated return continuations.
+            (('save reprs . args)
+             (error "unimplemented" exp))
+            (('drop reprs)
+             (error "unimplemented" exp))
+            (('restore1 'ptr)
+             `((call $pop-return!)))
+            (('restore reprs)
+             (error "unimplemented"))
+            (('push-prompt escape? tag handler)
+             (error "unimplemented" exp))
+
+            ;; Primcalls related to the module system.  Not sure if we
+            ;; will need these, at least in this form; the whole-program
+            ;; compiler may take a different approach to modules.
             (('current-module #f)
              (error "unimplemented" exp))
             (('current-thread #f)
@@ -737,6 +752,8 @@
             (('lookup-bound-private (mod name))
              (error "unimplemented" exp))
 
+            ;; Object allocation.  Probably most of these need to be
+            ;; replaced with `cons` et al; see log.md.
             (('allocate-words annotation nfields)
              (error "unimplemented" exp))
             (('allocate-words/immediate (annotation . nfields))
@@ -746,6 +763,10 @@
             (('allocate-pointerless-words/immediate (annotation . nfields))
              (error "unimplemented" exp))
 
+            ;; Object access.  Use the "annotation" param (or param
+            ;; component) to determine which kind of object is being
+            ;; accessed, infallibly cast to the appropriate struct type,
+            ;; and emit the appropriate struct/array field access.
             (('scm-ref annotation obj idx)
              (error "unimplemented" exp))
             (('scm-ref/immediate (annotation . idx) obj)
@@ -758,7 +779,6 @@
              (error "unimplemented" exp))
             (('tail-pointer-ref/immediate (annotation . idx) obj)
              (error "unimplemented" exp))
-
             (('scm-set! annotation obj idx val)
              (error "unimplemented" exp))
             (('scm-set!/tag annotation obj val)
@@ -774,6 +794,8 @@
             (('string-set! #f string index char)
              (error "unimplemented" exp))
 
+            ;; Generic arithmetic.  Emit a fixnum fast-path and a
+            ;; callout to runtime functions for the slow path.
             (('add #f x y)
              (error "unimplemented" exp))
             (('sub #f x y)
@@ -793,6 +815,26 @@
             (('mod #f x y)
              (error "unimplemented" exp))
 
+            ;; Integer bitwise operations.  Fast path for fixnums and
+            ;; callout otherwise.
+            (('logand #f x y)
+             (error "unimplemented" exp))
+            (('logior #f x y)
+             (error "unimplemented" exp))
+            (('logxor #f x y)
+             (error "unimplemented" exp))
+            (('logsub #f x y)
+             (error "unimplemented" exp))
+            (('rsh #f x y)
+             (error "unimplemented" exp))
+            (('lsh #f x y)
+             (error "unimplemented" exp))
+            (('rsh/immediate y x)
+             (error "unimplemented" exp))
+            (('lsh/immediate y x)
+             (error "unimplemented" exp))
+
+            ;; Arithmetic on real numbers.
             (('inexact #f x)
              (error "unimplemented" exp))
             (('abs #f x)
@@ -804,6 +846,7 @@
             (('ceiling #f x)
              (error "unimplemented" exp))
 
+            ;; Trig functions.  Probably just call out for now.
             (('sin #f x)
              (error "unimplemented" exp))
             (('cos #f x)
@@ -819,6 +862,7 @@
             (('atan2 #f x y)
              (error "unimplemented" exp))
 
+            ;; Unboxed integer arithmetic and logical operations.
             (((or 's64->u64 'u64->s64) #f arg)
              (error "unimplemented" exp))
             (('uadd #f x y)
@@ -846,6 +890,7 @@
             (('ulsh/immediate y x)
              (error "unimplemented" exp))
 
+            ;; Unboxed floating-point arithmetic and trig.
             (('s64->f64 #f arg)
              (error "unimplemented" exp))
             (('fadd #f x y)
@@ -879,23 +924,7 @@
             (('fatan2 #f x y)
              (error "unimplemented" exp))
 
-            (('logand #f x y)
-             (error "unimplemented" exp))
-            (('logior #f x y)
-             (error "unimplemented" exp))
-            (('logxor #f x y)
-             (error "unimplemented" exp))
-            (('logsub #f x y)
-             (error "unimplemented" exp))
-            (('rsh #f x y)
-             (error "unimplemented" exp))
-            (('lsh #f x y)
-             (error "unimplemented" exp))
-            (('rsh/immediate y x)
-             (error "unimplemented" exp))
-            (('lsh/immediate y x)
-             (error "unimplemented" exp))
-
+            ;; Misc.
             (('string->bignum #f x)
              (error "unimplemented" exp))
             (('string->symbol #f x)
@@ -903,6 +932,7 @@
             (('symbol->keyword #f x)
              (error "unimplemented" exp))
 
+            ;; Unboxing and boxing numbers.
             (('scm->f64 #f src)
              (error "unimplemented" exp))
             (('scm->u64 #f src)
@@ -974,6 +1004,7 @@
             (('atomic-scm-set!/immediate ('atomic-box . 1) obj val)
              (error "unimplemented" exp))
 
+            ;; Infallible unboxing of fixnums and chars.
             (('untag-fixnum #f src)
              (error "unimplemented" exp))
             (('tag-fixnum #f src)
@@ -983,6 +1014,7 @@
             (('tag-char #f src)
              (error "unimplemented" exp))
 
+            ;; The dynamic state.  Implement using runtime.
             (('push-fluid #f fluid val)
              (error "unimplemented" exp))
             (('pop-fluid #f)

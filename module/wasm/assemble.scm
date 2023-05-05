@@ -678,8 +678,8 @@
          (emit-field-type port mutable? type))))
     (define (emit-sub-type-def port def)
       (match def
-        (($ <sub-type> supers def)
-         (emit-u8 port #x50)
+        (($ <sub-type> final? supers def)
+         (emit-u8 port (if final? #x4e #x50))
          (emit-vec port supers emit-u32)
          (emit-base-type-def port def))
         (_ (emit-base-type-def port def))))

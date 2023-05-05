@@ -84,7 +84,7 @@
   (<array-type> mutable? type)
   (<field> id mutable? type)
   (<struct-type> fields)
-  (<sub-type> supers type)
+  (<sub-type> final? supers type)
   (<rec-group> types)
   (<type> id val)
   (<import> mod name kind id type)
@@ -106,7 +106,7 @@
       (pred rec type-id type-idx supers type))
     (define (visit-sub rec type-id type-idx type)
       (match type
-        (($ <sub-type> supers type)
+        (($ <sub-type> final? supers type)
          (visit-base rec supers type-id type-idx type))
         (_ (visit-base rec '()  type-id type-idx type))))
     (match types

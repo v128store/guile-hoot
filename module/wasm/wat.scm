@@ -132,6 +132,7 @@
         (('data . x) (set! datas (cons x datas)))
         (('tag . x) (set! tags (cons x tags)))
         (('strings . x) (set! strings (append strings x)))
+        (('rec . _) (set! types (cons x types)))
         (_ (error "unexpected form in module" x))))
     (match x
       (('module . clauses) (for-each collect-raw clauses))
@@ -167,6 +168,10 @@
     (match x
       ((or 'i32 'i64 'f32 'f64 'v128) x)
       (_ (parse-ref-type x #:error-message "bad valtype"))))
+  (define (parse-storage-type x)
+    (match x
+      ((or 'i8 'i16) x)
+      (_ (parse-val-type x))))
   (define (parse-params x)
     (match x
       (((? id? id) vt) (list (make-param id (parse-val-type vt))))
@@ -229,11 +234,21 @@
       (((? id? id) . x) (values id x))
       (_ (values #f x))))
   (define (parse-array-type x)
-    (error "unimplemented" x))
+    (match x
+      (('mut t) (make-array-type #t (parse-storage-type t)))
+      ((t) (make-array-type #f (parse-storage-type t)))))
+  (define (parse-field-type x)
+    (match x
+      (('field (? id? id) ('mut t))
+       (make-field id #t (parse-storage-type t)))
+      (('field (? id? id) t)
+       (make-field id #f (parse-storage-type t)))))
   (define (parse-struct-type x)
-    (error "unimplemented" x))
+    (make-struct-type (map parse-field-type x)))
   (define (parse-sub-type x)
-    (error "unimplemented" x))
+    (match x
+      ((final? supers type)
+       (make-sub-type final? supers type))))
   (define (parse-type x)
     (define (parse-prim-type x)
       (match x
@@ -246,8 +261,12 @@
       (_ (parse-prim-type x))))
   (define (parse-type-def x)
     (match x
+      (('rec . tail) (make-rec-group (map parse-rec-type-def tail)))
       (((? id? id) t) (make-type id (parse-type t)))
       ((t) (make-type #f (parse-type t)))))
+  (define (parse-rec-type-def x)
+    (match x
+      (('type (? id? id) t) (make-type id (parse-type t)))))
   (define (parse-import x)
     (define (parse-inner mod name kind id tail)
       (match kind

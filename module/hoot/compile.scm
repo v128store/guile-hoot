@@ -152,6 +152,7 @@
                     ((_ (name super ...) (field spec ...) ...)
                      (make-type 'name
                                 (make-sub-type
+                                 #f
                                  '(super ...)
                                  (struct-type (field spec ...) ...))))))
          (struct (syntax-rules ()

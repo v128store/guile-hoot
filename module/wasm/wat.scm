@@ -144,21 +144,29 @@
 
   (define (parse-heap-type x)
     (match x
-      ((or 'func 'extern (? id-or-idx?)) x)
+      ((or 'func 'extern 'any 'none 'noextern 'nofunc 'eq 'struct 'array 'i31
+           (? id-or-idx?))
+       x)
       (_ (error "bad heaptype" x))))
-  (define (parse-ref-type x)
+  (define* (parse-ref-type x #:key (error-message "bad reftype"))
     (match x
-      ((or 'funcref 'externref) x)
       (('ref 'null ht) (make-ref-type #t (parse-heap-type ht)))
       (('ref ht) (make-ref-type #f (parse-heap-type ht)))
-      (_ (error "bad reftype" x))))
+      ('funcref (make-ref-type #t 'func))
+      ('externref (make-ref-type #t 'extern))
+      ('anyref (make-ref-type #t 'any))
+      ('nullref (make-ref-type #t 'none))
+      ('nullexternref (make-ref-type #t 'noextern))
+      ('nullfuncref (make-ref-type #t 'nofunc))
+      ('eqref (make-ref-type #t 'eq))
+      ('structref (make-ref-type #t 'struct))
+      ('arrayref (make-ref-type #t 'array))
+      ('i31ref (make-ref-type #t 'i31))
+      (_ (error error-message x))))
   (define (parse-val-type x)
     (match x
       ((or 'i32 'i64 'f32 'f64 'v128) x)
-      ((or 'funcref 'externref) x)
-      (('ref 'null ht) (make-ref-type #t (parse-heap-type ht)))
-      (('ref ht) (make-ref-type #f (parse-heap-type ht)))
-      (_ (error "bad valtype" x))))
+      (_ (parse-ref-type x #:error-message "bad valtype"))))
   (define (parse-params x)
     (match x
       (((? id? id) vt) (list (make-param id (parse-val-type vt))))

@@ -236,7 +236,7 @@
   (define (parse-array-type x)
     (match x
       (('mut t) (make-array-type #t (parse-storage-type t)))
-      ((t) (make-array-type #f (parse-storage-type t)))))
+      (t (make-array-type #f (parse-storage-type t)))))
   (define (parse-field-type x)
     (match x
       (('field (? id? id) ('mut t))
@@ -253,7 +253,7 @@
     (define (parse-prim-type x)
       (match x
         (('func . sig) (parse-func-sig sig))
-        (('array . sig) (parse-array-type sig))
+        (('array sig) (parse-array-type sig))
         (('struct . sig) (parse-struct-type sig))))
     (match x
       (('sub final? (? id-or-idx? id) sub)

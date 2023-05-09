@@ -227,8 +227,14 @@
   (global $arg6 (import "abi" "$arg6") (mut (ref eq)))
   (global $arg7 (import "abi" "$arg7") (mut (ref eq)))
   (table $argv (import "abi" "$argv") 0 (ref null eq))
-  (global $return-sp (import "abi" "$return-sp") (mut i32))
-  (table $return-stack (import "abi" "$return-stack") 0 (ref null $kvarargs))
+
+  (global $raw-sp (import "abi" "$raw-sp") (mut i32))
+  (global $scm-sp (import "abi" "$scm-sp") (mut i32))
+  (global $ret-sp (import "abi" "$ret-sp") (mut i32))
+
+  (memory $raw-stack (import "abi" "$raw-stack") 0)
+  (table $scm-stack (import "abi" "$scm-stack") 0 (ref null eq))
+  (table $ret-stack (import "abi" "$ret-stack") 0 (ref null $kvarargs))
 
   (func $string->symbol (import "abi" "$string->symbol")
         (param $str (ref string)) (result (ref $symbol)))
@@ -245,9 +251,9 @@
                        (table.grow $argv (i31.new (i32.const 0))
                                    (local.get $diff))))
     (unreachable))
-  (func $grow-return-stack (param $diff i32)
+  (func $grow-ret-stack (param $diff i32)
     (br_if 0 (i32.ge_s (i32.const 0)
-                       (table.grow $return-stack (ref.func $abort)
+                       (table.grow $ret-stack (ref.func $abort)
                                    (local.get $diff))))
     (unreachable))
 
@@ -432,15 +438,15 @@
 
   (func $push-return (param $k (ref $kvarargs))
     (local $sp i32)
-    (local.set $sp (global.get $return-sp))
-    (if (i32.eq (table.size $return-stack) (local.get $sp))
-        (then (call $grow-return-stack
+    (local.set $sp (global.get $ret-sp))
+    (if (i32.eq (table.size $ret-stack) (local.get $sp))
+        (then (call $grow-ret-stack
                     (i32.add (i32.const 16) (local.get $sp)))))
-    (table.set $return-stack (local.get $sp) (local.get $k))
-    (global.set $return-sp (i32.add (local.get $sp) (i32.const 1))))
+    (table.set $ret-stack (local.get $sp) (local.get $k))
+    (global.set $ret-sp (i32.add (local.get $sp) (i32.const 1))))
   (func $pop-return (result (ref $kvarargs))
-    (global.set $return-sp (i32.sub (global.get $return-sp) (i32.const 1)))
-    (ref.as_non_null (table.get $return-stack (global.get $return-sp))))
+    (global.set $ret-sp (i32.sub (global.get $ret-sp) (i32.const 1)))
+    (ref.as_non_null (table.get $ret-stack (global.get $ret-sp))))
 
   (func $make-vector (export "make_vector")
         (param $size i32) (param $init (ref eq)) (result (ref $mutable-vector))

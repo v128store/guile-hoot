@@ -112,8 +112,12 @@
           (make-export "$arg6" 'global '$arg6)
           (make-export "$arg7" 'global '$arg7)
           (make-export "$argv" 'table '$argv)
-          (make-export "$return-sp" 'global '$return-sp)
-          (make-export "$return-stack" 'table '$return-stack)
+          (make-export "$raw-sp" 'global '$raw-sp)
+          (make-export "$scm-sp" 'global '$scm-sp)
+          (make-export "$ret-sp" 'global '$ret-sp)
+          (make-export "$raw-stack" 'memory '$raw-stack)
+          (make-export "$scm-stack" 'table '$scm-stack)
+          (make-export "$ret-stack" 'table '$ret-stack)
           (make-export "$string->symbol" 'func '$string->symbol)
           (make-export "$symbol->keyword" 'func '$symbol->keyword)))
   (define (add-export export exports)
@@ -314,12 +318,12 @@
                               '()
                               (list (make-ref-type #f '$kvarargs))))
            '()
-           `((global.get $return-sp)
+           `((global.get $ret-sp)
              (i32.const 1)
              (i32.sub)
-             (global.set $return-sp)
-             (global.get $return-sp)
-             (table.get $return-stack)
+             (global.set $ret-sp)
+             (global.get $ret-sp)
+             (table.get $ret-stack)
              (ref.as_non_null)))
           (make-func
            '$integer-hash
@@ -411,7 +415,57 @@
            ;; FIXME: intern into kwtab.
            `((local.get 0) (struct.get $symbol 0) (call $finish-heap-object-hash)
              (local.get 0)
-             (struct.new $keyword)))))
+             (struct.new $keyword)))
+          (make-func
+           '$grow-raw-stack
+           (make-type-use #f (make-func-sig '() '()))
+           '()
+           ;; Grow by 50%, plus one to ensure we can grow from zero.
+           ;; Trap if we fail to grow.
+           '((memory.size $raw-stack)
+             (i32.shr_u 1)
+             (i32.const 1)
+             (i32.add)
+             (memory.grow $raw-stack)
+             (i32.const -1)
+             (i32.eq)
+             (if #f #f ((unreachable)))))
+          (make-func
+           '$grow-scm-stack
+           (make-type-use #f (make-func-sig '() '()))
+           '()
+           ;; Grow by 50%, plus one to ensure we can grow from zero.
+           ;; Trap if we fail to grow.
+           '((i32.const 0)
+             (i31.new)
+             (table.size $scm-stack)
+             (i32.shr_u 1)
+             (i32.const 1)
+             (i32.add)
+             (table.grow $scm-stack)
+             (i32.const -1)
+             (i32.eq)
+             (if #f #f ((unreachable)))))
+          (make-func
+           '$invalid-continuation
+           (make-type-use '$kvarargs kvarargs-sig)
+           '()
+           '((unreachable)))
+          (make-func
+           '$grow-ret-stack
+           (make-type-use #f (make-func-sig '() '()))
+           '()
+           ;; Grow by 50%, plus one to ensure we can grow from zero.
+           ;; Trap if we fail to grow.
+           '((ref.func $invalid-continuation)
+             (table.size $ret-stack)
+             (i32.shr_u 1)
+             (i32.const 1)
+             (i32.add)
+             (table.grow $ret-stack)
+             (i32.const -1)
+             (i32.eq)
+             (if #f #f ((unreachable)))))))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.
@@ -421,13 +475,20 @@
                        (make-limits 0 #f)
                        (make-ref-type #t 'eq))
                       #f)
-          (make-table '$return-stack
+          (make-table '$scm-stack
+                      (make-table-type
+                       (make-limits 0 #f)
+                       (make-ref-type #t 'eq))
+                      #f)
+          (make-table '$ret-stack
                       (make-table-type
                        (make-limits 0 #f)
                        (make-ref-type #t '$kvarargs))
                       #f)))
 
-  (define memories '())
+  (define memories
+    (list (make-memory '$raw-stack
+                       (make-mem-type (make-limits 0 #f)))))
 
   (define globals
     (let ((scm-init '((i32.const 0) i31.new)))
@@ -436,7 +497,9 @@
             (make-global '$arg5 (make-global-type #t scm-type) scm-init)
             (make-global '$arg6 (make-global-type #t scm-type) scm-init)
             (make-global '$arg7 (make-global-type #t scm-type) scm-init)
-            (make-global '$return-sp (make-global-type #t 'i32) '((i32.const 0))))))
+            (make-global '$ret-sp (make-global-type #t 'i32) '((i32.const 0)))
+            (make-global '$scm-sp (make-global-type #t 'i32) '((i32.const 0)))
+            (make-global '$raw-sp (make-global-type #t 'i32) '((i32.const 0))))))
 
   (define exports '())
   (define start #f)
@@ -459,11 +522,16 @@
                          (make-import "abi" (symbol->string id) 'table id
                                       type)))
                        tables)
+                  (map (match-lambda
+                        (($ <memory> id type)
+                         (make-import "abi" (symbol->string id) 'memory id
+                                      type)))
+                       tables)
                   imports)
                  imports)
              funcs
              (if import-abi? '() tables)
-             memories
+             (if import-abi? '() memories)
              (if import-abi? '() globals)
              exports start elems datas tags strings custom))
 
@@ -696,6 +764,104 @@
           (%name (match (cons param args) ((%param . %args) . body)))
           ...))
 
+      (define (analyze-saved-vars reprs)
+        (define (save/raw memory sp grow-stack idx store-inst alignment)
+          (lambda (var sizes)
+            (define (prepare-save)
+              `((global.get ,sp)
+                (local.tee ,sp)
+                (i32.const ,(assq-ref sizes sp))
+                (i32.add)
+                (global.set ,sp)
+                (global.get ,sp)
+                (i32.const 16) ;; Wasm pages are 64 kB.
+                (i32.shr_u)
+                (memory.size ,memory)
+                (i32.le_u)
+                (if #f #f
+                    ((call ,grow-stack))
+                    ())))
+            `(,@(if (zero? idx) (prepare-save) '())
+              (local.get ,sp)
+              (local.get ,var)
+              (,store-inst ,(make-mem-arg memory idx alignment)))))
+        (define (save/ref table sp grow-stack idx)
+          (lambda (var sizes)
+            (define (prepare-save)
+              `((global.get ,sp)
+                (local.tee ,sp)
+                (i32.const ,(assq-ref sizes sp))
+                (i32.add)
+                (global.set ,sp)
+                (global.get ,sp)
+                (table.size ,table)
+                (i32.le_u)
+                (if #f #f
+                    ((call ,grow-stack))
+                    ())))
+            `(,@(if (zero? idx) (prepare-save) '())
+              (local.get ,sp)
+              ,@(if (zero? idx) '() `((i32.const ,idx) (i32.add)))
+              (local.get ,var)
+              (table.set ,table))))
+        (define (restore sp idx code)
+          (lambda (sizes)
+            (define (prepare-restore)
+              `((global.get ,sp)
+                (i32.const ,(assq-ref sizes sp))
+                (i32.sub)
+                (local.tee ,sp)
+                (global.set ,sp)))
+            `(,@(if (zero? idx) (prepare-restore) '())
+              (local.get ,sp)
+              ,@code)))
+        (define (restore/raw memory sp idx load-inst alignment)
+          (restore sp idx `((,load-inst ,(make-mem-arg memory idx alignment)))))
+        (define (restore/ref table sp idx)
+          (restore sp idx `((table.get ,table) (ref.as_non_null))))
+
+        (define (visit/raw idx store-inst load-inst alignment)
+          (cons (save/raw '$raw-stack '$raw-sp '$grow-raw-stack idx store-inst
+                          alignment)
+                (restore/raw '$raw-stack '$raw-sp idx load-inst alignment)))
+        (define (visit/ref table sp grow idx)
+          (cons (save/ref table sp grow idx)
+                (restore/ref table sp idx)))
+
+        (define (visit-i64 idx) (visit/raw idx 'i64.store 'i64.load 8))
+        (define (visit-f64 idx) (visit/raw idx 'f64.store 'f64.load 8))
+        (define (visit-scm idx)
+          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx))
+        (define (visit-ret idx)
+          (visit/ref '$ret-stack '$ret-sp '$grow-ret-stack idx))
+
+        (let lp ((reprs reprs) (out '())
+                 (raw-size 0) (scm-size 0) (ret-size 0))
+          (match reprs
+            (()
+             (values (reverse out)
+                     `(($raw-sp . ,raw-size)
+                       ($scm-sp . ,scm-size)
+                       ($ret-sp . ,ret-size))))
+            ((r . reprs)
+             (match r
+               ((or 'u64 's64)
+                (lp reprs
+                    (cons (visit-i64 raw-size) out)
+                    (+ raw-size 8) scm-size ret-size))
+               ('f64
+                (lp reprs
+                    (cons (visit-f64 raw-size) out)
+                    (+ raw-size 8) scm-size ret-size))
+               ('scm
+                (lp reprs
+                    (cons (visit-scm scm-size) out)
+                    raw-size (1+ scm-size) ret-size))
+               ('ptr
+                (lp reprs
+                    (cons (visit-ret ret-size) out)
+                    raw-size scm-size (1+ ret-size))))))))
+
       (define (compile-values exp)
         (match exp
           (($ $const val) (compile-constant val))
@@ -705,7 +871,7 @@
            (map local.get vals))
 
           (($ $code k)
-           (error "unimplemented" exp))
+           `((ref.func ,(func-label k))))
 
           (($ $primcall name param args)
            (match-primcall
@@ -714,13 +880,38 @@
             ;; These are the primcalls inserted by tailification to
             ;; handle stack-allocated return continuations.
             (('save reprs . args)
-             (error "unimplemented" exp))
+             (call-with-values (lambda () (analyze-saved-vars reprs))
+               (lambda (analyzed spill-sizes)
+                 (define (save-var analyzed var)
+                   (match analyzed
+                     ((save . restore)
+                      (save (var-label var) spill-sizes))))
+                 (append-map save-var analyzed args))))
             (('drop reprs)
-             (error "unimplemented" exp))
+             (call-with-values (lambda () (analyze-saved-vars reprs))
+               (lambda (analyzed spill-sizes)
+                 (define pop-sp
+                   (match-lambda
+                    ((sp . size)
+                     (if (zero? size)
+                         '()
+                         `((global.get ,sp)
+                           (i32.const ,size)
+                           (i32.sub)
+                           (global.set ,sp))))))
+                 (append-map pop-sp spill-sizes))))
             (('restore1 'ptr)
              `((call $pop-return!)))
             (('restore reprs)
-             (error "unimplemented"))
+             ;; Precondition: the order of the vars (and associated
+             ;; reprs) is the same as for the corresponding save.
+             (call-with-values (lambda () (analyze-saved-vars reprs))
+               (lambda (analyzed spill-sizes)
+                 (define restore-var
+                   (match-lambda
+                    ((save . restore)
+                     (restore spill-sizes))))
+                 (append-map restore-var analyzed))))
             (('push-prompt escape? tag handler)
              (error "unimplemented" exp))
 
@@ -1368,12 +1559,47 @@
           ('f64 'f64)
           ((or 's64 'u64) 'i64)
           ('ptr (make-ref-type #f '$kvarargs))))
+      (define (add-locals-from-code code)
+        (define locals (make-hash-table))
+        (define (visit-inst inst)
+          (match inst
+            (((or 'block 'loop) label type body)
+             (visit-expr body))
+            (('if label type consequent alternate)
+             (visit-expr consequent)
+             (visit-expr alternate))
+            (('try label type body catches catch-all)
+             (visit-expr body)
+             (for-each visit-expr catches)
+             (when catch-all (visit-expr catch-all)))
+            (('try_delegate label type body handler)
+             (visit-expr body))
+            (((or 'local.set 'local.tee) label)
+             (let ((type (match label
+                           ((or '$raw-sp '$scm-sp '$ret-sp) 'i32)
+                           (_ #f))))
+               (when type
+                 (hashq-set! locals label type))))
+            (_ #f)))
+        (define (visit-expr expr)
+          (match expr
+            (() (values))
+            ((inst . expr)
+             (visit-inst inst)
+             (visit-expr expr))))
+        (visit-expr code)
+        (sort (hash-map->list make-local locals)
+              (lambda (a b)
+                (string<? (match a (($ <local> id) (symbol->string id)))
+                          (match b (($ <local> id) (symbol->string id)))))))
       (define locals
-        (intmap-fold-right (lambda (var repr out)
-                             (cons (make-local (var-label var)
-                                               (type-for-repr repr))
-                                   out))
-                           (compute-var-representations cps) '()))
+        (append
+         (add-locals-from-code code)
+         (intmap-fold-right (lambda (var repr out)
+                              (cons (make-local (var-label var)
+                                                (type-for-repr repr))
+                                    out))
+                            (compute-var-representations cps) '())))
       ;; FIXME: Here attach a name, other debug info to the function
       (make-func (func-label kfun)
                  (make-type-use '$kvarargs kvarargs-sig)

@@ -254,9 +254,9 @@
          (match table
            (($ <table> id ($ <table-type> limits type) init)
             (visit-val-type type
-                          (if init
-                              (visit-body init types)
-                              types)))))
+                            (if init
+                                (visit-body init types)
+                                types)))))
        (define (visit-global global types)
          (match global
            (($ <global> id ($ <global-type> mutable? type) init)
@@ -283,7 +283,8 @@
                                                   (fold1 visit-type types
                                                          types)))))))))
 
-     (define (compute-imports imports funcs tables globals exports elems)
+     (define (compute-imports imports funcs tables memories globals exports
+                              elems)
        (define (function-locally-bound? label)
          (or-map (match-lambda (($ <func> id) (eqv? label id)))
                  funcs))
@@ -293,6 +294,9 @@
        (define (table-locally-bound? label)
          (or-map (match-lambda (($ <table> id type init) (eq? id label)))
                  tables))
+       (define (memory-locally-bound? label)
+         (or-map (match-lambda (($ <memory> id type) (eq? id label)))
+                 memories))
        (define (add-import import kind imports)
          (define (lookup name imports)
            (simple-lookup
@@ -316,6 +320,10 @@
          (if (global-locally-bound? label)
              imports
              (add-import label 'global imports)))
+       (define (add-imported-memory label imports)
+         (if (memory-locally-bound? label)
+             imports
+             (add-import label 'memory imports)))
        (define (visit-body body imports)
          (fold-instructions
           (lambda (inst imports)
@@ -333,6 +341,19 @@
                (add-imported-table dst (add-imported-table src imports)))
               (((or 'global.get 'global.set) label)
                (add-imported-global label imports))
+              (((or 'i32.load 'i64.load 'f32.load 'f64.load
+                    'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u
+                    'i64.load8_s 'i64.load8_u 'i64.load16_s 'i64.load16_u
+                    'i64.load32_s 'i64.load32_u
+                    'i32.store 'i64.store 'f32.store 'f64.store
+                    'i32.store8 'i32.store16 'i64.store8 'i64.store16
+                    'i64.store32)
+                ($ <mem-arg> id offset align))
+               (add-imported-memory id imports))
+              (((or 'memory.size 'memory.grow 'memory.init 'memory.fill) id)
+               (add-imported-memory id imports))
+              (('memory.copy dst src)
+               (add-imported-memory dst (add-imported-memory src imports)))
               (_ imports)))
           body imports))
        (define (visit-func func imports)
@@ -356,7 +377,7 @@
               ('func (add-imported-func id imports))
               ('table (add-imported-table id imports))
               ('global (add-imported-global id imports))
-              ('memory imports)))))
+              ('memory (add-imported-memory id imports))))))
        (define (visit-elem elem imports)
          (match elem
            (($ <elem> id mode table type offset inits)
@@ -462,6 +483,58 @@
        (reverse (fold1 visit-func funcs
                        (fold1 visit-export exports (reverse tables)))))
 
+     (define (compute-memories funcs memories exports datas)
+       (define (add-memory memory memories)
+         (define (lookup name memories)
+           (simple-lookup
+            memories
+            (($ <memory> id) (eqv? id name))))
+         (match (lookup memory memories)
+           (#f (match (lookup memory std-memories)
+                 (#f memories)
+                 (memory (cons memory memories))))
+           (_ memories)))
+       (define (visit-body body memories)
+         (fold-instructions
+          (lambda (inst memories)
+            (match inst
+              (((or 'i32.load 'i64.load 'f32.load 'f64.load
+                    'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u
+                    'i64.load8_s 'i64.load8_u 'i64.load16_s 'i64.load16_u
+                    'i64.load32_s 'i64.load32_u
+                    'i32.store 'i64.store 'f32.store 'f64.store
+                    'i32.store8 'i32.store16 'i64.store8 'i64.store16
+                    'i64.store32)
+                ($ <mem-arg> id offset align))
+               (add-memory id memories))
+              (((or 'memory.size 'memory.grow 'memory.init 'memory.fill) id)
+               (add-memory id memories))
+              (('memory.copy dst src)
+               (add-memory dst (add-memory src memories)))
+              (_ memories)))
+          body memories))
+       (define (visit-func func memories)
+         (match func
+           (($ <func> id type locals body)
+            (visit-body body memories))))
+       (define (visit-export export memories)
+         (match export
+           (($ <export> name kind id)
+            (if (eq? kind 'memory)
+                (add-memory id memories)
+                memories))))
+       (define (visit-data data memories)
+         (match data
+           (($ <data> id mode mem offset init)
+            (if (eq? mode 'active)
+                (add-memory mem memories)
+                memories))))
+       (reverse
+        (fold1 visit-func funcs
+               (fold1 visit-export exports
+                      (fold1 visit-data datas
+                             (reverse memories))))))
+
      (define (compute-globals funcs tables globals exports elems)
        (define (add-global global globals)
          (define (lookup name globals)
@@ -519,16 +592,19 @@
      (match wasm
        (($ <wasm> types imports funcs tables memories globals exports
            start elems datas tags strings custom)
-        ;; An export can pull in funcs, tables, and globals, possibly imported.
+        ;; An export can pull in funcs, tables, globals, and memories,
+        ;; possibly imported.
         ;;
-        ;; A function can pull in types, funcs, tables, and globals from
-        ;; the stdlib.  These fragments may be locally defined or
-        ;; imported (except for types which are always locally defined).
+        ;; A function can pull in types, funcs, tables, globals and
+        ;; memories from the stdlib.  These fragments may be locally
+        ;; defined or imported (except for types which are always
+        ;; locally defined).
         ;;
         ;; A table can pull in types, globals, and functions, possibly
         ;; imported.
         ;;
-        ;; A global can pull in types, globals, and functions, possibly imported.
+        ;; A global can pull in types, globals, and functions, possibly
+        ;; imported.
         ;;
         ;; An elem can pull in types and globals, possibly imported.
         ;;
@@ -538,10 +614,14 @@
         ;;
         ;; A type can pull in other types.
         ;;
+        ;; Data can pull in a memory.
+        ;;
+        ;; Memories can't pull in anything else.
+        ;;
         ;; Therefore, to allow pieces of the stdlib to lazily pull in
         ;; other pieces of the stdlib, we do a fixed-point on the set of
-        ;; funcs, tables, and globals, then we compute imports and
-        ;; types.
+        ;; funcs, tables, and globals, then we compute memories, imports
+        ;; and types.
         (let fixpoint ((funcs funcs) (tables tables) (globals globals))
           (let* ((funcs' (compute-funcs funcs tables globals exports elems))
                  (tables' (compute-tables funcs' tables exports))
@@ -549,10 +629,11 @@
             (if (and (= (length funcs') (length funcs))
                      (= (length tables') (length tables))
                      (= (length globals') (length globals)))
-                (let ((imports (compute-imports imports funcs tables globals
-                                                exports elems))
-                      (types (compute-types types imports funcs tables globals
-                                            elems tags)))
-                  (make-wasm types imports funcs tables memories globals exports
-                             start elems datas tags strings custom))
+                (let ((memories (compute-memories funcs memories exports datas)))
+                  (let ((imports (compute-imports imports funcs tables memories
+                                                  globals exports elems))
+                        (types (compute-types types imports funcs tables globals
+                                              elems tags)))
+                    (make-wasm types imports funcs tables memories globals exports
+                               start elems datas tags strings custom)))
                 (fixpoint funcs' tables' globals')))))))))

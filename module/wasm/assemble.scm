@@ -271,9 +271,14 @@
         (_ (bad-instruction))))
     (define (emit-mem code)
       (match args
-        ((($ <mem-arg> offset align))
+        ((($ <mem-arg> id offset align))
          (emit-u8 port code)
-         (emit-u32 port align)
+         (emit-u32 port
+                   (if (zero? id)
+                       align
+                       (logior align (ash 1 6))))
+         (unless (zero? id)
+           (emit-u32 port id))
          (emit-u32 port offset))
         (_ (bad-instruction))))
     (define (emit-const code emit-val)
@@ -742,7 +747,7 @@
        (match kind
          ('func (emit-u8 port #x00))
          ('table (emit-u8 port #x01))
-         ('mem (emit-u8 port #x02))
+         ('memory (emit-u8 port #x02))
          ('global (emit-u8 port #x03)))
        (emit-u32 port id))))
 

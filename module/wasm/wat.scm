@@ -281,9 +281,11 @@
               (error "bad mem arg" arg))
           x))
         (_ (values #f x))))
-    (let*-values (((offset x) (parse-arg "offset=" x))
+    (let*-values (((idx x) (parse-id-or-idx x))
+                  ((offset x) (parse-arg "offset=" x))
                   ((align x) (parse-arg "align=" x)))
-      (values (make-mem-arg (or offset 0)
+      (values (make-mem-arg (or idx 0)
+                            (or offset 0)
                             (or align (natural-alignment inst)))
               x)))
   (define (unfold-instruction inst)
@@ -299,8 +301,11 @@
          `((type ,idx)))))
     (define (unfold-mem-arg arg)
       (match arg
-        (($ <mem-arg> offset align)
-         `(,@(if offset
+        (($ <mem-arg> id offset align)
+         `(,@(if (eqv? id 0)
+                 '()
+                 (list id))
+           ,@(if offset
                  (list (string->symbol (format #f "offset=~a" offset)))
                  '())
            ,@(if align

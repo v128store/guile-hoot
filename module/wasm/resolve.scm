@@ -68,6 +68,11 @@
   (define-values (add-data-id! resolve-data) (make-name-store))
   (define-values (add-tag-id! resolve-tag) (make-name-store))
 
+  (define (resolve-memarg memarg)
+    (match memarg
+      (($ <mem-arg> id offset align)
+       (make-mem-arg (resolve-memory id) offset align))))
+
   (define struct-fields (make-hash-table))
   (define (add-struct-field! struct-id struct-idx field-id)
     (match (hashq-ref struct-fields struct-idx)
@@ -383,7 +388,7 @@
                          'stringview_wtf8.encode_wtf8
                          'stringview_wtf16.encode))
            mem)
-          `(,inst ,(resolve-memory mem)))
+          `(,inst ,(resolve-memarg mem)))
 
          ;; Misc instructions.
          (('memory.init data mem)

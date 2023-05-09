@@ -89,7 +89,7 @@
   (<type> id val)
   (<import> mod name kind id type)
   (<export> name kind idx)
-  (<mem-arg> offset align)
+  (<mem-arg> id offset align)
   (<elem> id mode table type offset inits)
   (<data> id mode mem offset init)
   (<tag> id type)

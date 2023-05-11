@@ -24,6 +24,7 @@
 (use-modules (wasm assemble)
              (hoot compile)
              (ice-9 binary-ports)
+             (ice-9 match)
              (ice-9 popen)
              (ice-9 textual-ports)
              (srfi srfi-64))
@@ -69,8 +70,21 @@
    (lambda (wasm-file-name)
      (run-d8 "load-wasm-and-print.js" "--" wasm-file-name))))
 
+(define (compile-call form)
+  (let lp ((form form) (files '()))
+    (match form
+      (()
+       (apply run-d8 "test-call.js" "--" (reverse files)))
+      ((x . form)
+       (call-with-compiled-wasm-file
+        (compile x)
+        (lambda (file)
+          (lp form (cons file files))))))))
+
 (define-syntax-rule (test-compilation expr repr)
   (test-equal repr repr (compile-scheme-then-load-wasm-in-d8 'expr)))
+(define-syntax-rule (test-call repr proc arg ...)
+  (test-equal repr repr (compile-call '(proc arg ...))))
 
 (test-compilation 42 "42")
 (test-compilation 100 "100")
@@ -95,6 +109,8 @@
 (test-compilation "foo" "foo")
 (test-compilation (lambda () 42) "#<procedure>")
 (test-compilation #:foo "#:foo")
+
+(test-call "42" (lambda () 42))
 
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))

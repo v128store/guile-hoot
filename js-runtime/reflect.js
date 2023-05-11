@@ -108,6 +108,9 @@ class MutableString extends HeapObject {
 
 class Procedure extends HeapObject {
     toString() { return "#<procedure>"; }
+    call(...arg) {
+        return this.reflector.call(this, ...arg);
+    }
 }
 
 class Sym extends HeapObject {
@@ -236,6 +239,7 @@ class SchemeReflector {
     call(func, ...args) {
         let api = this.#instance.exports;
         let argv = api.make_vector(args.length + 1, api.scm_false());
+        func = this.#to_scm(func);
         api.vector_set(argv, 0, func);
         for (let [idx, arg] of args.entries())
             api.vector_set(argv, idx + 1, this.#to_scm(arg));
@@ -337,5 +341,6 @@ function repr(obj) {
 async function test_load(path) {
     let mod = await SchemeModule.fetch_and_instantiate(path);
     let reflect = await mod.reflect();
-    return reflect.call(mod.get_export('$load').value)
+    let proc = new Procedure(reflect, mod.get_export('$load').value)
+    return proc.call();
 }

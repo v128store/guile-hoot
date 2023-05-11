@@ -124,6 +124,46 @@
  #vu8(0 97 115 109 1 0 0 0 1 7 1 95 2 127 1 127 1)
  (module (type $foo (struct (field $a (mut i32)) (field $b (mut i32))))))
 
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 9 1 79 1 80 0 95 1 127 1)
+ (module
+  (rec
+   (type $heap-object
+         (struct (field $hash (mut i32)))))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 19 1 79 2 80 0 95 1 127 1 80 1 0 95 2 127 1
+        107 111 0)
+ (module
+  (rec
+   (type $heap-object
+         (struct (field $hash (mut i32))))
+   (type $extern-ref
+         (sub $heap-object
+              (struct
+               (field $hash (mut i32))
+               (field $val (ref extern))))))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 35 1 79 3 80 0 95 1 127 1 80 1 0 95 3 127 1
+        107 109 1 107 109 1 80 1 1 95 3 127 1 107 109 1 107 109 1)
+ (module
+  (rec
+   (type $heap-object
+         (struct (field $hash (mut i32))))
+   (type $pair
+         (sub $heap-object
+              (struct
+               (field $hash (mut i32))
+               (field $car (mut (ref eq)))
+               (field $cdr (mut (ref eq))))))
+   (type $mutable-pair
+         (sub $pair
+              (struct
+               (field $hash (mut i32))
+               (field $car (mut (ref eq)))
+               (field $cdr (mut (ref eq)))))))))
+
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))
 

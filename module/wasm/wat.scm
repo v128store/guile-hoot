@@ -248,8 +248,10 @@
     (make-struct-type (map parse-field-type x)))
   (define (parse-sub-type x)
     (match x
-      ((final? supers type)
-       (make-sub-type final? supers type))))
+      (('sub super type)
+       (make-sub-type #f (list super) (parse-type type)))
+      (_
+       (make-sub-type #t '() (parse-type x)))))
   (define (parse-type x)
     (define (parse-prim-type x)
       (match x
@@ -257,17 +259,21 @@
         (('array sig) (parse-array-type sig))
         (('struct . sig) (parse-struct-type sig))))
     (match x
-      (('sub final? (? id-or-idx? id) sub)
-       (make-sub-type final? (list id) (parse-prim-type sub)))
+      (('sub id sub)
+       (make-sub-type #f (list id) (parse-prim-type sub)))
+      ((? id-or-idx?) x)
       (_ (parse-prim-type x))))
   (define (parse-type-def x)
     (match x
       (('rec . tail) (make-rec-group (map parse-rec-type-def tail)))
+      (('sub id sub) (make-rec-group
+                      (list
+                       (make-sub-type #f (list id) (parse-type sub)))))
       (((? id? id) t) (make-type id (parse-type t)))
       ((t) (make-type #f (parse-type t)))))
   (define (parse-rec-type-def x)
     (match x
-      (('type (? id? id) t) (make-type id (parse-type t)))))
+      (('type (? id? id) t) (make-type id (parse-sub-type t)))))
   (define (parse-import x)
     (define (parse-inner mod name kind id tail)
       (match kind

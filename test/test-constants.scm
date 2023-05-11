@@ -112,6 +112,9 @@
 
 (test-call "42" (lambda () 42))
 (test-call "69" (lambda (x) x) 69)
+(test-call "hey" (lambda (x) (if x 'hey 'ho)) #t)
+(test-call "hey2" (lambda (x) (if x 'hey2 'ho)) 42)
+(test-call "ho" (lambda (x) (if x 'hey3 'ho)) #f)
 
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))

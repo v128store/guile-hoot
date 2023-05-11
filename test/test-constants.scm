@@ -111,6 +111,7 @@
 (test-compilation #:foo "#:foo")
 
 (test-call "42" (lambda () 42))
+(test-call "69" (lambda (x) x) 69)
 
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))

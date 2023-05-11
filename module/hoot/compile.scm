@@ -1523,7 +1523,7 @@
                      ;; number of arguments.
                      (let ((vars (if self (cons self vars) vars)))
                        `(,@(append-map (lambda (var idx)
-                                         `(,(arg-ref idx)
+                                         `(,@(arg-ref idx)
                                            ,(local.set var)))
                                        vars (iota (length vars)))
                          ,@(do-tree kentry ctx))))))
@@ -1541,7 +1541,7 @@
                        (i32.eq)
                        (if #f ,void-block-type
                            (,@(append-map (lambda (arg idx)
-                                            `(,(arg-ref (1+ idx))
+                                            `(,@(arg-ref (1+ idx))
                                               ,(local.set arg)))
                                           vars (iota (length req)))
                             ,@(do-branch label kbody ctx))

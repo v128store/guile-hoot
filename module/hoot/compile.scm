@@ -98,6 +98,8 @@
 ;;    a smaller set of locals, to avoid emitting one local per variable.
 
 (define scm-type (make-ref-type #f 'eq))
+(define scm-block-type (make-type-use #f (make-func-sig '() (list scm-type))))
+
 (define kvarargs-sig
   (make-func-sig (list (make-param '$nargs 'i32)
                        (make-param '$arg0 scm-type)
@@ -275,13 +277,6 @@
                                         (list result-type ...))))))
   (define imports
     (list
-     (make-import "rt" "get_argument" 'func '$get-argument
-                  (imported-function-type ('i32) => (scm-type)))
-     (make-import "rt" "prepare_return_values" 'func '$prepare-return-values
-                  (imported-function-type ('i32) => ()))
-     (make-import "rt" "set_return_value" 'func '$set-return-value
-                  (imported-function-type ('i32 scm-type) => ()))
-     
      (make-import "rt" "bignum_from_i64" 'func '$bignum-from-i64
                   (imported-function-type ('i64)
                                           => ((make-ref-type #f 'extern))))
@@ -313,19 +308,6 @@
 
   (define funcs
     (list (make-func
-           '$pop-return!
-           (make-type-use #f (make-func-sig
-                              '()
-                              (list (make-ref-type #f '$kvarargs))))
-           '()
-           `((global.get $ret-sp)
-             (i32.const 1)
-             (i32.sub)
-             (global.set $ret-sp)
-             (global.get $ret-sp)
-             (table.get $ret-stack)
-             (ref.as_non_null)))
-          (make-func
            '$integer-hash
            (make-type-use #f (make-func-sig
                               (list (make-param '$v 'i32))
@@ -418,30 +400,34 @@
              (struct.new $keyword)))
           (make-func
            '$grow-raw-stack
-           (make-type-use #f (make-func-sig '() '()))
+           (make-type-use #f (make-func-sig '(i32) '()))
            '()
-           ;; Grow by 50%, plus one to ensure we can grow from zero.
-           ;; Trap if we fail to grow.
+           ;; Grow the stack by at least 50% and at least the needed
+           ;; space.  Trap if we fail to grow.
+           ;; additional_size = (current_size >> 1) | needed_size
            '((memory.size $raw-stack)
-             (i32.shr_u 1)
              (i32.const 1)
-             (i32.add)
+             (i32.shr_u)
+             (local.get 0)
+             (i32.const 16) ;; Wasm pages are 64 kB.
+             (i32.shr_u)
+             (i32.or)
              (memory.grow $raw-stack)
              (i32.const -1)
              (i32.eq)
              (if #f #f ((unreachable)))))
           (make-func
            '$grow-scm-stack
-           (make-type-use #f (make-func-sig '() '()))
+           (make-type-use #f (make-func-sig '(i32) '()))
            '()
-           ;; Grow by 50%, plus one to ensure we can grow from zero.
-           ;; Trap if we fail to grow.
+           ;; Grow as in $grow-raw-stack.
            '((i32.const 0)
              (i31.new)
              (table.size $scm-stack)
-             (i32.shr_u 1)
              (i32.const 1)
-             (i32.add)
+             (i32.shr_u)
+             (local.get 0)
+             (i32.or)
              (table.grow $scm-stack)
              (i32.const -1)
              (i32.eq)
@@ -453,15 +439,15 @@
            '((unreachable)))
           (make-func
            '$grow-ret-stack
-           (make-type-use #f (make-func-sig '() '()))
+           (make-type-use #f (make-func-sig '(i32) '()))
            '()
-           ;; Grow by 50%, plus one to ensure we can grow from zero.
-           ;; Trap if we fail to grow.
+           ;; Grow as in $grow-raw-stack.
            '((ref.func $invalid-continuation)
              (table.size $ret-stack)
-             (i32.shr_u 1)
              (i32.const 1)
-             (i32.add)
+             (i32.shr_u)
+             (local.get 0)
+             (i32.or)
              (table.grow $ret-stack)
              (i32.const -1)
              (i32.eq)
@@ -744,7 +730,7 @@
                       (lp args (1+ idx))))))))
         (match exp
           (($ $call proc args)
-           `(,@(pass-abi-arguments args)
+           `(,@(pass-abi-arguments (cons proc args))
              ,(local.get proc)
              (ref.cast #f $proc)
              (struct.get $proc 1)
@@ -777,9 +763,10 @@
                 (i32.const 16) ;; Wasm pages are 64 kB.
                 (i32.shr_u)
                 (memory.size ,memory)
-                (i32.le_u)
+                (i32.ge_u)
                 (if #f #f
-                    ((call ,grow-stack))
+                    ((i32.const ,(assq-ref sizes sp))
+                     (call ,grow-stack))
                     ())))
             `(,@(if (zero? idx) (prepare-save) '())
               (local.get ,sp)
@@ -795,9 +782,10 @@
                 (global.set ,sp)
                 (global.get ,sp)
                 (table.size ,table)
-                (i32.le_u)
+                (i32.ge_u)
                 (if #f #f
-                    ((call ,grow-stack))
+                    ((i32.const ,(assq-ref sizes sp))
+                     (call ,grow-stack))
                     ())))
             `(,@(if (zero? idx) (prepare-save) '())
               (local.get ,sp)
@@ -818,7 +806,9 @@
         (define (restore/raw memory sp idx load-inst alignment)
           (restore sp idx `((,load-inst ,(make-mem-arg memory idx alignment)))))
         (define (restore/ref table sp idx)
-          (restore sp idx `((table.get ,table) (ref.as_non_null))))
+          (restore sp idx `(,@(if (zero? idx) '() `(i32.const ,idx))
+                            (table.get ,table)
+                            (ref.as_non_null))))
 
         (define (visit/raw idx store-inst load-inst alignment)
           (cons (save/raw '$raw-stack '$raw-sp '$grow-raw-stack idx store-inst
@@ -862,6 +852,38 @@
                     (cons (visit-ret ret-size) out)
                     raw-size scm-size (1+ ret-size))))))))
 
+      (define (compile-binary-op/fixnum-fast-path a b block-type
+                                                  fast-expr slow-expr)
+        `((block #f ,block-type
+                 ((block #f #f
+                         (,(local.get a)
+                          (ref.test #f i31)
+                          (i32.eqz)
+                          (br_if 0)
+                          ,(local.get b)
+                          (ref.test #f i31)
+                          (i32.eqz)
+                          (br_if 0)
+
+                          ,(local.get a)
+                          (ref.cast #f i31)
+                          (i32.get_s)
+                          (local.tee $i0)
+                          ,(local.get b)
+                          (ref.cast #f i31)
+                          (i32.get_s)
+                          (local.tee $i1)
+                          (i32.or)
+                          (i32.const 1)
+                          (i32.and)
+                          (br_if 0)
+
+                          ,@fast-expr
+                          (br 1)))
+                  ,(local.get a)
+                  ,(local.get b)
+                  ,@slow-expr))))
+
       (define (compile-values exp)
         (match exp
           (($ $const val) (compile-constant val))
@@ -900,8 +922,8 @@
                            (i32.sub)
                            (global.set ,sp))))))
                  (append-map pop-sp spill-sizes))))
-            (('restore1 'ptr)
-             `((call $pop-return!)))
+            (('restore1 repr)
+             (compile-values (build-exp ($primcall 'restore (list repr) ()))))
             (('restore reprs)
              ;; Precondition: the order of the vars (and associated
              ;; reprs) is the same as for the corresponding save.
@@ -988,7 +1010,11 @@
             ;; Generic arithmetic.  Emit a fixnum fast-path and a
             ;; callout to runtime functions for the slow path.
             (('add #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              ;; FIXME: Overflow to bignum.
+              '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
+              '((unreachable))))
             (('sub #f x y)
              (error "unimplemented" exp))
             (('add/immediate y x)
@@ -1228,42 +1254,6 @@
 
           (_ (error "unexpected expression" exp))))
 
-      (define (compile-binary-op/fixnum-fast-path a b type
-                                                  fast-expr slow-expr)
-        `((block #f ,type
-                 ((block #f #f
-                         (,(local.get a)
-                          (ref.test #f i31)
-                          (i32.eqz)
-                          (br_if 0)
-                          ,(local.get b)
-                          (ref.test #f i31)
-                          (i32.eqz)
-                          (br_if 0)
-
-                          ,(local.get a)
-                          (ref.cast #f i31)
-                          (i32.get_s)
-                          ,(local.get a)
-                          (ref.cast #f i31)
-                          (i32.get_s)
-                          (i32.or)
-                          (i32.const 1)
-                          (i32.and)
-                          (br_if 0)
-
-                          ,(local.get a)
-                          (ref.cast #f i31)
-                          (i32.get_s)
-                          ,(local.get a)
-                          (ref.cast #f i31)
-                          (i32.get_s)
-                          ,@fast-expr
-                          (br 1)))
-                  ,(local.get a)
-                  ,(local.get b)
-                  ,@slow-expr))))
-
       (define (compile-test op param args)
         (match (vector op param args)
           ;; Immediate type tag predicates.
@@ -1366,16 +1356,22 @@
           (#('heap-numbers-equal? #f (a b))
            `(,(local.get a) ,(local.get b) (call $heap-numbers-equal?)))
           (#('< #f (a b))
-           (compile-binary-op/fixnum-fast-path a b 'i32
-                                               '((i32.lt_s))
+           (compile-binary-op/fixnum-fast-path a b i32-block-type
+                                               '((local.get $i0)
+                                                 (local.get $i1)
+                                                 (i32.lt_s))
                                                '((call $slow-<))))
           (#('<= #f (a b))
-           (compile-binary-op/fixnum-fast-path a b 'i32
-                                               '((i32.le_s))
+           (compile-binary-op/fixnum-fast-path a b i32-block-type
+                                               '((local.get $i0)
+                                                 (local.get $i1)
+                                                 (i32.le_s))
                                                '((call $slow-<=))))
           (#('= #f (a b))
-           (compile-binary-op/fixnum-fast-path a b 'i32
-                                               '((i32.eq))
+           (compile-binary-op/fixnum-fast-path a b i32-block-type
+                                               '((local.get $i0)
+                                                 (local.get $i1)
+                                                 (i32.eq))
                                                '((call $slow-=))))
           (#('u64-< #f (a b))
            `(,(local.get a)
@@ -1577,6 +1573,7 @@
             (((or 'local.set 'local.tee) label)
              (let ((type (match label
                            ((or '$raw-sp '$scm-sp '$ret-sp) 'i32)
+                           ((or '$i0 '$i1 '$i2) 'i32)
                            (_ #f))))
                (when type
                  (hashq-set! locals label type))))

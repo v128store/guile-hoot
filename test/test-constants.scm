@@ -56,9 +56,9 @@
 
 (define (run-d8 . args)
   (let* ((args (cons* "--experimental-wasm-gc"
-                     "--experimental-wasm-stringref"
-                     "--experimental-wasm-return-call"
-                     args))
+                      "--experimental-wasm-stringref"
+                      "--experimental-wasm-return-call"
+                      args))
          (port (apply open-pipe* OPEN_READ d8 args))
          (output (get-string-all port)))
     (close-port port)
@@ -109,12 +109,27 @@
 (test-compilation "foo" "foo")
 (test-compilation (lambda () 42) "#<procedure>")
 (test-compilation #:foo "#:foo")
+(test-compilation 'TZAG "TZAG")
 
 (test-call "42" (lambda () 42))
 (test-call "69" (lambda (x) x) 69)
 (test-call "hey" (lambda (x) (if x 'hey 'ho)) #t)
 (test-call "hey2" (lambda (x) (if x 'hey2 'ho)) 42)
 (test-call "ho" (lambda (x) (if x 'hey3 'ho)) #f)
+;(test-call "10" (lambda (x y) (+ x y)) 6 4)
+(test-call "rerro" (lambda () 'rerro))
+;;(test-call "TZAG" (lambda (f) (f)) (lambda () 'TZAG))
+
+;; This is how you would debug outside the test suite...
+;; (call-with-compiled-wasm-file
+;;  (compile '(lambda (f) (f)) #:dump-cps? #t #:dump-wasm? #t)
+;;  (lambda (proc)
+;;    (call-with-compiled-wasm-file
+;;     (compile '(lambda () 'TZAG))
+;;     (lambda (arg)
+;;       (copy-file proc "/tmp/proc.wasm")
+;;       (copy-file arg "/tmp/arg.wasm")
+;;       (pk (run-d8 "test-call.js" "--" proc arg))))))
 
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))

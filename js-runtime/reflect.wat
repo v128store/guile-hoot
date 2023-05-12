@@ -247,12 +247,12 @@
   ;; filling in a sensible default value so as to not require the
   ;; tables to be nullable, and abort if that fails.
   (func $grow-argv (param $diff i32)
-    (br_if 0 (i32.ge_s (i32.const 0)
+    (br_if 0 (i32.le_s (i32.const 0)
                        (table.grow $argv (i31.new (i32.const 0))
                                    (local.get $diff))))
     (unreachable))
   (func $grow-ret-stack (param $diff i32)
-    (br_if 0 (i32.ge_s (i32.const 0)
+    (br_if 0 (i32.le_s (i32.const 0)
                        (table.grow $ret-stack (ref.func $abort)
                                    (local.get $diff))))
     (unreachable))
@@ -444,9 +444,6 @@
                     (i32.add (i32.const 16) (local.get $sp)))))
     (table.set $ret-stack (local.get $sp) (local.get $k))
     (global.set $ret-sp (i32.add (local.get $sp) (i32.const 1))))
-  (func $pop-return (result (ref $kvarargs))
-    (global.set $ret-sp (i32.sub (global.get $ret-sp) (i32.const 1)))
-    (ref.as_non_null (table.get $ret-stack (global.get $ret-sp))))
 
   (func $make-vector (export "make_vector")
         (param $size i32) (param $init (ref eq)) (result (ref $mutable-vector))

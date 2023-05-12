@@ -146,7 +146,7 @@
   (define (parse-heap-type x)
     (match x
       ((or 'func 'extern 'any 'none 'noextern 'nofunc 'eq 'struct 'array
-           'i31 'string
+           'i31 'string 'stringview_iter
            (? id-or-idx?))
        x)
       (_ (error "bad heaptype" x))))

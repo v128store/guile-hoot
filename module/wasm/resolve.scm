@@ -377,6 +377,8 @@
           `(array.copy ,(resolve-type dst) ,(resolve-type src)))
          (((and inst (or 'ref.test 'ref.cast)) nullable? ht)
           `(,inst ,nullable? ,(resolve-heap-type ht)))
+         (((and inst (or 'ref.test 'ref.cast)) ht)
+          `(,inst #f ,(resolve-heap-type ht)))
          (('string.const (? string? str))
           `(string.const ,(intern-string str)))
          (((and inst (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8

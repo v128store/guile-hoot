@@ -405,7 +405,7 @@
            ;; Grow the stack by at least 50% and at least the needed
            ;; space.  Trap if we fail to grow.
            ;; additional_size = (current_size >> 1) | needed_size
-           '((memory.size $raw-stack)
+           `((memory.size $raw-stack)
              (i32.const 1)
              (i32.shr_u)
              (local.get 0)
@@ -415,13 +415,13 @@
              (memory.grow $raw-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f #f ((unreachable)))))
+             (if #f ,void-block-type ((unreachable)))))
           (make-func
            '$grow-scm-stack
            (make-type-use #f (make-func-sig '(i32) '()))
            '()
            ;; Grow as in $grow-raw-stack.
-           '((i32.const 0)
+           `((i32.const 0)
              (i31.new)
              (table.size $scm-stack)
              (i32.const 1)
@@ -431,7 +431,7 @@
              (table.grow $scm-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f #f ((unreachable)))))
+             (if #f ,void-block-type ((unreachable)))))
           (make-func
            '$invalid-continuation
            (make-type-use '$kvarargs kvarargs-sig)
@@ -442,7 +442,7 @@
            (make-type-use #f (make-func-sig '(i32) '()))
            '()
            ;; Grow as in $grow-raw-stack.
-           '((ref.func $invalid-continuation)
+           `((ref.func $invalid-continuation)
              (table.size $ret-stack)
              (i32.const 1)
              (i32.shr_u)
@@ -451,7 +451,7 @@
              (table.grow $ret-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f #f ((unreachable)))))))
+             (if #f ,void-block-type ((unreachable)))))))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.
@@ -512,7 +512,7 @@
                         (($ <memory> id type)
                          (make-import "abi" (symbol->string id) 'memory id
                                       type)))
-                       tables)
+                       memories)
                   imports)
                  imports)
              funcs
@@ -764,7 +764,7 @@
                 (i32.shr_u)
                 (memory.size ,memory)
                 (i32.ge_u)
-                (if #f #f
+                (if #f ,void-block-type
                     ((i32.const ,(assq-ref sizes sp))
                      (call ,grow-stack))
                     ())))
@@ -783,7 +783,7 @@
                 (global.get ,sp)
                 (table.size ,table)
                 (i32.ge_u)
-                (if #f #f
+                (if #f ,void-block-type
                     ((i32.const ,(assq-ref sizes sp))
                      (call ,grow-stack))
                     ())))
@@ -855,7 +855,7 @@
       (define (compile-binary-op/fixnum-fast-path a b block-type
                                                   fast-expr slow-expr)
         `((block #f ,block-type
-                 ((block #f #f
+                 ((block #f ,void-block-type
                          (,(local.get a)
                           (ref.test #f i31)
                           (i32.eqz)
@@ -867,11 +867,11 @@
 
                           ,(local.get a)
                           (ref.cast #f i31)
-                          (i32.get_s)
+                          (i31.get_s)
                           (local.tee $i0)
                           ,(local.get b)
                           (ref.cast #f i31)
-                          (i32.get_s)
+                          (i31.get_s)
                           (local.tee $i1)
                           (i32.or)
                           (i32.const 1)
@@ -1456,7 +1456,8 @@
             (intset-filter merge-cont? (intmap-ref dom-children label)))
           (node-within label children ctx))
         (if (loop-cont? label)
-            `((loop #f #f ,(code-for-label (push-loop label ctx))))
+            `((loop #f ,void-block-type
+                    ,(code-for-label (push-loop label ctx))))
             (code-for-label ctx)))
       (define (do-branch pred succ ctx)
         (cond

@@ -148,16 +148,32 @@ function instantiate_streaming(path, imports) {
     return WebAssembly.instantiate(bytes, imports);
 }
 
-class SchemeReflector {
+class Scheme {
     #instance;
-    constructor(instance) {
+    #abi;
+    constructor(instance, abi) {
         this.#instance = instance;
+        this.#abi = abi;
     }
 
     static async reflect(abi) {
         let { module, instance } =
             await instantiate_streaming('./reflect.wasm', { abi });
-        return new SchemeReflector(instance);
+        return new Scheme(instance, abi);
+    }
+
+    #init_module(mod) {
+        let proc = new Procedure(this, mod.get_export('$load').value)
+        return proc.call();
+    }
+    static async load_main(path, abi) {
+        let mod = await SchemeModule.fetch_and_instantiate(path, abi);
+        let reflect = await mod.reflect();
+        return reflect.#init_module(mod);
+    }
+    async load_extension(path) {
+        let mod = await SchemeModule.fetch_and_instantiate(path, this.#abi);
+        return this.#init_module(mod);
     }
 
     #to_scm(js) {
@@ -328,7 +344,7 @@ class SchemeModule {
         throw new Error(`unknown export: ${name}`)
     }
     async reflect() {
-        return await SchemeReflector.reflect(this.exported_abi());
+        return await Scheme.reflect(this.exported_abi());
     }
 }
 
@@ -336,11 +352,4 @@ function repr(obj) {
     if (obj instanceof HeapObject)
         return obj.repr();
     return obj + '';
-}
-
-async function test_load(path) {
-    let mod = await SchemeModule.fetch_and_instantiate(path);
-    let reflect = await mod.reflect();
-    let proc = new Procedure(reflect, mod.get_export('$load').value)
-    return proc.call();
 }

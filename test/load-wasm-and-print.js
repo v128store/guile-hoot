@@ -50,7 +50,7 @@ if (args.length != 1) {
 
 async function runTest(wasmFile) {
     try {
-        for (let obj of await test_load(wasmFile))
+        for (let obj of await Scheme.load_main(wasmFile))
             log(repr(obj));
     } catch (e) {
         log(`error: ${e}`);

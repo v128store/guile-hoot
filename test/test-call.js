@@ -50,12 +50,15 @@ if (args.length < 1) {
 
 async function runTest(call) {
     try {
-        let vals = []
-        for (let file of call) {
-            let [val] = await test_load(file);
-            vals.push(val);
+        let [procFile, ...argFiles] = call;
+        let [proc] = await Scheme.load_main(procFile);
+        let argPromises =
+            argFiles.map(file => proc.reflector.load_extension(file));
+        let args = [];
+        for (let p of argPromises) {
+            let [arg] = await p;
+            args.push(arg);
         }
-        let [proc, ...args] = vals;
         for (let result of proc.call(...args))
             log(repr(result));
     } catch (e) {

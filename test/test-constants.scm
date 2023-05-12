@@ -71,15 +71,15 @@
      (run-d8 "load-wasm-and-print.js" "--" wasm-file-name))))
 
 (define (compile-call form)
-  (let lp ((form form) (files '()))
+  (let lp ((form form) (files '()) (first? #t))
     (match form
       (()
        (apply run-d8 "test-call.js" "--" (reverse files)))
       ((x . form)
        (call-with-compiled-wasm-file
-        (compile x)
+        (compile x #:import-abi? (not first?) #:export-abi? first?)
         (lambda (file)
-          (lp form (cons file files))))))))
+          (lp form (cons file files) #f)))))))
 
 (define-syntax-rule (test-compilation expr repr)
   (test-equal repr repr (compile-scheme-then-load-wasm-in-d8 'expr)))
@@ -116,16 +116,18 @@
 (test-call "hey" (lambda (x) (if x 'hey 'ho)) #t)
 (test-call "hey2" (lambda (x) (if x 'hey2 'ho)) 42)
 (test-call "ho" (lambda (x) (if x 'hey3 'ho)) #f)
-;(test-call "10" (lambda (x y) (+ x y)) 6 4)
+(test-call "10" (lambda (x y) (+ x y)) 6 4)
 (test-call "rerro" (lambda () 'rerro))
-;;(test-call "TZAG" (lambda (f) (f)) (lambda () 'TZAG))
+(test-call "1337" (lambda (f) (f)) (lambda () 1337))
+
+(compile-call '((lambda (x y) (+ x y) 42 69)))
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
-;;  (compile '(lambda (f) (f)) #:dump-cps? #t #:dump-wasm? #t)
+;;  (compile '(lambda (f) (f)) #:import-abi? #f #:export-abi? #t)
 ;;  (lambda (proc)
 ;;    (call-with-compiled-wasm-file
-;;     (compile '(lambda () 'TZAG))
+;;     (compile '(lambda () 42) #:import-abi? #t #:export-abi? #f)
 ;;     (lambda (arg)
 ;;       (copy-file proc "/tmp/proc.wasm")
 ;;       (copy-file arg "/tmp/arg.wasm")

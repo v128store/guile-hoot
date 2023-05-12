@@ -217,7 +217,7 @@
       (_ (error "bad elem type"))))
   (define (parse-table-type x)
     (let-values (((limits x) (parse-limits x)))
-      (make-table-type limits (parse-elem-type x))))
+      (make-table-type limits (parse-ref-type (car x) #:error-message "bad elem type"))))
   (define (parse-mem-type x)
     (let-values (((limits x) (parse-limits x)))
       (match x

@@ -119,15 +119,16 @@
 (test-call "10" (lambda (x y) (+ x y)) 6 4)
 (test-call "rerro" (lambda () 'rerro))
 (test-call "1337" (lambda (f) (f)) (lambda () 1337))
-
-(compile-call '((lambda (x y) (+ x y) 42 69)))
+(test-call "43" (lambda (f) (+ (f) 1)) (lambda () 42))
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
-;;  (compile '(lambda (f) (f)) #:import-abi? #f #:export-abi? #t)
+;;  (compile '(lambda (f) (+ (f) 1)) #:import-abi? #f #:export-abi? #t
+;;           #:dump-wasm? #t)
 ;;  (lambda (proc)
 ;;    (call-with-compiled-wasm-file
-;;     (compile '(lambda () 42) #:import-abi? #t #:export-abi? #f)
+;;     (compile '(lambda () 42) #:import-abi? #t #:export-abi? #f
+;;              #:dump-wasm? #t)
 ;;     (lambda (arg)
 ;;       (copy-file proc "/tmp/proc.wasm")
 ;;       (copy-file arg "/tmp/arg.wasm")

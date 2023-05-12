@@ -400,7 +400,7 @@
              (struct.new $keyword)))
           (make-func
            '$grow-raw-stack
-           (make-type-use #f (make-func-sig '(i32) '()))
+           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
            '()
            ;; Grow the stack by at least 50% and at least the needed
            ;; space.  Trap if we fail to grow.
@@ -408,17 +408,17 @@
            `((memory.size $raw-stack)
              (i32.const 1)
              (i32.shr_u)
-             (local.get 0)
+             (local.get $sp)
              (i32.const 16) ;; Wasm pages are 64 kB.
              (i32.shr_u)
              (i32.or)
              (memory.grow $raw-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f ,void-block-type ((unreachable)))))
+             (if #f ,void-block-type ((unreachable)) ())))
           (make-func
            '$grow-scm-stack
-           (make-type-use #f (make-func-sig '(i32) '()))
+           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
            '()
            ;; Grow as in $grow-raw-stack.
            `((i32.const 0)
@@ -426,12 +426,12 @@
              (table.size $scm-stack)
              (i32.const 1)
              (i32.shr_u)
-             (local.get 0)
+             (local.get $sp)
              (i32.or)
              (table.grow $scm-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f ,void-block-type ((unreachable)))))
+             (if #f ,void-block-type ((unreachable)) ())))
           (make-func
            '$invalid-continuation
            (make-type-use '$kvarargs kvarargs-sig)
@@ -439,19 +439,19 @@
            '((unreachable)))
           (make-func
            '$grow-ret-stack
-           (make-type-use #f (make-func-sig '(i32) '()))
+           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
            '()
            ;; Grow as in $grow-raw-stack.
            `((ref.func $invalid-continuation)
              (table.size $ret-stack)
              (i32.const 1)
              (i32.shr_u)
-             (local.get 0)
+             (local.get $sp)
              (i32.or)
              (table.grow $ret-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f ,void-block-type ((unreachable)))))))
+             (if #f ,void-block-type ((unreachable)) ())))))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.
@@ -552,6 +552,42 @@
   (make-static-procedure code)
   static-procedure?
   (code static-procedure-code))
+
+(define (compute-used-vars cps)
+  (define (adjoin var used)
+    (intset-add! used var))
+  (define (adjoin* vars used)
+    (fold1 adjoin vars used))
+  (persistent-intset
+   (intmap-fold
+    (lambda (k cont used)
+      ;; Only a term can use a var.
+      (match cont
+        (($ $kargs names syms term)
+         (match term
+           (($ $continue k src exp)
+            (match exp
+              (($ $call proc args)
+               (adjoin* args (adjoin proc used)))
+              (($ $callk k proc args)
+               (adjoin* args (if proc (adjoin proc used) used)))
+              (($ $calli args callee)
+               (adjoin* args (adjoin callee used)))
+              (($ $primcall name param args)
+               (adjoin* args used))
+              (($ $values args)
+               (adjoin* args used))
+              ((or ($ $const) ($ $const-fun) ($ $prim) ($ $code)) used)))
+           (($ $branch kf kt src op param args)
+            (adjoin* args used))
+           (($ $switch kf kt* src arg)
+            (adjoin arg used))
+           (($ $prompt k kh src escape? tag)
+            (adjoin tag used))
+           (($ $throw src op param args)
+            (adjoin* args used))))
+        (_ used)))
+    cps empty-intset)))
 
 (define* (lower-to-wasm cps #:key import-abi?)
   ;; interning constants into constant table
@@ -671,6 +707,11 @@
   (define (func-label k) (string->symbol (format #f "$f~a" k)))
   (define (lower-func kfun body)
     (let ((cps (intmap-select cps body)))
+      (define has-closure?
+        (match (intmap-ref cps kfun)
+          (($ $kfun src meta self ktail kentry) self)))
+      (define used-vars (compute-used-vars cps))
+      (define (var-used? var) (intset-ref used-vars var))
       (define preds (compute-predecessors cps kfun))
       (define idoms (compute-idoms cps kfun))
       (define dom-children (invert-tree idoms))
@@ -806,7 +847,7 @@
         (define (restore/raw memory sp idx load-inst alignment)
           (restore sp idx `((,load-inst ,(make-mem-arg memory idx alignment)))))
         (define (restore/ref table sp idx)
-          (restore sp idx `(,@(if (zero? idx) '() `(i32.const ,idx))
+          (restore sp idx `(,@(if (zero? idx) '() `((i32.const ,idx) (i32.add)))
                             (table.get ,table)
                             (ref.as_non_null))))
 
@@ -851,6 +892,28 @@
                 (lp reprs
                     (cons (visit-ret ret-size) out)
                     raw-size scm-size (1+ ret-size))))))))
+
+      (define (compile-unary-op/fixnum-fast-path a block-type
+                                                 fast-expr slow-expr)
+        `((block #f ,block-type
+                 ((block #f ,void-block-type
+                         (,(local.get a)
+                          (ref.test #f i31)
+                          (i32.eqz)
+                          (br_if 0)
+
+                          ,(local.get a)
+                          (ref.cast #f i31)
+                          (i31.get_s)
+                          (local.tee $i0)
+                          (i32.const 1)
+                          (i32.and)
+                          (br_if 0)
+
+                          ,@fast-expr
+                          (br 1)))
+                  ,(local.get a)
+                  ,@slow-expr))))
 
       (define (compile-binary-op/fixnum-fast-path a b block-type
                                                   fast-expr slow-expr)
@@ -1018,7 +1081,11 @@
             (('sub #f x y)
              (error "unimplemented" exp))
             (('add/immediate y x)
-             (error "unimplemented" exp))
+             (compile-unary-op/fixnum-fast-path
+              x scm-block-type
+              ;; FIXME: Overflow to bignum.
+              `((local.get $i0) (i32.const ,(ash y 1)) (i32.add) (i31.new))
+              '((unreachable))))
             (('sub/immediate y x)
              (error "unimplemented" exp))
             (('mul #f x y)
@@ -1530,17 +1597,23 @@
                   (when allow-other-keys? (error "allow-other-keys? unimplemented"))
                   (when (not (null? kw)) (error "kwargs unimplemented"))
                   (when (not (null? opt)) (error "optargs unimplemented"))
-                  (when rest (error "rest args unimplemented"))
                   (match (intmap-ref cps kbody)
                     (($ $kargs names vars)
+                     (when (and rest (var-used? (car (last-pair vars))))
+                       (error "rest args unimplemented"))
                      `((local.get $nargs)
-                       (i32.const ,(1+ (length req)))
-                       (i32.eq)
+                       (i32.const ,((if has-closure? 1+ identity)
+                                    (length req)))
+                       ,(if rest '(i32.ge_u) '(i32.eq))
                        (if #f ,void-block-type
-                           (,@(append-map (lambda (arg idx)
-                                            `(,@(arg-ref (1+ idx))
-                                              ,(local.set arg)))
-                                          vars (iota (length req)))
+                           (,@(append-map
+                               (lambda (arg idx)
+                                 (if (var-used? arg)
+                                     `(,@(arg-ref
+                                          (if has-closure? (1+ idx) idx))
+                                       ,(local.set arg))
+                                     '()))
+                               vars (iota (length req)))
                             ,@(do-branch label kbody ctx))
                            ((unreachable)))))))
                  (($ $ktail)

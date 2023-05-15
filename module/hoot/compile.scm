@@ -53,6 +53,7 @@
   #:use-module (wasm resolve)
   #:use-module (wasm parse)
   #:use-module (wasm types)
+  #:use-module (hoot unify-returns)
   #:export (read-and-compile
             compile-file
             compile))
@@ -1758,7 +1759,7 @@
       (let ((make-lower (language-lowerer (lookup-language 'cps))))
         (make-lower optimization-level opts)))
     (define lowered-cps (lower-cps cps env))
-    (define tailified (tailify lowered-cps))
+    (define tailified (unify-returns (tailify lowered-cps)))
     (verify tailified)
     (renumber (simplify (eliminate-dead-code tailified))))
   (let ((cps (lower-and-tailify cps)))

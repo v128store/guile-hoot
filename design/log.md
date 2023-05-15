@@ -150,6 +150,20 @@ literals, and we are starting to implement the different primcalls.
 Then, non-tail function calls; once that is working we'll be close to
 having a working Scheme.
 
+### 2023-05-15
+
+Some interesting progress: the test suite and JS host harness has been
+enhanced so as to compile multiple compilation units and have them
+interoperate.  To do this we need to ensure they share the same run-time
+(stack pointers, etc).  Probably there are some more guard-rails to make
+here but for now it's an interesting development.
+
+We now compile value returns, tail calls, conditionals, and a few
+minimal primcalls (add, add/immediate, sub, sub/immediate, mul).  We can
+do non-tail calls too.  Recursive fac and fib run (though don't handle
+overflow to bignum yet); speed appears to currently be about 15x slower
+than Guile native.  Something to work on over time.
+
 ## The near future
 
 ### Differences from Guile's compiler backend

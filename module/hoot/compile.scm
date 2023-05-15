@@ -738,6 +738,10 @@
       (define has-closure?
         (match (intmap-ref cps kfun)
           (($ $kfun src meta self ktail kentry) self)))
+      (define elide-arity-check?
+        (match (intmap-ref cps kfun)
+          (($ $kfun src meta self ktail kentry)
+           (assq-ref meta 'elide-arity-check?))))
       (define used-vars (compute-used-vars cps))
       (define (var-used? var) (intset-ref used-vars var))
       (define preds (compute-predecessors cps kfun))
@@ -1619,8 +1623,7 @@
                     (($ $kclause)
                      ;; An arity-checking function; let the clause check
                      ;; the arity.
-                     (if self
-                         ;; only if referenced?
+                     (if (and self (var-used? self))
                          `(,@(arg-ref 0)
                            ,(local.set self)
                            ,@(do-branch label kentry ctx))
@@ -1645,21 +1648,23 @@
                     (($ $kargs names vars)
                      (when (and rest (var-used? (car (last-pair vars))))
                        (error "rest args unimplemented"))
-                     `((local.get $nargs)
-                       (i32.const ,((if has-closure? 1+ identity)
-                                    (length req)))
-                       ,(if rest '(i32.ge_u) '(i32.eq))
-                       (if #f ,void-block-type
-                           (,@(append-map
-                               (lambda (arg idx)
-                                 (if (var-used? arg)
-                                     `(,@(arg-ref
-                                          (if has-closure? (1+ idx) idx))
-                                       ,(local.set arg))
-                                     '()))
-                               vars (iota (length req)))
-                            ,@(do-branch label kbody ctx))
-                           ((unreachable)))))))
+                     (let ((body `(,@(append-map
+                                      (lambda (arg idx)
+                                        (if (var-used? arg)
+                                            `(,@(arg-ref
+                                                 (if has-closure? (1+ idx) idx))
+                                              ,(local.set arg))
+                                            '()))
+                                      vars (iota (length req)))
+                                   ,@(do-branch label kbody ctx))))
+                       (cond
+                        (elide-arity-check? body)
+                        (else
+                         `((local.get $nargs)
+                           (i32.const ,((if has-closure? 1+ identity)
+                                        (length req)))
+                           ,(if rest '(i32.ge_u) '(i32.eq))
+                           (if #f ,void-block-type ,body ((unreachable))))))))))
                  (($ $ktail)
                   '())))
               (y

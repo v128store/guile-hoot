@@ -59,6 +59,21 @@
   #:export (unify-returns))
 
 (define (unify-returns cps)
+  (define (strip-meta cps k)
+    (define (strip meta)
+      (match meta
+        (() '())
+        (((k' . v') . meta)
+         (let ((meta (strip meta)))
+           (if (eq? k' k)
+               meta
+               (acons k' v' meta))))))
+    (intmap-map (lambda (label cont)
+                  (rewrite-cont cont
+                    (($ $kfun src meta self ktail kentry)
+                     ($kfun src (strip meta) self ktail kentry))
+                    (_ ,cont)))
+                cps))
   (define (maybe-wrap-return-continuation out wrapped kfun failure success)
     (match (intmap-ref wrapped kfun (lambda (_) #f))
       (#f
@@ -67,7 +82,8 @@
           (match (intmap-ref cps kentry)
             (($ $kargs names vars term)
              (let* ((self (and self (fresh-var)))
-                    (vars (map (lambda (_) (fresh-var)) vars)))
+                    (vars (map (lambda (_) (fresh-var)) vars))
+                    (meta (acons 'elide-arity-check? #t meta)))
                (with-cps out
                  (letk ktail
                        ($ktail))
@@ -78,7 +94,7 @@
                  (letk kclause
                        ($kclause (names '() #f '() #f) kcall #f))
                  (letk kwrapped
-                       ($kfun src '() self ktail kclause))
+                       ($kfun src meta self ktail kclause))
                  ($ (success (intmap-add wrapped kfun kwrapped) kwrapped)))))
             (_ (failure))))))
       (kwrapped
@@ -103,5 +119,5 @@
                  (intmap-add wrapped kfun kwrapped)))))
            (_ (values out wrapped))))
        cps
-       cps
+       (strip-meta cps 'elide-arity-check?)
        empty-intmap)))))

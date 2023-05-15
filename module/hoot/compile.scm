@@ -1006,8 +1006,6 @@
                            (i32.sub)
                            (global.set ,sp))))))
                  (append-map pop-sp spill-sizes))))
-            (('restore1 repr)
-             (compile-values (build-exp ($primcall 'restore (list repr) ()))))
             (('restore reprs)
              ;; Precondition: the order of the vars (and associated
              ;; reprs) is the same as for the corresponding save.

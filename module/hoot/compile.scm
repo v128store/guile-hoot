@@ -727,6 +727,12 @@
     (or (compile-immediate-constant val)
         (compile-heap-constant val)))
   (define (func-label k) (string->symbol (format #f "$f~a" k)))
+  (define (known-arity k)
+    (match (intmap-ref cps k)
+      (($ $kfun src meta self ktail kentry)
+       (match (intmap-ref cps kentry)
+         (($ $kclause) #f)
+         (($ $kargs names vars) (if self (cons self vars) vars))))))
   (define (lower-func kfun body)
     (let ((cps (intmap-select cps body)))
       (define has-closure?
@@ -804,8 +810,11 @@
              ,(local.get callee)
              (return_call_ref $kvarargs)))
           (($ $callk k proc args)
-           `(,@(map local.get (if proc (cons proc args) args))
-             (return_call ,(func-label k))))))
+           (let ((args (if proc (cons proc args) args)))
+             `(,@(if (known-arity k)
+                     (map local.get args)
+                     (pass-abi-arguments args))
+               (return_call ,(func-label k)))))))
 
       (define-syntax-rule (match-primcall name param args
                                           ((%name %param . %args) . body) ...)
@@ -1606,8 +1615,9 @@
                      ;; A function whose callers all pass the expected
                      ;; number of arguments.
                      (let ((vars (if self (cons self vars) vars)))
+                       ;; FIXME: no need to rebind vars.
                        `(,@(append-map (lambda (var idx)
-                                         `(,@(arg-ref idx)
+                                         `((local.get ,idx)
                                            ,(local.set var)))
                                        vars (iota (length vars)))
                          ,@(do-tree kentry ctx))))))
@@ -1693,7 +1703,14 @@
                             (compute-var-representations cps) '())))
       ;; FIXME: Here attach a name, other debug info to the function
       (make-func (func-label kfun)
-                 (make-type-use '$kvarargs kvarargs-sig)
+                 (match (known-arity kfun)
+                   (#f (make-type-use '$kvarargs kvarargs-sig))
+                   (vars (make-type-use
+                          #f
+                          (make-func-sig (map (lambda (_)
+                                                (make-param #f scm-type))
+                                              vars)
+                                         '()))))
                  locals
                  code)))
 

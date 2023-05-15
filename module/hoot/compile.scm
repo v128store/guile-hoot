@@ -451,7 +451,28 @@
              (table.grow $ret-stack)
              (i32.const -1)
              (i32.eq)
-             (if #f ,void-block-type ((unreachable)) ())))))
+             (if #f ,void-block-type ((unreachable)) ())))
+          (make-func
+           '$slow-<
+           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
+                                                  (make-param '$b scm-type))
+                                            '(i32)))
+           '()
+           `((unreachable)))
+          (make-func
+           '$slow-<=
+           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
+                                                  (make-param '$b scm-type))
+                                            '(i32)))
+           '()
+           `((unreachable)))
+          (make-func
+           '$slow-=
+           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
+                                                  (make-param '$b scm-type))
+                                            '(i32)))
+           '()
+           `((unreachable)))))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.

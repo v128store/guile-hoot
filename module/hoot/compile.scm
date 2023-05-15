@@ -1108,7 +1108,11 @@
               '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
               '((unreachable))))
             (('sub #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              ;; FIXME: Overflow to bignum.
+              '((local.get $i0) (local.get $i1) (i32.sub) (i31.new))
+              '((unreachable))))
             (('add/immediate y x)
              (compile-unary-op/fixnum-fast-path
               x scm-block-type
@@ -1116,9 +1120,19 @@
               `((local.get $i0) (i32.const ,(ash y 1)) (i32.add) (i31.new))
               '((unreachable))))
             (('sub/immediate y x)
-             (error "unimplemented" exp))
+             (compile-unary-op/fixnum-fast-path
+              x scm-block-type
+              ;; FIXME: Overflow to bignum.
+              `((local.get $i0) (i32.const ,(ash y 1)) (i32.sub) (i31.new))
+              '((unreachable))))
             (('mul #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              ;; FIXME: Overflow to bignum.
+              '((local.get $i0)
+                (local.get $i1) (i32.const 1) (i32.shr_s)
+                (i32.mul) (i31.new))
+              '((unreachable))))
             (('div #f x y)
              (error "unimplemented" exp))
             (('quo #f x y)

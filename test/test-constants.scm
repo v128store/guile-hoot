@@ -120,15 +120,30 @@
 (test-call "rerro" (lambda () 'rerro))
 (test-call "1337" (lambda (f) (f)) (lambda () 1337))
 (test-call "43" (lambda (f) (+ (f) 1)) (lambda () 42))
+(test-call "120" (lambda (n)
+                   (let fac ((n n))
+                     (if (eq? n 0)
+                         1
+                         (* n (fac (1- n))))))
+           5)
+(test-call "9227465" (lambda (n)
+                       (let fib ((n n))
+                         (if (<= n 1)
+                             1
+                             (+ (fib (- n 1)) (fib (- n 2))))))
+           34)
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
-;;  (compile '(lambda (f) (+ (f) 1)) #:import-abi? #f #:export-abi? #t
-;;           #:dump-wasm? #t)
+;;  (compile '(lambda (n)
+;;              (let fib ((n n))
+;;                          (if (<= n 1)
+;;                              1
+;;                              (+ (fib (- n 1)) (fib (- n 2))))))
+;;           #:import-abi? #f #:export-abi? #t #:dump-cps? #t #:dump-wasm? #t)
 ;;  (lambda (proc)
 ;;    (call-with-compiled-wasm-file
-;;     (compile '(lambda () 42) #:import-abi? #t #:export-abi? #f
-;;              #:dump-wasm? #t)
+;;     (compile 40 #:import-abi? #t #:export-abi? #f)
 ;;     (lambda (arg)
 ;;       (copy-file proc "/tmp/proc.wasm")
 ;;       (copy-file arg "/tmp/arg.wasm")

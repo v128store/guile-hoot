@@ -1539,14 +1539,14 @@
       (define (push-loop label ctx)
         (match ctx
           ((next-label . stack)
-           (make-ctx label
+           (make-ctx next-label
                      (acons 'loop-headed-by label stack)))))
       (define (push-block label ctx)
         (match ctx
           ((next-label . stack)
            (make-ctx label
                      (acons 'block-followed-by label stack)))))
-      (define (push-if label ctx)
+      (define (push-if ctx)
         (match ctx
           ((next-label . stack)
            (make-ctx next-label (cons 'if-then-else stack)))))
@@ -1556,11 +1556,11 @@
            (let lp ((stack stack) (depth 0))
              (match stack
                (('if-then-else . stack) (lp stack (1+ depth)))
-               ((((or 'loop-headed-by 'block-followed-by) label) . stack)
+               ((((or 'loop-headed-by 'block-followed-by) . label) . stack)
                 (if (eqv? label k)
                     depth
                     (lp stack (1+ depth))))
-               (_ (error "block label not found" k)))))))
+               (_ (error "block label not found" k ctx)))))))
 
       (define (do-tree label ctx)
         (define (code-for-label ctx)
@@ -1608,8 +1608,8 @@
                     (($ $branch kf kt src op param args)
                      `(,@(compile-test op param args)
                        (if #f ,void-block-type
-                           ,(do-branch label kt (cons 'if-then-else ctx))
-                           ,(do-branch label kf (cons 'if-then-else ctx)))))
+                           ,(do-branch label kt (push-if ctx))
+                           ,(do-branch label kf (push-if ctx)))))
                     (($ $switch kf kt* src arg)
                      (error "switch unimplemented"))
                     (($ $prompt k kh src escape? tag)

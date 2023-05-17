@@ -1395,7 +1395,7 @@
                   (i31.get_u)
                   (i32.const #b11)
                   (i32.and)
-                  (i32.const #b10)
+                  (i32.const #b11)
                   (i32.eq))
                  ((i32.const 0)))))
           (#('eq-constant? imm (a))

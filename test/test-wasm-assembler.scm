@@ -164,6 +164,20 @@
                (field $car (mut (ref eq)))
                (field $cdr (mut (ref eq)))))))))
 
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 4 1 96 0 0 3 2 1 0 10 9 1 7 0 65 0 14 0 0 11)
+ (module (func (i32.const 0) (br_table 0))))
+
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 1 127 0 3 2 1 0 10 20 1 18 0 2 64 2
+        64 2 64 32 0 14 2 2 1 0 11 11 11 11)
+ (module
+  (func (param $i i32)
+    (block $l1
+      (block $l2
+        (block $l3
+          (br_table $l1 $l2 $l3 (local.get $i))))))))
+
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))
 

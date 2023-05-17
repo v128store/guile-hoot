@@ -133,6 +133,12 @@
                              (+ (fib (- n 1)) (fib (- n 2))))))
            34)
 
+(test-call "500000000" (lambda ()
+                         (let lp ((n 0))
+                           (if (< n #e5e8)
+                               (lp (1+ n))
+                               n))))
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

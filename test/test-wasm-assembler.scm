@@ -178,6 +178,16 @@
         (block $l3
           (br_table $l1 $l2 $l3 (local.get $i))))))))
 
+(test-wat->wasm
+ #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 127 3 2 1 0 10 14 1 12 0 65 0 4
+        127 65 1 5 65 2 11 11)
+ '(module
+   (func (result i32)
+         (if i32
+             (i32.const 0)
+             (then (i32.const 1))
+             (else (i32.const 2))))))
+
 (when (and (batch-mode?) (not (test-passed?)))
   (exit 1))
 

@@ -237,41 +237,44 @@
     (match x
       (('mut t) (make-array-type #t (parse-storage-type t)))
       (t (make-array-type #f (parse-storage-type t)))))
-  (define (parse-field-type x)
+  (define (parse-field x)
     (match x
       (('field (? id? id) ('mut t))
        (make-field id #t (parse-storage-type t)))
       (('field (? id? id) t)
-       (make-field id #f (parse-storage-type t)))))
+       (make-field id #f (parse-storage-type t)))
+      (('mut t)
+       (make-field #f #t (parse-storage-type t)))
+      (t
+       (make-field #f #f (parse-storage-type t)))))
   (define (parse-struct-type x)
-    (make-struct-type (map parse-field-type x)))
-  (define (parse-sub-type x)
+    (make-struct-type (map parse-field x)))
+  (define (parse-sub-type type)
+    (match type
+      (('sub 'final (? id-or-idx? super) ... type)
+       (make-sub-type #t super (parse-prim-type type)))
+      (('sub (? id-or-idx? super) ... type)
+       (make-sub-type #f super (parse-prim-type type)))
+      (type
+       (parse-prim-type type))))
+  (define (parse-prim-type x)
     (match x
-      (('sub super type)
-       (make-sub-type #f (list super) (parse-type type)))
-      (_
-       (make-sub-type #t '() (parse-type x)))))
+      (('func . sig) (parse-func-sig sig))
+      (('array sig) (parse-array-type sig))
+      (('struct . sig) (parse-struct-type sig))))
   (define (parse-type x)
-    (define (parse-prim-type x)
-      (match x
-        (('func . sig) (parse-func-sig sig))
-        (('array sig) (parse-array-type sig))
-        (('struct . sig) (parse-struct-type sig))))
     (match x
       (('sub id sub)
        (make-sub-type #f (list id) (parse-prim-type sub)))
       (_ (parse-prim-type x))))
-  (define (parse-type-def x)
-    (match x
-      (('rec . tail) (make-rec-group (map parse-rec-type-def tail)))
-      (('sub id sub) (make-rec-group
-                      (list
-                       (make-sub-type #f (list id) (parse-type sub)))))
-      (((? id? id) t) (make-type id (parse-type t)))
-      ((t) (make-type #f (parse-type t)))))
-  (define (parse-rec-type-def x)
-    (match x
-      (('type (? id? id) t) (make-type id (parse-sub-type t)))))
+  (define (parse-type-def def)
+    (define (parse-def def)
+      (match def
+          (((? id-or-idx? id) type) (make-type id (parse-sub-type type)))
+          ((type) (make-type #f (parse-sub-type type)))))
+    (match def
+      (('rec ('type . def) ...) (make-rec-group (map parse-def def)))
+      (def (parse-def def))))
   (define (parse-import x)
     (define (parse-inner mod name kind id tail)
       (match kind

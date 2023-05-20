@@ -461,9 +461,9 @@
                 (((? id-or-idx? target) . in)
                  (lp in (cons target targets)))
                 (_
-                 (match targets
+                 (match (reverse targets)
                    ((target ... default)
-                    (lp/inst in `(,inst ,targets ,default)))
+                    (lp/inst in `(,inst ,target ,default)))
                    (_ (error "no targets for br_table")))))))
            ('call_indirect
             (let*-values (((table in) (parse-id-or-idx in))

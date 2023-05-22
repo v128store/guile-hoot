@@ -203,7 +203,13 @@
        (parse-sig idx sig))
       (sig (parse-sig #f sig))))
   (define (parse-block-type x)
-    (parse-type-use x))
+    (match x
+      ;; cf. emit-block-type in (@ (wasm assemble) assemble-wasm)
+      (((and t (or (? symbol?) ('ref . _))) . tail)
+       (values
+        (make-type-use #f (make-func-sig '() (list (parse-val-type t))))
+        tail))
+      (_ (parse-type-use x))))
   (define (parse-limits x)
     (match x
       (((? u32? min) (? u32? max) . tail)

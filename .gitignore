@@ -1,4 +1,16 @@
-/test/*.log
+Makefile
+Makefile.in
+*.go
+*.log
+*.trs
 /js-runtime/reflect.wasm
 /examples/basic-types.wasm
 /test-wasm-assembler.log
+/aclocal.m4
+/autom4te.cache/
+/build-aux/
+/config.log
+/config.status
+/configure
+/pre-inst-env
+/js-test

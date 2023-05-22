@@ -43,8 +43,8 @@ if (args[0] == '--') {
     args.shift();
 }
 
-if (args.length < 1) {
-    logErr('usage: test-call.js PROC.WASM ARG.WASM...');
+if (args.length < 2) {
+    logErr('usage: test-call.js SRCDIR PROC.WASM ARG.WASM...');
     _exit(1);
 }
 
@@ -67,5 +67,6 @@ async function runTest(call) {
     }
 }
 
-load('reflect.js');
+load(`${args[0]}/js-runtime/reflect.js`);
+args.shift();
 waitFor(runTest(args));

@@ -30,6 +30,10 @@
              (srfi srfi-64))
 
 (define d8 (or (getenv "D8") "d8"))
+(define srcdir (or (getenv "SRCDIR") (getcwd)))
+
+(define (scope-file file-name)
+  (string-append srcdir "/" file-name))
 
 (test-begin "test-constants")
 
@@ -68,13 +72,13 @@
   (call-with-compiled-wasm-file
    (compile constant)
    (lambda (wasm-file-name)
-     (run-d8 "load-wasm-and-print.js" "--" wasm-file-name))))
+     (run-d8 (scope-file "test/load-wasm-and-print.js") "--" srcdir wasm-file-name))))
 
 (define (compile-call form)
   (let lp ((form form) (files '()) (first? #t))
     (match form
       (()
-       (apply run-d8 "test-call.js" "--" (reverse files)))
+       (apply run-d8 (scope-file "test/test-call.js") "--" srcdir (reverse files)))
       ((x . form)
        (call-with-compiled-wasm-file
         (compile x #:import-abi? (not first?) #:export-abi? first?)
@@ -159,4 +163,3 @@
   (exit 1))
 
 (test-end "test-constants")
-

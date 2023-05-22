@@ -8,6 +8,7 @@
              (gnu packages autotools)
              (gnu packages base)
              (gnu packages bash)
+             (gnu packages gawk)
              (gnu packages glib)
              (gnu packages guile)
              (gnu packages icu4c)
@@ -285,10 +286,15 @@
       (license license:bsd-3))))
 
 (packages->manifest
- (list bash
+ (list gawk
+       autoconf
+       automake
+       bash
        binaryen
        coreutils
        grep
        gnu-make
        guile-tailify
+       pkg-config
+       sed
        v8))

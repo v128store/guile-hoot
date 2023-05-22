@@ -43,8 +43,8 @@ if (args[0] == '--') {
     args.shift();
 }
 
-if (args.length != 1) {
-    logErr('usage: load-wasm-and-print.js FOO.WASM');
+if (args.length != 2) {
+    logErr('usage: load-wasm-and-print.js SRCDIR FOO.WASM');
     _exit(1);
 }
 
@@ -58,5 +58,5 @@ async function runTest(wasmFile) {
     }
 }
 
-load('reflect.js');
-waitFor(runTest(args[0]));
+load(`${args[0]}/js-runtime/reflect.js`);
+waitFor(runTest(args[1]));

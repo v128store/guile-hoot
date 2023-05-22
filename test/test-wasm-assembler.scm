@@ -26,6 +26,9 @@
              (ice-9 binary-ports)
              (srfi srfi-64))
 
+(define (scope-file file-name)
+  (string-append (getenv "SRCDIR") "/test/" file-name))
+
 (test-begin "test-wasm-assembler")
 
 (define-syntax-rule (test-wat->wasm expected wat)
@@ -41,7 +44,7 @@
         (i32.const 42))))
 
 (define basic-types.wasm
-  (call-with-input-file "./basic-types.wasm" get-bytevector-all))
+  (call-with-input-file (scope-file "basic-types.wasm") get-bytevector-all))
 (define basic-types/1
   (call-with-input-bytevector basic-types.wasm parse-wasm))
 (define basic-types.wasm/2
@@ -192,4 +195,3 @@
   (exit 1))
 
 (test-end "test-wasm-assembler")
-

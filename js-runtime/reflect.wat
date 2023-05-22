@@ -374,9 +374,9 @@
       (br $Ldone (string.const "false"))))
 
   (func $scm-most-negative-fixnum (export "scm_most_negative_fixnum") (result i32)
-    (i32.const -0x20000000))
+    (i32.const -536870912))
   (func $scm-most-positive-fixnum (export "scm_most_positive_fixnum") (result i32)
-    (i32.const 0x1fffffff))
+    (i32.const 536870911))
   (func $scm-from-fixnum (export "scm_from_fixnum") (param $v i32) (result (ref eq))
     (i31.new (i32.shl (local.get $v) (i32.const 1))))
   (func $scm-from-bignum (export "scm_from_bignum") (param $v (ref extern)) (result (ref eq))

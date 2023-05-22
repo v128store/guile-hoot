@@ -164,6 +164,44 @@ do non-tail calls too.  Recursive fac and fib run (though don't handle
 overflow to bignum yet); speed appears to currently be about 15x slower
 than Guile native.  Something to work on over time.
 
+### 2023-05-22
+
+Conversations from Hoot sync meeting:
+
+- Land Robin's MRs on self-assembling
+- Move stdlib from hoot compile to hoot stdlib
+- Add function to WAT parsing module to parse an expression,
+  unfolding at same time
+- Use that function as part of compute stdlib
+- Need to be able to raise our abstraction for defining runtime functions!
+
+In medium term wanna define more functions in scheme.  Want to compile
+expressions with lexically available environment, but that's kind of a
+separate thing
+
+Might be in medium term that we could define functions in scheme that have
+their implementation in webassembly
+
+Add special logic to compiler to emit WASM code instead of in other ways
+to compile a function (kinda like inline-asm)
+
+Gotta make it nicer to write WASM!  Especially all those damn make-type-use
+things.  If you're parsing WAT, you get around a lot of those
+
+In that file maybe have more emacs indentation rules so the code
+doesn't look terrible.  Should put in local variables or `.dir-locals.el`
+or etc.
+
+Prioritization for this week:
+
+- Land self-assembly MRs
+
+- Move stdlib from hoot compile to hoot stdlib
+- Compute stdlib return standard wasm module but parse from WAT
+  instead of more imperative mode.  Put it in the WAT DSL instead of
+  in scheme.
+- Use WAT more.  Less explicit assembly records, more WAT parsing
+
 ## The near future
 
 ### Differences from Guile's compiler backend

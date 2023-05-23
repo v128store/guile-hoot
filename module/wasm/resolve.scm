@@ -223,7 +223,7 @@
                         (add-struct-field! type-id type-idx field-id))
                       field-id))
                     (_ (values)))
-                  #t)
+                  #f)
                 types)
 
      (define (type-by-idx idx)

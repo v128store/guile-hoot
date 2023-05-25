@@ -1153,14 +1153,31 @@
 
             ;; Integer bitwise operations.  Fast path for fixnums and
             ;; callout otherwise.
-            (('logand #f x y)
-             (error "unimplemented" exp))
-            (('logior #f x y)
-             (error "unimplemented" exp))
-            (('logxor #f x y)
-             (error "unimplemented" exp))
-            (('logsub #f x y)
-             (error "unimplemented" exp))
+            (('logand #f x y)           ;FIXME: implement slow path
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0) (local.get $i1) (i32.and) (i31.new))
+              '((unreachable))))
+            (('logior #f x y)           ;FIXME: implement slow path
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0) (local.get $i1) (i32.or) (i31.new))
+              '((unreachable))))
+            (('logxor #f x y)           ;FIXME: implement slow path
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0) (local.get $i1) (i32.xor) (i31.new))
+              '((unreachable))))
+            (('logsub #f x y)           ;FIXME: implement slow path
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0)
+                (local.get $i1)
+                (i32.const -1)
+                (i32.xor)
+                (i32.and)
+                (i31.new))
+              '((unreachable))))
             (('rsh #f x y)
              (error "unimplemented" exp))
             (('lsh #f x y)

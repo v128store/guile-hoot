@@ -139,6 +139,11 @@
                                (lp (1+ n))
                                n))))
 
+(test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
+(test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
+(test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)
+(test-call "4" (lambda (a b) (logand a (lognot b))) #b1100 #b1010)
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

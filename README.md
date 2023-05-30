@@ -46,8 +46,8 @@ You need Guile from the `wip-tailify` branch.  Then you check out this
 repo:
 
 ```
-$ git clone https://gitlab.com/spritely/guile-hoot-updates
-$ cd guile-hoot-updates
+$ git clone https://gitlab.com/spritely/guile-hoot
+$ cd guile-hoot
 $ echo 42 > 42.scm
 $ GUILE_LOAD_PATH=`pwd`/module guild compile-wasm -o 42.wasm 42.scm
 wrote `42.wasm`
@@ -76,7 +76,7 @@ cmake . -DCMAKE_BUILD_TYPE=Debug
 make
 ```
 
-Then back in `guile-hoot-updates`, just `make`:
+Then back in `guile-hoot`, just `make`:
 
 ```
 $ make
@@ -95,10 +95,10 @@ If all that works you should be able to `make check`:
 
 ```
 $ make check
-cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot-updates/module" /opt/guile/bin/guile test-wasm-assembler.scm
+cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot/module" /opt/guile/bin/guile test-wasm-assembler.scm
 %%%% Starting test test-wasm-assembler  (Writing full log to "test-wasm-assembler.log")
 # of expected passes      3
-cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot-updates/module" /opt/guile/bin/guile test-constants.scm
+cd test/ && D8=~/src/v8/out/x64.release/d8 GUILE_LOAD_PATH="~/src/guile-hoot/module" /opt/guile/bin/guile test-constants.scm
 %%%% Starting test test-constants  (Writing full log to "test-constants.log")
 WARNING: (guile-user): `compile' imported from both (system base compile) and (hoot compile)
 V8 is running with experimental features enabled. Stability and security will suffer.
@@ -152,6 +152,6 @@ Build and upload the image:
 ```
 guix pack -m manifest.scm -f docker -S /bin=bin
 docker load < $pack-from-prev-cmd
-docker tag $image-name-from-prev-cmd:latest registry.gitlab.com/spritely/guile-hoot-updates
-docker push registry.gitlab.com/spritely/guile-hoot-updates
+docker tag $image-name-from-prev-cmd:latest registry.gitlab.com/spritely/guile-hoot
+docker push registry.gitlab.com/spritely/guile-hoot
 ```

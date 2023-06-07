@@ -54,14 +54,14 @@
       i64.load8_u
       i32.store8
       i64.store8)
-     8)
+     0)
     ((i32.load16_s
       i32.load16_u
       i64.load16_s
       i64.load16_u
       i32.store16
       i64.store16)
-     16)
+     1)
     ((i32.load
       f32.load
       i64.load32_s
@@ -69,12 +69,12 @@
       i32.store
       f32.store
       i64.store32)
-     32)
+     2)
     ((i64.load
       f64.load
       i64.store
       f64.store)
-     64)))
+     3)))
 
 (define (parse-wat expr)
   (define (id? x)

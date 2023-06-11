@@ -463,6 +463,7 @@
     (block $Lbignum
       (br_if $Lbignum (i32.eqz (call $bignum-is-i64 (local.get $v))))
       (local.set $tmp (call $bignum-get-i64 (local.get $v)))
+      ;; 536870912 = 0x2000_0000, 1073741824 = 0x4000_0000
       (br_if $Lbignum (i64.gt_u (i64.add (i64.const 536870912)
                                          (local.get $tmp))
                                 (i64.const 1073741824)))
@@ -534,7 +535,7 @@
     (local.set $v (i32.xor (local.get $v)
                            (i32.shr_u (local.get $v) (i32.const 4))))
     (local.set $v (i32.mul (local.get $v)
-                           (i32.const 668265261)))
+                           (i32.const 668265261))) ;; = 0x27d4eb2d
     (i32.xor (local.get $v)
              (i32.shr_u (local.get $v) (i32.const 15))))
 
@@ -911,6 +912,7 @@
     ;; 1<<31
     (table.set $argv (i32.const 18)
                (struct.new $bignum (i32.const 0)
+                           ;; 2147483648 = 0x80000000
                            (call $bignum-from-i64 (i64.const 2147483648))))
     ;; 42+6.9i
     (table.set $argv (i32.const 19)

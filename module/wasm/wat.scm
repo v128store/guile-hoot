@@ -409,6 +409,31 @@
        `(,@args ref.func ,id))
       (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
+      (((and tag 'ref.null) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag (or 'table.grow 'table.set 'table.get))
+        (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag (or 'struct.new)) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag (or 'struct.set 'struct.get))
+        (? id-or-idx? ti)
+        (? id-or-idx? fi) . args)
+       `(,@args ,tag ,ti ,fi))
+      (((and tag (or 'ref.test 'ref.cast)) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag 'string.const) str . args) ;;FIXME: str predicate
+       `(,@args ,tag ,str))
+      (((and tag (or 'array.get 'array.set 'array.get_u 'array.get_s))
+        (? id-or-idx? ti) . args)
+       `(,@args ,tag ,ti))
+      (((and tag (or 'array.new 'array.new_default))
+        (? id-or-idx? ti) . args)
+       `(,@args ,tag ,ti))
+      (((and tag 'return_call) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag 'table.size) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
       ((tag . args)
        `(,@args ,tag))))
   (define (parse-block x block-kind)
@@ -503,6 +528,46 @@
            ((or 'call_ref 'return_call_ref)
             (match in
               (((? id-or-idx? id) . in)
+               (lp/inst in `(,inst ,id)))))
+           ('ref.null
+            (match in
+              ((id . in)
+               (lp/inst in `(,inst ,id)))))
+           ((or 'table.grow 'table.set 'table.get)
+            (match in
+              ((id . in)
+               (lp/inst in `(,inst ,id)))))
+           ('struct.new
+            (match in
+              ((id . in)
+               (lp/inst in `(,inst ,id)))))
+           ((or 'struct.set 'struct.get)
+            (match in
+              ((ti fi . in)
+               (lp/inst in `(,inst ,ti ,fi)))))
+           ((or 'ref.test 'ref.cast)
+            (match in
+              ((id . in)
+               (lp/inst in `(,inst ,id)))))
+           ('string.const
+            (match in
+              ((str . in)
+               (lp/inst in `(,inst ,str)))))
+           ((or 'array.get 'array.set 'array.get_u 'array.get_s)
+            (match in
+              ((ti . in)
+               (lp/inst in `(,inst ,ti)))))
+           ((or 'array.new 'array.new_default)
+            (match in
+              ((ti . in)
+               (lp/inst in `(,inst ,ti)))))
+           ('return_call
+            (match in
+              ((id . in)
+               (lp/inst in `(,inst ,id)))))
+           ('table.size
+            (match in
+              ((id . in)
                (lp/inst in `(,inst ,id)))))
            (_
             (lp/inst in inst)))))))

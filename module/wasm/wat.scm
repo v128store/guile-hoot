@@ -219,6 +219,7 @@
   (define (parse-elem-type x)
     (match x
       (('funcref) 'funcref)
+      ((x) (parse-ref-type x #:error-message "bad elem type"))
       (_ (error "bad elem type"))))
   (define (parse-table-type x)
     (let-values (((limits x) (parse-limits x)))

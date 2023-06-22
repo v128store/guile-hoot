@@ -21,8 +21,8 @@
              (gnu packages version-control))
 
 (define guile-tailify
-  (let ((commit "0a7ef22974526f137f81c7ce43c29007bbac3136")
-        (revision "3"))
+  (let ((commit "018c5b9ad9c29183075f5f37e4f01081002e3e98")
+        (revision "4"))
     (package
      (inherit guile-next)
      (version (git-version "3.0.8" revision commit))
@@ -34,7 +34,7 @@
              (commit commit)))
        (file-name (git-file-name "guile" version))
        (sha256
-        (base32 "0kxcnc1lyhw2bw2f9b9zmn2kp0sj5dnzzaz5m6a35dr630j7fa6s")))))))
+        (base32 "1nn819zngp3wr2x1a9028zgsjdfrq4a0274vf3gzdf6hnlb3i895")))))))
 
 (define binaryen
   (let ((commit "0578862dc5569a4b544800d666458d698536a1a5")

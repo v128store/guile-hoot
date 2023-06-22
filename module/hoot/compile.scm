@@ -36,14 +36,10 @@
                           default-warning-level
                           default-optimization-level))
   #:use-module (system base language)
+  #:use-module (system base target)
   #:use-module (language cps)
   #:use-module (language cps intset)
   #:use-module (language cps intmap)
-  #:use-module (language cps tailify)
-  #:use-module (language cps verify)
-  #:use-module (language cps renumber)
-  #:use-module (language cps dce)
-  #:use-module (language cps simplify)
   #:use-module (language cps dump)
   #:use-module (language cps utils)
   #:use-module (rnrs bytevectors)
@@ -53,7 +49,6 @@
   #:use-module (wasm resolve)
   #:use-module (wasm parse)
   #:use-module (wasm types)
-  #:use-module (hoot unify-returns)
   #:export (read-and-compile
             compile-file
             compile))
@@ -1863,13 +1858,12 @@
                                (dump-wasm? #f)
                                (opts '()))
   (define (lower-and-tailify cps)
-    (define lower-cps
-      (let ((make-lower (language-lowerer (lookup-language 'cps))))
-        (make-lower optimization-level opts)))
-    (define lowered-cps (lower-cps cps env))
-    (define tailified (unify-returns (tailify lowered-cps)))
-    (verify tailified)
-    (renumber (simplify (eliminate-dead-code tailified))))
+    (with-target "wasm32-unknown-hoot"
+      (lambda ()
+        (define lower-cps
+          (let ((make-lower (language-lowerer (lookup-language 'cps))))
+            (make-lower optimization-level opts)))
+        (lower-cps cps env))))
   (let ((cps (lower-and-tailify cps)))
     (when dump-cps?
       (dump cps))
@@ -1892,10 +1886,6 @@
                   (dump-cps? #f)
                   (dump-wasm? #f)
                   (opts '()))
-  ;; FIXME: Right now the tree-il->cps phase will expand primitives to
-  ;; Guile VM primitives, e.g. including `heap-object?` and so on.  We
-  ;; need to instead expand into more wasm-appropriate primitives, at
-  ;; some point anyway.
   (define cps
     (%compile exp #:env env #:from from #:to 'cps
               #:optimization-level optimization-level

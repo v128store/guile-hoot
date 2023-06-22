@@ -1,4 +1,4 @@
-GUILE_WARNINGS = -Wunbound-variable -Warity-mismatch -Wformat
+GUILE_WARNINGS = -W2
 moddir=$(prefix)/share/guile/site/$(GUILE_EFFECTIVE_VERSION)
 godir=$(libdir)/guile/$(GUILE_EFFECTIVE_VERSION)/site-ccache
 
@@ -11,7 +11,6 @@ SOURCES = 					\
   wasm/dump.scm					\
   wasm/link.scm					\
   wasm/parse.scm				\
-  hoot/unify-returns.scm			\
   hoot/compile.scm				\
   scripts/compile-wasm.scm
 

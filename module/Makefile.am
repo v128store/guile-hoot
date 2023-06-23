@@ -12,6 +12,7 @@ SOURCES = 					\
   wasm/link.scm					\
   wasm/parse.scm				\
   hoot/compile.scm				\
+  hoot/stdlib.scm				\
   scripts/compile-wasm.scm
 
 SUFFIXES = .scm .go

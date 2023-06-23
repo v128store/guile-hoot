@@ -382,6 +382,12 @@
                                                   (make-param '$b scm-type))
                                             '(i32)))
            '()
+           `((unreachable)))
+          (make-func
+           '$u64->bignum
+           (make-type-use #f (make-func-sig (list (make-param '$a 'i64))
+                                            (list scm-type)))
+           '()
            `((unreachable)))))
 
   ;; Because V8 and binaryen don't really support non-nullable table

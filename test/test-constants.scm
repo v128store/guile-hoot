@@ -160,6 +160,9 @@
 (test-call "42" (lambda (n t) (when t (set! n 42)) n) 10 #t)
 (test-call "10" (lambda (n t) (when t (set! n 42)) n) 10 #f)
 
+(test-call "10" (lambda (bv) ((@ (rnrs bytevectors) bytevector-length) bv))
+           #vu8(0 1 2 3 4 5 6 7 8 9))
+
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

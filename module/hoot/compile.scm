@@ -1322,7 +1322,7 @@
                   '())))
               (y
                `((block #f ,void-block-type
-                        ,(node-within label ys (push-block label ctx)))
+                        ,(node-within label ys (push-block y ctx)))
                  ,@(do-tree y ctx)))))))
       (define code (do-tree kfun (make-ctx #f '())))
       (define (type-for-repr repr)

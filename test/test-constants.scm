@@ -152,6 +152,11 @@
 (test-call "1" (lambda (a) (car a)) '(1 . 2))
 (test-call "2" (lambda (a) (cdr a)) '(1 . 2))
 
+(test-call "#(1 2 3)" (lambda (a b c) (vector a b c)) 1 2 3)
+(test-call "3" (lambda (v) (vector-ref v 2)) #(1 2 3))
+(test-call "2" (lambda (v idx) (vector-ref v idx)) #(1 2 3) 1)
+(test-call "#(42 42 42)" (lambda (n) (make-vector n 42)) 3)
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

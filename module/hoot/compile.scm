@@ -766,44 +766,36 @@
                  ,(local.get val)
                  (struct.set ,type ,pos))))
 
-            (('allocate-words annotation nfields)
+            (('struct-vtable #f struct)
              (error "unimplemented" exp))
-            (('allocate-words/immediate (annotation . nfields))
+            (('vtable-size #f struct)
              (error "unimplemented" exp))
-            (('allocate-pointerless-words annotation nfields)
+            (('allocate-struct nfields vtable)
              (error "unimplemented" exp))
-            (('allocate-pointerless-words/immediate (annotation . nfields))
+            (('struct-ref idx struct)
+             (error "unimplemented" exp))
+            (('struct-set! idx struct val)
              (error "unimplemented" exp))
 
-            ;; Object access.  Use the "annotation" param (or param
-            ;; component) to determine which kind of object is being
-            ;; accessed, infallibly cast to the appropriate struct type,
-            ;; and emit the appropriate struct/array field access.
-            (('scm-ref annotation obj idx)
+            (('string-length #f str)
              (error "unimplemented" exp))
-            (('scm-ref/immediate (annotation . idx) obj)
+            (('string-ref #f str idx)
              (error "unimplemented" exp))
-            (('word-ref annotation obj idx)
+            (('string-set! #f str idx val)
              (error "unimplemented" exp))
-            (('word-ref/immediate (annotation . idx) obj)
+
+            (('make-atomic-box #f val)
              (error "unimplemented" exp))
-            (('pointer-ref/immediate (annotation . idx) obj)
+            (('atomic-box-ref #f box)
              (error "unimplemented" exp))
-            (('tail-pointer-ref/immediate (annotation . idx) obj)
+            (('atomic-box-set! #f box val)
              (error "unimplemented" exp))
-            (('scm-set! annotation obj idx val)
+            (('atomic-box-swap! #f box val)
              (error "unimplemented" exp))
-            (('scm-set!/tag annotation obj val)
+            (('atomic-box-compare-and-swap! #f box expected desired)
              (error "unimplemented" exp))
-            (('scm-set!/immediate (annotation . idx) obj val)
-             (error "unimplemented" exp))
-            (('word-set! annotation obj idx val)
-             (error "unimplemented" exp))
-            (('word-set!/immediate (annotation . idx) obj val)
-             (error "unimplemented" exp))
-            (('pointer-set!/immediate (annotation . idx) obj val)
-             (error "unimplemented" exp))
-            (('string-set! #f string index char)
+
+            (('f64->scm #f f64)
              (error "unimplemented" exp))
 
             ;; Generic arithmetic.  Emit a fixnum fast-path and a
@@ -1084,17 +1076,6 @@
             (('f64-set! ann obj ptr idx val)
              (error "unimplemented" exp))
 
-            ;; Operations on atomic boxes.
-            (('atomic-scm-ref/immediate ('atomic-box . 1) obj)
-             (error "unimplemented" exp))
-            (('atomic-scm-swap!/immediate ('atomic-box . 1) obj val)
-             (error "unimplemented" exp))
-            (('atomic-scm-compare-and-swap!/immediate ('atomic-box . 1)
-              obj expected desired)
-             (error "unimplemented" exp))
-            (('atomic-scm-set!/immediate ('atomic-box . 1) obj val)
-             (error "unimplemented" exp))
-
             ;; Infallible unboxing of fixnums and chars.
             (('untag-fixnum #f src)
              `(,(local.get src)
@@ -1247,6 +1228,15 @@
           (#('compnum? #f (a))          `(,(local.get a) (ref.test #f $compnum)))
           (#('fracnum? #f (a))          `(,(local.get a) (ref.test #f $fracnum)))
           (#('eq? #f (a b))             `(,(local.get a) ,(local.get b) (ref.eq)))
+
+          (('vtable-vtable? #f (vtable))
+           (error "unimplemented branch" op param args))
+          ;; FIXME: fold these two in pre-pass.
+          (('vtable-has-unboxed-fields? nfields (vtable))
+           `((i32.const 0)))
+          (('vtable-field-boxed? idx (vtable))
+           `((i32.const 1)))
+            
           (#('heap-numbers-equal? #f (a b))
            `(,(local.get a) ,(local.get b) (call $heap-numbers-equal?)))
           (#('< #f (a b))

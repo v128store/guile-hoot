@@ -745,6 +745,27 @@
              ;; Need to model bv-contents in a way other than 'ptr.
              (error "unimplemented" exp))
 
+            (('make-closure nfree code)
+             `((i32.const 0)
+               ,(local.get code)
+               ,@(make-list nfree '(i32.const 0))
+               (struct.new ,(closure-type nfree))))
+            (('closure-ref (idx . nfree) closure)
+             (let ((type (closure-type nfree))
+                   ;; Two header fields: hash and proc.
+                   (pos (+ idx 2)))
+               `(,(local.get closure)
+                 (ref.cast #f ,type)
+                 (struct.get ,type ,pos))))
+            (('closure-set! (idx . nfree) closure val)
+             (let ((type (closure-type nfree))
+                   ;; Two header fields: hash and proc.
+                   (pos (+ idx 2)))
+               `(,(local.get closure)
+                 (ref.cast #f ,type)
+                 ,(local.get val)
+                 (struct.set ,type ,pos))))
+
             (('allocate-words annotation nfields)
              (error "unimplemented" exp))
             (('allocate-words/immediate (annotation . nfields))

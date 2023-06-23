@@ -1185,6 +1185,35 @@
              ,(local.get b)
              (f64.eq)))))
          
+      (define (compile-throw src op param args)
+        ;; FIXME: Instead of dying, we need to implement exception
+        ;; handling, as in Guile.
+        (match (vector op param args)
+          (#('throw #f (key args))
+           `((string.const "throw")
+             (i32.const 0)
+             ,(local.get key)
+             ,(local.get args)
+             (struct.new $pair)
+             (call $die)
+             (unreachable)))
+          (#('throw/value param (val))
+           `((string.const "throw/value")
+             (i32.const 0)
+             ,(local.get val)
+             ,@(compile-constant param)
+             (struct.new $pair)
+             (call $die)
+             (unreachable)))
+          (#('throw/value+data param (val))
+           `((string.const "throw/value+data")
+             (i32.const 0)
+             ,(local.get val)
+             ,@(compile-constant param)
+             (struct.new $pair)
+             (call $die)
+             (unreachable)))))
+
       ;; See "Beyond Relooper: Recursive Translation of Unstructured
       ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP
       ;; 2022.
@@ -1268,7 +1297,7 @@
                     (($ $prompt k kh src escape? tag)
                      (error "prompts should be removed by tailification?"))
                     (($ $throw src op param args)
-                     (error "throw unimplemented"))))
+                     (compile-throw src op param args))))
                  (($ $kreceive)
                   (error "kreceive should be tailified away"))
                  (($ $kfun src meta self ktail kentry)

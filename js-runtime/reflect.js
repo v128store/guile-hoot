@@ -293,6 +293,11 @@ class Scheme {
     keyword_name(x) { return this.#instance.exports.keyword_name(x.obj); }
 }
 
+class SchemeTrapError extends Error {
+    constructor(tag, data) { super(); this.tag = tag; this.data = data; }
+    toString() { return `SchemeTrap(${this.tag}, ${this.data})`; }
+}
+
 class SchemeModule {
     #instance;
     static #rt = {
@@ -310,7 +315,9 @@ class SchemeModule {
         make_weak_map() { return new WeakMap; },
         weak_map_get(map, k) { return map.get(k); },
         weak_map_set(map, k, v) { return map.set(k, v); },
-        weak_map_delete(map, k) { return map.delete(k); }
+        weak_map_delete(map, k) { return map.delete(k); },
+
+        die(tag, data) { throw new SchemeTrapError(tag, data); }
     };
 
     constructor(instance) {

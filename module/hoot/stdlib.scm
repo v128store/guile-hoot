@@ -211,7 +211,10 @@
                                           => ()))
      (make-import "rt" "weak_map_delete" 'func '$weak-map-delete
                   (imported-function-type ((make-ref-type #f 'extern) scm-type)
-                                          => ('i32)))))
+                                          => ('i32)))
+     (make-import "rt" "die" 'func '$die
+                  (imported-function-type ((make-ref-type #f 'string) scm-type)
+                                          => ()))))
 
   (define funcs
     (list (make-func

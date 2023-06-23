@@ -216,6 +216,29 @@ allocate objects with Wasm/GC typed objects.
 
 ## The near future
 
+### Cast optimizations
+
+In WebAssembly, `vector-length` needs to work on a value of type
+`(struct $vector)`.  But generally what is flowing around is the `(ref
+eq)` unitype, so we have to introduce explicit `ref.cast` operations.
+Still, type checks can help us automatically recover this information:
+because `vector-length` is dominated by a `vector?` check, we should be
+able to use `br_on_cast` or similar.
+
+Right now we're just going to insert casts right before `vector-ref` et
+al, as we emit the `vector-ref`.  But really we should instead do like
+this:
+ 1. Add a pass to explicitly insert `$vector` casts right before each
+    vector accessor (or pairs, structs, etc).
+ 2. That pass also inserts casts on the true branch of each `vector?`
+    primcall.
+ 3. Run CSE to eliminate casts at the access points and instead use the
+    `$vector` cast after the type check.  This is already a win because
+    probably there's more than one access.
+ 4. When emitting wasm, detect a `br_on_cast` if a branch is followed by
+    a cast.  Not sure how this integrates with the "beyond relooper"
+    design though!
+
 ### Other potential starter tasks
 
 Some good starter tasks for new contributors:

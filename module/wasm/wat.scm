@@ -420,8 +420,10 @@
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
+      (((and tag (or 'ref.test 'ref.cast)) 'null (? id-or-idx? id) . args)
+       `(,@args ,tag #t ,id))
       (((and tag (or 'ref.test 'ref.cast)) (? id-or-idx? id) . args)
-       `(,@args ,tag ,id))
+       `(,@args ,tag #f ,id))
       (((and tag 'string.const) str . args) ;;FIXME: str predicate
        `(,@args ,tag ,str))
       (((and tag (or 'array.get 'array.set 'array.get_u 'array.get_s))
@@ -547,8 +549,8 @@
                (lp/inst in `(,inst ,ti ,fi)))))
            ((or 'ref.test 'ref.cast)
             (match in
-              ((id . in)
-               (lp/inst in `(,inst ,id)))))
+              ((nullable? ht . in)
+               (lp/inst in `(,inst nullable? ,(parse-heap-type rt))))))
            ('string.const
             (match in
               ((str . in)

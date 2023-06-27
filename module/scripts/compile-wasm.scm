@@ -149,9 +149,12 @@ options."
                (warnings unsupported-warning))))
 
 (define (show-version)
-  (format #t "compile-wasm (GNU Guile) ~A~%" (version))
-  (format #t "Copyright (C) 2023  Free Software Foundation, Inc.
-License LGPLv3+: GNU LGPL version 3 or later <http://gnu.org/licenses/lgpl.html>.
+  (format #t "compile-wasm ~A~%" (version))
+  (format #t "Copyright (C) 2023  Spritely Institute, Igalia.
+Part of guile-hoot:
+  https://gitlab.com/spritely/guile-hoot
+Licensed under the Apache License, Version 2.0:
+  http://www.apache.org/licenses/LICENSE-2.0
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.~%"))
 

@@ -21,35 +21,7 @@
 
 (define-module (wasm types)
   #:use-module (ice-9 match)
-  #:export (<wasm> make-wasm
-            <param> make-param
-            <func-sig> make-func-sig
-            <type-use> make-type-use
-            <ref-type> make-ref-type
-            <array-type> make-array-type
-            <field> make-field
-            <struct-type> make-struct-type
-            <sub-type> make-sub-type
-            <rec-group> make-rec-group
-            <limits> make-limits
-            <table-type> make-table-type
-            <mem-type> make-mem-type
-            <global-type> make-global-type
-            <type> make-type
-            <import> make-import
-            <export> make-export
-            <mem-arg> make-mem-arg
-            <elem> make-elem
-            <data> make-data
-            <tag> make-tag
-            <local> make-local
-            <func> make-func
-            <table> make-table
-            <memory> make-memory
-            <global> make-global
-            <custom> make-custom
-
-            find-type))
+  #:export (find-type))  ; rest of type stuff implicitly exported
 
 (define-syntax define-simple-record-type
   (lambda (x)
@@ -60,10 +32,19 @@
        (let ((stem (let ((str (symbol->string (syntax->datum #'<rt>))))
                      (string->symbol
                       (substring str 1 (1- (string-length str)))))))
-         (with-syntax ((make-rt (id-append #'<rt> 'make- stem)))
+         (with-syntax ((make-rt (id-append #'<rt> 'make- stem))
+                       (rt? (id-append #'<rt> stem '?))
+                       ((getter ...) (map (lambda (f)
+                                            (id-append #'<rt> stem '-
+                                                       (syntax->datum f)))
+                                          #'(field ...))))
            #'(begin
                (define <rt> (make-record-type '<rt> '(field ...)))
-               (define make-rt (record-constructor <rt>)))))))))
+               (define make-rt (record-constructor <rt>))
+               (define rt? (record-predicate <rt>))
+               (begin
+                 (define getter (record-accessor <rt> 'field)) ...)
+               (export <rt> make-rt rt? getter ...))))))))
 (define-syntax-rule (define-simple-record-types (rt field ...) ...)
   (begin
     (define-simple-record-type rt field ...)

@@ -21,12 +21,18 @@ SCM_LOG_COMPILER = $(top_builddir)/pre-inst-env $(GUILE)
 AM_SCM_LOG_FLAGS = --no-auto-compile
 JS_LOG_COMPILER = $(top_builddir)/js-test
 AM_JS_LOG_FLAGS = $(V8_FEATURES)
-CLEANFILES += $(TESTS:test/%.scm=%.log)
+CLEANFILES += $(SCM_TESTS:test/%.scm=%.log)
 
-TESTS =						\
-  examples/basic-types.js			\
+SCM_TESTS = 					\
   test/test-wasm-assembler.scm			\
   test/test-constants.scm
+
+JS_TESTS = 					\
+  examples/basic-types.js
+
+TESTS =						\
+  $(JS_TESTS)					\
+  $(SCM_TESTS)
 
 EXTRA_DIST = 					\
   $(WATS)					\

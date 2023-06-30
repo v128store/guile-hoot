@@ -555,7 +555,7 @@
            ((or 'ref.test 'ref.cast)
             (match in
               ((nullable? ht . in)
-               (lp/inst in `(,inst nullable? ,(parse-heap-type ht))))))
+               (lp/inst in `(,inst ,nullable? ,(parse-heap-type ht))))))
            ('string.const
             (match in
               ((str . in)

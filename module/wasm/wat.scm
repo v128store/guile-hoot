@@ -407,7 +407,8 @@
        `(,@args ref.func ,id))
       (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
-      (((and tag 'ref.null) (? id-or-idx? id) . args)
+      ;; FIXME: check id
+      (((and tag 'ref.null) id . args)
        `(,@args ,tag ,id))
       (((and tag (or 'table.grow 'table.set 'table.get))
         (? id-or-idx? id) . args)
@@ -418,9 +419,15 @@
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
-      (((and tag (or 'ref.test 'ref.cast)) 'null (? id-or-idx? id) . args)
+      ;; FIXME: check id
+      (((and tag (or 'ref.test 'ref.cast)) 'null id . args)
        `(,@args ,tag #t ,id))
-      (((and tag (or 'ref.test 'ref.cast)) (? id-or-idx? id) . args)
+      ;; FIXME: check id
+      (((and tag (or 'ref.test 'ref.cast))
+        (? boolean? nullable?) id . args)
+       `(,@args ,tag ,nullable? ,id))
+      ;; FIXME: check id
+      (((and tag (or 'ref.test 'ref.cast)) id . args)
        `(,@args ,tag #f ,id))
       (((and tag 'string.const) str . args) ;;FIXME: str predicate
        `(,@args ,tag ,str))
@@ -548,7 +555,7 @@
            ((or 'ref.test 'ref.cast)
             (match in
               ((nullable? ht . in)
-               (lp/inst in `(,inst nullable? ,(parse-heap-type ht))))))
+               (lp/inst in `(,inst ,nullable? ,(parse-heap-type ht))))))
            ('string.const
             (match in
               ((str . in)

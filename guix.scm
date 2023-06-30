@@ -36,32 +36,6 @@
        (sha256
         (base32 "1nn819zngp3wr2x1a9028zgsjdfrq4a0274vf3gzdf6hnlb3i895")))))))
 
-(define binaryen
-  (let ((commit "0578862dc5569a4b544800d666458d698536a1a5")
-        (revision "1"))
-    (package
-     (name "binaryen")
-     (version (git-version "112" revision commit))
-     (source
-      (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://github.com/WebAssembly/binaryen")
-             (commit commit)))
-       (file-name (git-file-name name version))
-       (sha256
-        (base32 "0y6gaws118ipg3nljj99db3jrsfy9g0mciawc7qrv32c5kj2bp14"))))
-     (build-system cmake-build-system)
-     (arguments
-      ;; Tests require using bundled googletest via a submodule.
-      '(#:configure-flags '("-DBUILD_TESTS=OFF"
-                            "-DCMAKE_BUILD_TYPE=Debug")
-        #:tests? #f))
-     (home-page "https://github.com/WebAssembly/binaryen")
-     (synopsis "Binaryen")
-     (description "Binaryen")
-     (license license:asl2.0))))
-
 (define gn
   (let ((commit "b25a2f8c2d33f02082f0f258350f5e22c0973108")
         (revision "1"))
@@ -296,7 +270,7 @@
   (native-inputs
    (list autoconf automake pkg-config))
   (inputs
-   (list binaryen guile-tailify v8))
+   (list guile-tailify v8))
   (synopsis "WASM compiler for Guile Scheme")
   (description "Guile-hoot is an ahead-of-time WebAssembly compiler for GNU Guile.")
   (home-page "https://spritely.institute")

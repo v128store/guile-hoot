@@ -1,4 +1,3 @@
-BINARYEN_FEATURES=--enable-gc --enable-strings --enable-tail-call --enable-reference-types --enable-bulk-memory
 V8_FEATURES=--experimental-wasm-gc --experimental-wasm-stringref --experimental-wasm-return-call
 
 SUBDIRS = module
@@ -14,7 +13,8 @@ SUFFIXES = .wat .wasm
 # The mkdir is necessary for 'make distcheck' since it's building in a
 # different directory than the project root.
 .wat.wasm:
-	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(WASM_AS) $(BINARYEN_FEATURES) -o "$@" "$<"
+	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
+	  $(top_builddir)/pre-inst-env guild assemble-wasm -o "$@" "$<"
 
 TEST_EXTENSIONS = .js .scm
 SCM_LOG_COMPILER = $(top_builddir)/pre-inst-env $(GUILE)

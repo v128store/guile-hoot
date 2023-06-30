@@ -91,6 +91,7 @@
 (test-compilation 42 "42")
 (test-compilation 100 "100")
 (test-compilation -1 "-1")
+(test-compilation -42 "-42")
 (test-compilation #f "false")
 (test-compilation '#nil "#nil")
 (test-compilation '() "()")

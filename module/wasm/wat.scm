@@ -548,7 +548,7 @@
            ((or 'ref.test 'ref.cast)
             (match in
               ((nullable? ht . in)
-               (lp/inst in `(,inst nullable? ,(parse-heap-type rt))))))
+               (lp/inst in `(,inst nullable? ,(parse-heap-type ht))))))
            ('string.const
             (match in
               ((str . in)

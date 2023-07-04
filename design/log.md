@@ -214,6 +214,12 @@ type checks and bailouts as part of explicit control flow, but CPS
 conversion residualizes e.g. `vector-ref` etc.  This will let Hoot
 allocate objects with Wasm/GC typed objects.
 
+### 2023-07-04
+
+Finished adding support for vectors, pairs, closures, variables/boxes,
+structs, and started on bytevectors.  Next up will be the dynamic
+environment.
+
 ## The near future
 
 ### Cast optimizations

@@ -500,25 +500,28 @@
               ,@code)))
         (define (restore/raw memory sp idx load-inst alignment)
           (restore sp idx `((,load-inst ,(make-mem-arg memory idx alignment)))))
-        (define (restore/ref table sp idx)
+        (define (restore/ref table sp idx cast)
           (restore sp idx `(,@(if (zero? idx) '() `((i32.const ,idx) (i32.add)))
                             (table.get ,table)
-                            (ref.as_non_null))))
+                            ,@cast)))
 
         (define (visit/raw idx store-inst load-inst alignment)
           (cons (save/raw '$raw-stack '$raw-sp '$grow-raw-stack idx store-inst
                           alignment)
                 (restore/raw '$raw-stack '$raw-sp idx load-inst alignment)))
-        (define (visit/ref table sp grow idx)
+        (define (visit/ref table sp grow idx restore-cast)
           (cons (save/ref table sp grow idx)
-                (restore/ref table sp idx)))
+                (restore/ref table sp idx restore-cast)))
 
         (define (visit-i64 idx) (visit/raw idx 'i64.store 'i64.load 8))
         (define (visit-f64 idx) (visit/raw idx 'f64.store 'f64.load 8))
         (define (visit-scm idx)
-          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx))
+          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx '((ref.as_non_null))))
+        (define (visit-raw-bytevector idx)
+          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx
+                     '((ref.cast #f $raw-bytevector))))
         (define (visit-ret idx)
-          (visit/ref '$ret-stack '$ret-sp '$grow-ret-stack idx))
+          (visit/ref '$ret-stack '$ret-sp '$grow-ret-stack idx '((ref.as_non_null))))
 
         (let lp ((reprs reprs) (out '())
                  (raw-size 0) (scm-size 0) (ret-size 0))
@@ -542,7 +545,11 @@
                 (lp reprs
                     (cons (visit-scm scm-size) out)
                     raw-size (1+ scm-size) ret-size))
-               ('ptr
+               ('raw-bytevector
+                (lp reprs
+                    (cons (visit-raw-bytevector scm-size) out)
+                    raw-size (1+ scm-size) ret-size))
+               ('code
                 (lp reprs
                     (cons (visit-ret ret-size) out)
                     raw-size scm-size (1+ ret-size))))))))
@@ -779,8 +786,9 @@
                (array.len)
                (i64.extend_i32_u)))
             (('bv-contents #f bv)
-             ;; Need to model bv-contents in a way other than 'ptr.
-             (error "unimplemented" exp))
+             `(,(local.get bv)
+               (ref.cast #f $bytevector)
+               (struct.get $bytevector $vals)))
 
             (('make-closure nfree code)
              `((i32.const 0)
@@ -1092,13 +1100,22 @@
             ;; For native Guile, these bytevector accesses take three
             ;; parameters: the object itself, which is unused but keeps
             ;; the pointer alive; a pointer to the actual bytes; and an
-            ;; index.  For WebAssembly we'll pass the $raw-bytevector as
-            ;; the ptr and not reference the object.  Annoyingly there
-            ;; are no native multi-byte accesses to i8 arrays.
+            ;; index.  For WebAssembly we pass the $raw-bytevector as
+            ;; the ptr and not reference the object.
             (('u8-ref ann obj ptr idx)
-             (error "unimplemented" exp))
+             `(,(local.get ptr)
+               ,(local.get idx)
+               (i32.wrap_i64)
+               (array.get_u $raw-bytevector)
+               (i64.extend_i32_u)))
             (('s8-ref ann obj ptr idx)
-             (error "unimplemented" exp))
+             `(,(local.get ptr)
+               ,(local.get idx)
+               (i32.wrap_i64)
+               (array.get_s $raw-bytevector)
+               (i64.extend_i32_s)))
+            ;; Annoyingly there are no native multi-byte accesses to i8
+            ;; arrays.
             (('u16-ref ann obj ptr idx)
              (error "unimplemented" exp))
             (('s16-ref ann obj ptr idx)
@@ -1115,10 +1132,13 @@
              (error "unimplemented" exp))
             (('f64-ref ann obj ptr idx)
              (error "unimplemented" exp))
-            (('u8-set! ann obj ptr idx val)
-             (error "unimplemented" exp))
-            (('s8-set! ann obj ptr idx val)
-             (error "unimplemented" exp))
+            (((or 'u8-set! 's8-set!) ann obj ptr idx val)
+             `(,(local.get ptr)
+               ,(local.get idx)
+               (i32.wrap_i64)
+               ,(local.get val)
+               (i32.wrap_i64)
+               (array.set $raw-bytevector)))
             (('u16-set! ann obj ptr idx val)
              (error "unimplemented" exp))
             (('s16-set! ann obj ptr idx val)
@@ -1540,7 +1560,8 @@
           ('scm scm-type)
           ('f64 'f64)
           ((or 's64 'u64) 'i64)
-          ('ptr (make-ref-type #f '$kvarargs))))
+          ('raw-bytevector (make-ref-type #f '$raw-bytevector))
+          ('code (make-ref-type #f '$kvarargs))))
       (define (add-locals-from-code code)
         (define locals (make-hash-table))
         (define (visit-inst inst)

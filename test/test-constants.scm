@@ -172,6 +172,10 @@
 (test-call "247" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u8-ref) bv 9))
            #vu8(0 #xff 2 #xfd 4 #xfb 6 #xf9 8 #xf7))
 
+(test-call "3" (lambda (str) (string-length str)) "fox")
+(test-call "#\f" (lambda (str) (string-ref str 0)) "fox")
+(test-call "#\x" (lambda (str) (string-ref str 2)) "fox")
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

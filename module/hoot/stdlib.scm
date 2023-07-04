@@ -167,10 +167,10 @@
                  ($vtable (mut (make-ref-type #t '$vtable))))
          (struct ($vtable $struct)
                  ($vtable (mut (make-ref-type #t '$vtable)))
-                 ($field0 (mut scm-type))
-                 ($field1 (mut scm-type))
-                 ($field2 (mut scm-type))
-                 ($field3 (mut scm-type))))))))
+                 ($flags (mut scm-type))
+                 ($nfields (mut scm-type))
+                 ($name (mut scm-type))
+                 ($print (mut scm-type))))))))
 
   (define types (append func-types heap-types))
 

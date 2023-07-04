@@ -1300,12 +1300,7 @@
                (i32.and)
                (i32.const ,(ash vtable-validated-value 1))
                (i32.eq))))
-          ;; FIXME: fold these two in pre-pass.
-          (#('vtable-has-unboxed-fields? nfields (vtable))
-           `((i32.const 0)))
-          (#('vtable-field-boxed? idx (vtable))
-           `((i32.const 1)))
-            
+
           (#('heap-numbers-equal? #f (a b))
            `(,(local.get a) ,(local.get b) (call $heap-numbers-equal?)))
           (#('< #f (a b))

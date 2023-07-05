@@ -95,7 +95,7 @@
 (test-compilation '#nil "#nil")
 (test-compilation '() "()")
 (test-compilation #t "true")
-(test-compilation #\a "#\\x61")
+(test-compilation #\a "#\\a")
 (test-compilation (if #f #f) "#<unspecified>")
 ;(test-compilation the-eof-object "#<eof>")
 (test-compilation '(1 . 2) "(1 . 2)")
@@ -173,8 +173,8 @@
            #vu8(0 #xff 2 #xfd 4 #xfb 6 #xf9 8 #xf7))
 
 (test-call "3" (lambda (str) (string-length str)) "fox")
-(test-call "#\f" (lambda (str) (string-ref str 0)) "fox")
-(test-call "#\x" (lambda (str) (string-ref str 2)) "fox")
+(test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
+(test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

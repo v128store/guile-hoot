@@ -3,6 +3,8 @@ class Char {
         this.codepoint = codepoint;
     }
     toString() {
+        let ch = String.fromCodePoint(this.codepoint);
+        if (ch.match(/[a-zA-Z0-9$[\]().]/)) return `#\\${ch}`;
         return `#\\x${this.codepoint.toString(16)}`;
     }
 }

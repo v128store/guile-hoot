@@ -22,6 +22,7 @@
 (define-module (hoot stdlib)
   #:use-module (ice-9 match)
   #:use-module (wasm types)
+  #:use-module (wasm wat)
   #:export (compute-stdlib))
 
 (define void-block-type (make-type-use #f (make-func-sig '() '())))
@@ -36,183 +37,250 @@
                        (make-param '$arg2 scm-type))'()))
 
 (define (compute-stdlib import-abi?)
-  (define func-types
-    (list (make-type '$kvarargs kvarargs-sig)))
+  (define wasm
+    (parse-wat
+     `((type $kvarargs
+             (func (param $nargs i32)
+                   (param $arg0 (ref eq))
+                   (param $arg1 (ref eq))
+                   (param $arg2 (ref eq))))
 
-  (define heap-types
-    (letrec-syntax
-        ((struct-field (syntax-rules (mut)
-                         ((_ name (mut type))
-                          (make-field 'name #t type))
-                         ((_ name type)
-                          (make-field 'name #f type))))
-         (struct-type (syntax-rules ()
-                        ((_ (field spec ...) ...)
-                         (make-struct-type (list (struct-field field spec ...) ...)))))
-         (struct* (syntax-rules ()
-                    ((_ (name) (field spec ...) ...)
-                     (make-type 'name
-                                (struct-type (field spec ...) ...)))
-                    ((_ (name super ...) (field spec ...) ...)
-                     (make-type 'name
-                                (make-sub-type
-                                 #f
-                                 '(super ...)
-                                 (struct-type (field spec ...) ...))))))
-         (struct (syntax-rules ()
-                   ((_ (name super ...) (field spec ...) ...)
-                    (struct* (name super ...)
-                             ($hash (mut 'i32))
-                             (field spec ...) ...)))))
-      (list
-       (make-type '$raw-bitvector (make-array-type #t 'i32))
-       (make-type '$raw-bytevector (make-array-type #t 'i8))
-       (make-type '$raw-scmvector (make-array-type #t scm-type))
-       ;; In theory we could just include those members of the rec group
-       ;; that the program needs, but to allow interoperability with
-       ;; separately-compiled modules, we'll just put in the whole rec
-       ;; group if any member is needed.
-       (make-rec-group
-        (list
-         (struct ($heap-object))
-         (struct ($extern-ref $heap-object)
-                 ($val (make-ref-type #f 'extern)))
-         (struct ($heap-number $heap-object))
-         (struct ($bignum $heap-number)
-                 ($val (make-ref-type #f 'extern)))
-         (struct ($flonum $heap-number)
-                 ($val 'f64))
-         (struct ($complex $heap-number)
-                 ($real 'f64)
-                 ($imag 'f64))
-         (struct ($fraction $heap-number)
-                 ($num scm-type)
-                 ($denom scm-type))
-         (struct ($pair $heap-object)
-                 ($car (mut scm-type))
-                 ($cdr (mut scm-type)))
-         (struct ($mutable-pair $pair)
-                 ($car (mut scm-type))
-                 ($cdr (mut scm-type)))
-         (struct ($vector $heap-object)
-                 ($vals (make-ref-type #f '$raw-scmvector)))
-         (struct ($mutable-vector $vector)
-                 ($vals (make-ref-type #f '$raw-scmvector)))
-         (struct ($bytevector $heap-object)
-                 ($vals (make-ref-type #f '$raw-bytevector)))
-         (struct ($mutable-bytevector $bytevector)
-                 ($vals (make-ref-type #f '$raw-bytevector)))
-         (struct ($bitvector $heap-object)
-                 ($len 'i32)
-                 ($vals (make-ref-type #f '$raw-bitvector)))
-         (struct ($mutable-bitvector $bitvector)
-                 ($len 'i32)
-                 ($vals (make-ref-type #f '$raw-bitvector)))
-         (struct ($string $heap-object)
-                 ($str (mut (make-ref-type #f 'string))))
-         (struct ($mutable-string $string)
-                 ($str (mut (make-ref-type #f 'string))))
-         (struct ($proc $heap-object)
-                 ($func (make-ref-type #f '$kvarargs)))
-         (struct ($symbol $heap-object)
-                 ($name (make-ref-type #f '$string)))
-         (struct ($keyword $heap-object)
-                 ($name (make-ref-type #f '$symbol)))
-         (struct ($variable $heap-object)
-                 ($val (mut scm-type)))
-         (struct ($atomic-box $heap-object)
-                 ($val (mut scm-type)))
-         (struct ($hash-table $heap-object)
-                 ($size (mut (make-ref-type #f 'i31)))
-                 ($buckets (make-ref-type #f '$vector)))
-         (struct ($weak-table $heap-object)
-                 ($val (make-ref-type #f 'extern)))
-         (struct ($fluid $heap-object)
-                 ($init scm-type))
-         (struct ($dynamic-state $heap-object)
-                 ($val (make-ref-type #f 'extern)))
-         (struct ($syntax $heap-object)
-                 ($expr scm-type)
-                 ($wrap scm-type)
-                 ($module scm-type)
-                 ($source scm-type))
-         (struct* ($port-type)
-                  ($name (make-ref-type #f 'string))
-                  ;; in guile these are (port, bv, start, count) -> size_t
-                  ($read (make-ref-type #t '$proc)) ;; could have a more refined type
-                  ($write (make-ref-type #t '$proc))
-                  ($seek (make-ref-type #t '$proc)) ;; (port, offset, whence) -> offset
-                  ($close (make-ref-type #t '$proc)) ;; (port) -> ()
-                  ($get-natural-buffer-sizes (make-ref-type #t '$proc)) ;; port -> (rdsz, wrsz)
-                  ($random-access? (make-ref-type #t '$proc)) ;; port -> bool
-                  ($input-waiting (make-ref-type #t '$proc)) ;; port -> bool
-                  ($truncate (make-ref-type #t '$proc)) ;; (port, length) -> ()
-                  ;; Guile also has GOOPS classes here.
-                  )
-         (struct ($port $heap-object)
-                 ($pt (make-ref-type #f '$port-type))
-                 ($stream (mut scm-type))
-                 ($file_name (mut scm-type))
-                 ($position (make-ref-type #f '$mutable-pair))
-                 ($read_buf (mut scm-type))      ;; A 5-vector
-                 ($write_buf (mut scm-type))     ;; A 5-vector
-                 ($write_buf_aux (mut scm-type)) ;; A 5-vector
-                 ($read_buffering (mut 'i32))
-                 ($refcount (mut 'i32))
-                 ($rw_random (mut 'i8))
-                 ($properties (mut scm-type)))
-         (struct ($struct $heap-object)
-                 ;; Vtable link is mutable so that we can tie the knot for
-                 ;; top types.
-                 ($vtable (mut (make-ref-type #t '$vtable))))
-         (struct ($vtable $struct)
-                 ($vtable (mut (make-ref-type #t '$vtable)))
-                 ($flags (mut scm-type))
-                 ($nfields (mut scm-type))
-                 ($name (mut scm-type))
-                 ($print (mut scm-type))))))))
+       (type $raw-bitvector (array (mut i32)))
+       (type $raw-bytevector (array (mut i8)))
+       (type $raw-scmvector (array (mut (ref eq))))
 
-  (define types (append func-types heap-types))
+       (rec
+        (type $heap-object
+              (struct
+               (field $hash (mut i32))))
 
-  (define-syntax imported-function-type
-    (syntax-rules (=>)
-      ((_ (param-type ...) => (result-type ...))
-       (make-type-use #f (make-func-sig (list (make-param #f param-type)
-                                              ...)
-                                        (list result-type ...))))))
+        (type $extern-ref
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (ref extern)))))
+
+        (type $heap-number
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32)))))
+        (type $bignum
+              (sub $heap-number
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (ref extern)))))
+        (type $flonum
+              (sub $heap-number
+                (struct
+                 (field $hash (mut i32))
+                 (field $val f64))))
+        (type $complex
+              (sub $heap-number
+                (struct
+                 (field $hash (mut i32))
+                 (field $real f64)
+                 (field $imag f64))))
+        (type $fraction
+              (sub $heap-number
+                (struct
+                 (field $hash (mut i32))
+                 (field $num (ref eq))
+                 (field $denom (ref eq)))))
+
+        (type $pair
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $car (mut (ref eq)))
+                 (field $cdr (mut (ref eq))))))
+        (type $mutable-pair
+              (sub $pair
+                (struct
+                 (field $hash (mut i32))
+                 (field $car (mut (ref eq)))
+                 (field $cdr (mut (ref eq))))))
+        (type $vector
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $vals (ref $raw-scmvector)))))
+        (type $mutable-vector
+              (sub $vector
+                (struct
+                 (field $hash (mut i32))
+                 (field $vals (ref $raw-scmvector)))))
+        (type $bytevector
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $vals (ref $raw-bytevector)))))
+        (type $mutable-bytevector
+              (sub $bytevector
+                (struct
+                 (field $hash (mut i32))
+                 (field $vals (ref $raw-bytevector)))))
+        (type $bitvector
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $len i32)
+                 (field $vals (ref $raw-bitvector)))))
+        (type $mutable-bitvector
+              (sub $bitvector
+                (struct
+                 (field $hash (mut i32))
+                 (field $len i32)
+                 (field $vals (ref $raw-bitvector)))))
+        (type $string
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $str (mut (ref string))))))
+        (type $mutable-string
+              (sub $string
+                (struct
+                 (field $hash (mut i32))
+                 (field $str (mut (ref string))))))
+        (type $proc
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $func (ref $kvarargs)))))
+        (type $symbol
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $name (ref $string)))))
+        (type $keyword
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $name (ref $symbol)))))
+        (type $variable
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (mut (ref eq))))))
+        (type $atomic-box
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (mut (ref eq))))))
+        (type $hash-table
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $size (mut (ref i31)))
+                 (field $buckets (ref $vector)))))
+        (type $weak-table
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (ref extern)))))
+        (type $fluid
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $init (ref eq)))))
+        (type $dynamic-state
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $val (ref extern)))))
+        (type $syntax
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $expr (ref eq))
+                 (field $wrap (ref eq))
+                 (field $module (ref eq))
+                 (field $source (ref eq)))))
+        (type $port-type
+              (struct
+               (field $name (ref string))
+               ;; in guile these are (port, bv, start, count) -> size_t
+               (field $read (ref null $proc)) ;; could have a more refined type
+               (field $write (ref null $proc))
+               (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
+               (field $close (ref null $proc)) ;; (port) -> ()
+               (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
+               (field $random-access? (ref null $proc)) ;; port -> bool
+               (field $input-waiting (ref null $proc))  ;; port -> bool
+               (field $truncate (ref null $proc)) ;; (port, length) -> ()
+               ;; Guile also has GOOPS classes here.
+               ))
+        (type $port
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 (field $pt (ref $port-type))
+                 (field $stream (mut (ref eq)))
+                 (field $file_name (mut (ref eq)))
+                 (field $position (ref $mutable-pair))
+                 (field $read_buf (mut (ref eq)))      ;; A 5-vector
+                 (field $write_buf (mut (ref eq)))     ;; A 5-vector
+                 (field $write_buf_aux (mut (ref eq))) ;; A 5-vector
+                 (field $read_buffering (mut i32))
+                 (field $refcount (mut i32))
+                 (field $rw_random (mut i8))
+                 (field $properties (mut (ref eq))))))
+        (type $struct
+              (sub $heap-object
+                (struct
+                 (field $hash (mut i32))
+                 ;; Vtable link is mutable so that we can tie the knot for top
+                 ;; types.
+                 (field $vtable (mut (ref null $vtable))))))
+        (type $vtable
+              (sub $struct
+                (struct
+                 (field $hash (mut i32))
+                 (field $vtable (mut (ref null $vtable)))
+                 (field $field0 (mut (ref eq)))
+                 (field $field1 (mut (ref eq)))
+                 (field $field2 (mut (ref eq)))
+                 (field $field3 (mut (ref eq)))))))
+
+       (func $bignum-from-i64 (import "rt" "bignum_from_i64")
+             (param i64)
+             (result (ref extern)))
+       (func $bignum-from-u64 (import "rt" "bignum_from_u64")
+             (param i64)
+             (result (ref extern)))
+       (func $bignum-is-i64 (import "rt" "bignum_is_i64")
+             (param (ref extern))
+             (result i32))
+       (func $bignum-is-u64 (import "rt" "bignum_is_u64")
+             (param (ref extern))
+             (result i32))
+       (func $bignum-get-i64 (import "rt" "bignum_get_i64")
+             (param (ref extern))
+             (result i64))
+
+       (func $make-weak-map (import "rt" "make_weak_map")
+             (result (ref extern)))
+       (func $weak-map-get (import "rt" "weak_map_get")
+             (param (ref extern) (ref eq))
+             (result (ref eq)))
+       (func $weak-map-set (import "rt" "weak_map_set")
+             (param (ref extern) (ref eq) (ref eq)))
+       (func $weak-map-delete (import "rt" "weak_map_delete")
+             (param (ref extern) (ref eq))
+             (result i32))
+
+       (func $die (import "rt" "die")
+             (param (ref string) (ref eq))))))
+  (define types
+    (match wasm
+      (($ <wasm> types imports funcs tables memories globals exports start
+          elems datas tags strings custom)
+       types)))
+
   (define imports
-    (list
-     (make-import "rt" "bignum_from_i64" 'func '$bignum-from-i64
-                  (imported-function-type ('i64)
-                                          => ((make-ref-type #f 'extern))))
-     (make-import "rt" "bignum_from_u64" 'func '$bignum-from-u64
-                  (imported-function-type ('i64)
-                                          => ((make-ref-type #f 'extern))))
-     (make-import "rt" "bignum_is_i64" 'func '$bignum-is-i64
-                  (imported-function-type ((make-ref-type #f 'extern))
-                                          => ('i32)))
-     (make-import "rt" "bignum_is_u64" 'func '$bignum-is-u64
-                  (imported-function-type ((make-ref-type #f 'extern))
-                                          => ('i32)))
-     (make-import "rt" "bignum_get_i64" 'func '$bignum-get-i64
-                  (imported-function-type ((make-ref-type #f 'extern))
-                                          => ('i64)))
-     (make-import "rt" "make_weak_map" 'func '$make-weak-map
-                  (imported-function-type ()
-                                          => ((make-ref-type #f 'extern))))
-     (make-import "rt" "weak_map_get" 'func '$weak-map-get
-                  (imported-function-type ((make-ref-type #f 'extern))
-                                          => (scm-type)))
-     (make-import "rt" "weak_map_set" 'func '$weak-map-set
-                  (imported-function-type ((make-ref-type #f 'extern)
-                                           scm-type scm-type)
-                                          => ()))
-     (make-import "rt" "weak_map_delete" 'func '$weak-map-delete
-                  (imported-function-type ((make-ref-type #f 'extern) scm-type)
-                                          => ('i32)))
-     (make-import "rt" "die" 'func '$die
-                  (imported-function-type ((make-ref-type #f 'string) scm-type)
-                                          => ()))))
+    (match wasm
+      (($ <wasm> types imports funcs tables memories globals exports start
+          elems datas tags strings custom)
+       imports)))
 
   (define funcs
     (list (make-func
@@ -430,7 +498,8 @@
   (define strings '())
   (define custom '())
 
-  (make-wasm (append func-types heap-types)
+  (make-wasm types
+             ;(append func-types heap-types)
              (if import-abi?
                  (append
                   (map (match-lambda

@@ -14,7 +14,7 @@ Hoot aims to be an ahead-of-time compiler for all of [R7RS-small
 Scheme](https://small.r7rs.org/) to WebAssembly.  We are targetting the
 WebAssembly extensions that appear ready to ship in Q4 2023, notably
 including garbage collection and tail calls, and hope to reach our goal
-in Jully 2023.
+in July 2023.
 
 Hoot is being developed here and in [Spritely's Guile development
 branches](https://gitlab.com/spritely/guile).  This repository is for

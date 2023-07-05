@@ -410,36 +410,38 @@
       ;; FIXME: check id
       (((and tag 'ref.null) id . args)
        `(,@args ,tag ,id))
-      (((and tag (or 'table.grow 'table.set 'table.get))
+      (((and tag (or 'table.set 'table.get 'table.size 'table.grow
+                     'table.fill
+                     'memory.size 'memory.grow 'memory.fill))
         (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
+      (((and tag (or 'memory.init 'table.init))
+        (? id-or-idx? id) (? id-or-idx? eid) . args)
+       `(,@args ,tag ,id ,eid))
+      (((and tag (or 'memory.init 'table.init)) (? id-or-idx? eid) . args)
+       `(,@args ,tag 0 ,eid))
+      (((and tag (or 'memory.copy 'table.copy))
+        (? id-or-idx? a) (? id-or-idx? b) . args)
+       `(,@args ,tag ,a ,b))
+      (((and tag (or 'memory.copy 'table.copy)) . args)
+       `(,@args ,tag 0 0))
       (((and tag (or 'struct.new)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'struct.set 'struct.get))
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
-      ;; FIXME: check id
-      (((and tag (or 'ref.test 'ref.cast)) 'null id . args)
-       `(,@args ,tag #t ,id))
-      ;; FIXME: check id
-      (((and tag (or 'ref.test 'ref.cast))
-        (? boolean? nullable?) id . args)
-       `(,@args ,tag ,nullable? ,id))
-      ;; FIXME: check id
-      (((and tag (or 'ref.test 'ref.cast)) id . args)
-       `(,@args ,tag #f ,id))
-      (((and tag 'string.const) str . args) ;;FIXME: str predicate
+      (((and tag (or 'ref.test 'ref.cast)) 'null (? id-or-idx? id) . args)
+       `(,@args ,tag 'null ,id))
+      (((and tag (or 'ref.test 'ref.cast)) (? id-or-idx? id) . args)
+       `(,@args ,tag ,id))
+      (((and tag 'string.const) (? string? str) . args)
        `(,@args ,tag ,str))
-      (((and tag (or 'array.get 'array.set 'array.get_u 'array.get_s))
-        (? id-or-idx? ti) . args)
-       `(,@args ,tag ,ti))
-      (((and tag (or 'array.new 'array.new_default))
+      (((and tag (or 'array.new 'array.new_default
+                     'array.get 'array.set 'array.get_u 'array.get_s))
         (? id-or-idx? ti) . args)
        `(,@args ,tag ,ti))
       (((and tag 'return_call) (? id-or-idx? id) . args)
-       `(,@args ,tag ,id))
-      (((and tag 'table.size) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       ((tag . args)
        `(,@args ,tag))))
@@ -538,43 +540,54 @@
                (lp/inst in `(,inst ,id)))))
            ('ref.null
             (match in
-              ((id . in)
+              (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
-           ((or 'table.grow 'table.set 'table.get)
+           ((or 'table.set 'table.get 'table.size 'table.grow
+                'table.fill
+                'memory.size 'memory.grow 'memory.fill)
             (match in
-              ((id . in)
-               (lp/inst in `(,inst ,id)))))
+              (((? id-or-idx? id) . in)
+               (lp/inst in `(,inst ,id)))
+              (_
+               (lp/inst in `(,inst 0)))))
+           ((or 'table.copy 'memory.copy)
+            (match in
+              (((? id-or-idx? a) (? id-or-idx? b) . in)
+               (lp/inst in `(,inst ,a ,b)))
+              (_
+               (lp/inst in `(,inst 0 0)))))
+           ((or 'table.init 'memory.init)
+            (match in
+              (((? id-or-idx? tid) (? id-or-idx? eid) . in)
+               (lp/inst in `(,inst ,tid ,eid)))
+              (((? id-or-idx? eid) . in)
+               (lp/inst in `(,inst 0 ,eid)))))
            ('struct.new
             (match in
-              ((id . in)
+              (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
            ((or 'struct.set 'struct.get)
             (match in
-              ((ti fi . in)
+              (((? id-or-idx? ti) (? id-or-idx? fi) . in)
                (lp/inst in `(,inst ,ti ,fi)))))
            ((or 'ref.test 'ref.cast)
             (match in
-              ((nullable? ht . in)
-               (lp/inst in `(,inst ,nullable? ,(parse-heap-type ht))))))
+              (('null ht . in)
+               (lp/inst in `(,inst #t ,(parse-heap-type ht))))
+              ((ht . in)
+               (lp/inst in `(,inst #f ,(parse-heap-type ht))))))
            ('string.const
             (match in
-              ((str . in)
+              (((? string? str) . in)
                (lp/inst in `(,inst ,str)))))
-           ((or 'array.get 'array.set 'array.get_u 'array.get_s)
+           ((or 'array.new 'array.new_default
+                'array.get 'array.set 'array.get_u 'array.get_s)
             (match in
-              ((ti . in)
-               (lp/inst in `(,inst ,ti)))))
-           ((or 'array.new 'array.new_default)
-            (match in
-              ((ti . in)
+              (((? id-or-idx? ti) . in)
                (lp/inst in `(,inst ,ti)))))
            ('return_call
             (match in
-              ((id . in)
-               (lp/inst in `(,inst ,id)))))
-           ('table.size
-            (match in
-              ((id . in)
+              (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
            (_
             (lp/inst in inst)))))))

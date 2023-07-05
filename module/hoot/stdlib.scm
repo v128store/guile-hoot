@@ -269,7 +269,114 @@
              (result i32))
 
        (func $die (import "rt" "die")
-             (param (ref string) (ref eq))))))
+             (param (ref string) (ref eq)))
+
+       ;; Thomas Wang's integer hasher, from
+       ;; http://www.cris.com/~Ttwang/tech/inthash.htm.
+       (func $integer-hash (param $v i32) (result i32)
+         (local.set $v (i32.xor (i32.xor (local.get $v) (i32.const 61))
+                                (i32.shr_u (local.get $v) (i32.const 16))))
+         (local.set $v (i32.add (local.get $v)
+                                (i32.shl (local.get $v) (i32.const 3))))
+         (local.set $v (i32.xor (local.get $v)
+                                (i32.shr_u (local.get $v) (i32.const 4))))
+         (local.set $v (i32.mul (local.get $v)
+                                (i32.const #x27d4eb2d)))
+         (i32.xor (local.get $v)
+                  (i32.shr_u (local.get $v) (i32.const 15))))
+
+       ;; Mix hash bits.  Result must be nonzero.
+       (func $finish-heap-object-hash (param $hash i32) (result i32)
+         (local.set $hash (call $integer-hash (local.get $hash)))
+         (if i32 (local.get $hash)
+           (then (local.get $hash))
+           (else (call $integer-hash (i32.const 42)))))
+
+       ;; For now, the Java string hash function, except over codepoints
+       ;; rather than WTF-16 code units.
+       (func $string-hash (param $str (ref string)) (result i32)
+         (local $iter (ref stringview_iter))
+         (local $hash i32)
+         (local $codepoint i32)
+         (local.set $iter (string.as_iter (local.get $str)))
+         (block $done
+           (loop $lp
+             (local.set $codepoint (stringview_iter.next (local.get $iter)))
+             (br_if $done (i32.eq (i32.const -1) (local.get $codepoint)))
+             (local.set $hash
+                        (i32.add (i32.mul (local.get $hash) (i32.const 31))
+                                 (local.get $codepoint)))
+             (br $lp)))
+         (local.get $hash))
+
+       ;; FIXME: Replace with version from basic-types.wat.
+       (func $string->symbol (param $str (ref string)) (result (ref $symbol))
+         (local.get 0) (call $string-hash) (call $finish-heap-object-hash)
+         (i32.const 0) (local.get 0) (struct.new $string)
+         (struct.new $symbol)
+         (call $intern-symbol!))
+
+       (func $intern-symbol! (param $sym (ref $symbol)) (result (ref $symbol))
+         ;; FIXME: Actually interning into symtab is unimplemented!
+         (local.get 0))
+
+       (func $symbol->keyword (param $sym (ref $symbol)) (result (ref $keyword))
+         ;; FIXME: intern into kwtab.
+         (local.get 0) (struct.get $symbol 0) (call $finish-heap-object-hash)
+         (local.get 0)
+         (struct.new $keyword))
+
+       (func $grow-raw-stack (param $sp i32)
+         ;; Grow the stack by at least 50% and at least the needed
+         ;; space.  Trap if we fail to grow.
+         ;; additional_size = (current_size >> 1) | needed_size
+         (memory.size $raw-stack)
+         (i32.const 1)
+         (i32.shr_u)
+         (local.get $sp)
+         (i32.const 16) ;; Wasm pages are 64 kB.
+         (i32.shr_u)
+         (i32.or)
+         (memory.grow $raw-stack)
+         (i32.const -1)
+         (i32.eq)
+         (if (i32.eq) (then (unreachable))))
+
+       (func $grow-scm-stack (param $sp i32)
+         ;; Grow as in $grow-raw-stack.
+         (i32.const 0)
+         (i31.new)
+         (table.size $scm-stack)
+         (i32.const 1)
+         (i32.shr_u)
+         (local.get $sp)
+         (i32.or)
+         (table.grow $scm-stack)
+         (i32.const -1)
+         (if (i32.eq) (then (unreachable))))
+
+       (func $invalid-continuation (type $kvarargs) (unreachable))
+       (func $grow-ret-stack (param $sp i32)
+         ;; Grow as in $grow-raw-stack.
+         (ref.func $invalid-continuation)
+         (table.size $ret-stack)
+         (i32.const 1)
+         (i32.shr_u)
+         (local.get $sp)
+         (i32.or)
+         (table.grow $ret-stack)
+         (i32.const -1)
+         (if (i32.eq) (then (unreachable))))
+
+       (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
+         (unreachable))
+       (func $slow-<= (param $a (ref eq)) (param $b (ref eq)) (result i32)
+         (unreachable))
+       (func $slow-= (param $a (ref eq)) (param $b (ref eq)) (result i32)
+         (unreachable))
+       (func $u64->bignum (param $i64 i64) (result (ref eq))
+         (unreachable)))))
+
   (define types
     (match wasm
       (($ <wasm> types imports funcs tables memories globals exports start
@@ -283,178 +390,10 @@
        imports)))
 
   (define funcs
-    (list (make-func
-           '$integer-hash
-           (make-type-use #f (make-func-sig
-                              (list (make-param '$v 'i32))
-                              (list 'i32)))
-           '()
-           '((local.get 0) (i32.const 61) (i32.xor)
-             (local.get 0) (i32.const 16) (i32.shr_u)
-             (i32.xor) (local.set 0)
-             (local.get 0)
-             (local.get 0) (i32.const 3) (i32.shl)
-             (i32.add) (local.set 0)
-             (local.get 0)
-             (local.get 0) (i32.const 4) (i32.shr_u)
-             (i32.xor) (local.set 0)
-             (local.get 0)
-             (i32.const #x27d4eb2d)
-             (i32.mul) (local.set 0)
-             (local.get 0)
-             (local.get 0) (i32.const 15) (i32.shr_u)
-             (i32.xor)))
-          (make-func
-           '$finish-heap-object-hash
-           (make-type-use #f (make-func-sig
-                              (list (make-param '$hash 'i32))
-                              '(i32)))
-           '()
-           `((local.get 0)
-             (call $integer-hash)
-             (local.tee 0)
-             (if #f ,i32-block-type
-                 ((local.get 0))
-                 ((i32.const 42)
-                  (call $integer-hash)))))
-          (make-func
-           '$string-hash
-           (make-type-use #f (make-func-sig
-                              (list
-                               (make-param '$str (make-ref-type #f 'string)))
-                              '(i32)))
-           (list (make-local '$iter (make-ref-type #f 'stringview_iter))
-                 (make-local '$hash 'i32)
-                 (make-local '$codepoint 'i32))
-           `((local.get $str)
-             (string.as_iter)
-             (local.set $iter)
-             (block
-              $done ,void-block-type
-              ((loop $lp ,void-block-type
-                     ((local.get $iter)
-                      (stringview_iter.next)
-                      (local.set $codepoint)
-                      (i32.const -1) (local.get $codepoint) (i32.eq)
-                      (br_if $done)
-                      (local.get $hash) (i32.const 31) (i32.mul)
-                      (local.get $codepoint)
-                      (i32.add)
-                      (local.set $hash)
-                      (br $lp)))))
-             (local.get $hash)))
-          (make-func
-           '$string->symbol
-           (make-type-use #f (make-func-sig
-                              (list
-                               (make-param '$str (make-ref-type #f 'string)))
-                              (list (make-ref-type #f '$symbol))))
-           '()
-           `((local.get 0) (call $string-hash) (call $finish-heap-object-hash)
-             (i32.const 0) (local.get 0) (struct.new $string)
-             (struct.new $symbol)
-             (call $intern-symbol!)))
-          (make-func
-           '$intern-symbol!
-           (make-type-use #f (make-func-sig
-                              (list (make-param '$sym
-                                                (make-ref-type #f '$symbol)))
-                              (list (make-ref-type #f '$symbol))))
-           '()
-           ;; FIXME: Actually interning into symtab is unimplemented!
-           `((local.get 0)))
-          (make-func
-           '$symbol->keyword
-           (make-type-use #f (make-func-sig
-                              (list
-                               (make-param '$sym (make-ref-type #f '$symbol)))
-                              (list (make-ref-type #f '$keyword))))
-           '()
-           ;; FIXME: intern into kwtab.
-           `((local.get 0) (struct.get $symbol 0) (call $finish-heap-object-hash)
-             (local.get 0)
-             (struct.new $keyword)))
-          (make-func
-           '$grow-raw-stack
-           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
-           '()
-           ;; Grow the stack by at least 50% and at least the needed
-           ;; space.  Trap if we fail to grow.
-           ;; additional_size = (current_size >> 1) | needed_size
-           `((memory.size $raw-stack)
-             (i32.const 1)
-             (i32.shr_u)
-             (local.get $sp)
-             (i32.const 16) ;; Wasm pages are 64 kB.
-             (i32.shr_u)
-             (i32.or)
-             (memory.grow $raw-stack)
-             (i32.const -1)
-             (i32.eq)
-             (if #f ,void-block-type ((unreachable)) ())))
-          (make-func
-           '$grow-scm-stack
-           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
-           '()
-           ;; Grow as in $grow-raw-stack.
-           `((i32.const 0)
-             (i31.new)
-             (table.size $scm-stack)
-             (i32.const 1)
-             (i32.shr_u)
-             (local.get $sp)
-             (i32.or)
-             (table.grow $scm-stack)
-             (i32.const -1)
-             (i32.eq)
-             (if #f ,void-block-type ((unreachable)) ())))
-          (make-func
-           '$invalid-continuation
-           (make-type-use '$kvarargs kvarargs-sig)
-           '()
-           '((unreachable)))
-          (make-func
-           '$grow-ret-stack
-           (make-type-use #f (make-func-sig (list (make-param '$sp 'i32)) '()))
-           '()
-           ;; Grow as in $grow-raw-stack.
-           `((ref.func $invalid-continuation)
-             (table.size $ret-stack)
-             (i32.const 1)
-             (i32.shr_u)
-             (local.get $sp)
-             (i32.or)
-             (table.grow $ret-stack)
-             (i32.const -1)
-             (i32.eq)
-             (if #f ,void-block-type ((unreachable)) ())))
-          (make-func
-           '$slow-<
-           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
-                                                  (make-param '$b scm-type))
-                                            '(i32)))
-           '()
-           `((unreachable)))
-          (make-func
-           '$slow-<=
-           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
-                                                  (make-param '$b scm-type))
-                                            '(i32)))
-           '()
-           `((unreachable)))
-          (make-func
-           '$slow-=
-           (make-type-use #f (make-func-sig (list (make-param '$a scm-type)
-                                                  (make-param '$b scm-type))
-                                            '(i32)))
-           '()
-           `((unreachable)))
-          (make-func
-           '$u64->bignum
-           (make-type-use #f (make-func-sig (list (make-param '$a 'i64))
-                                            (list scm-type)))
-           '()
-           `((unreachable)))))
+    (match wasm
+      (($ <wasm> types imports funcs tables memories globals exports start
+          elems datas tags strings custom)
+       funcs)))
 
   ;; Because V8 and binaryen don't really support non-nullable table
   ;; types right now, we currently use nullable tables.  Grr.

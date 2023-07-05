@@ -287,7 +287,9 @@
         ('func (make-import mod name 'func id (parse-type-use tail)))
         ('table (make-import mod name 'table id (parse-table-type tail)))
         ('memory (make-import mod name 'memory id (parse-mem-type tail)))
-        ('global (make-import mod name 'global id (parse-global-type tail)))))
+        ('global (make-import mod name 'global id
+                              (match tail
+                                ((type) (parse-global-type type)))))))
     (match x
       (((? string? mod) (? string? name) desc)
        (match desc

@@ -176,6 +176,34 @@
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")
 
+(test-call "42" (lambda (box)
+                  (define ref (@ (ice-9 atomic) atomic-box-ref))
+                  (define set! (@ (ice-9 atomic) atomic-box-set!))
+                  (define swap! (@ (ice-9 atomic) atomic-box-swap!))
+                  (define cas! (@ (ice-9 atomic) atomic-box-compare-and-swap!))
+                  (let ((val (ref box)))
+                    val))
+           ((@ (ice-9 atomic) make-atomic-box) 42))
+
+(test-call "(42 10 10 69 69 69 69 2)"
+           (lambda (box)
+             (define ref (@ (ice-9 atomic) atomic-box-ref))
+             (define set! (@ (ice-9 atomic) atomic-box-set!))
+             (define swap! (@ (ice-9 atomic) atomic-box-swap!))
+             (define cas! (@ (ice-9 atomic) atomic-box-compare-and-swap!))
+             (let ((v0 (ref box)))
+               (set! box 10)
+               box
+               (let* ((v1 (ref box))
+                      (v2 (swap! box 69))
+                      (v3 (ref box))
+                      (v4 (cas! box 1 2))
+                      (v5 (ref box))
+                      (v6 (cas! box v4 2))
+                      (v7 (ref box)))
+                 (list v0 v1 v2 v3 v4 v5 v6 v7))))
+           ((@ (ice-9 atomic) make-atomic-box) 42))
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

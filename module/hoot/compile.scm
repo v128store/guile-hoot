@@ -289,7 +289,7 @@
   (define (compile-immediate-constant val)
     (define (fixnum? val)
       (and (exact-integer? val)
-           (<= (ash -1 -29) val (1- (ash 1 29)))))
+           (<= (ash -1 29) val (1- (ash 1 29)))))
     (match val
       ((? fixnum?) `((i32.const ,(ash val 1))
                      (i31.new)))

@@ -377,6 +377,10 @@
      (func $u64->bignum (param $i64 i64) (result (ref eq))
            (unreachable))
 
+     (func $string-set! (param $str (ref $string)) (param $idx i32)
+           (param $ch i32)
+           (unreachable))
+
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))
      (table ,@(maybe-import '$ret-stack) 0 (ref null $kvarargs))

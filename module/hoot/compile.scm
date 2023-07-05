@@ -866,7 +866,12 @@
                (stringview_iter.next)
                (i64.extend_i32_u)))
             (('string-set! #f str idx val)
-             (error "unimplemented" exp))
+             `(,(local.get str)
+               ,(local.get idx)
+               (i32.wrap_i64)
+               ,(local.get val)
+               (i32.wrap_i64)
+               (call $string-set!)))
 
             (('make-atomic-box #f val)
              (error "unimplemented" exp))

@@ -409,7 +409,6 @@
        `(,@args ref.func ,id))
       (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
-      ;; FIXME: check id
       (((and tag 'ref.null) id . args)
        `(,@args ,tag ,id))
       (((and tag (or 'table.set 'table.get 'table.size 'table.grow
@@ -433,9 +432,13 @@
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
-      (((and tag (or 'ref.test 'ref.cast)) 'null (? id-or-idx? id) . args)
+      ;; FIXME: check that ID designates a heap type for ref.test and
+      ;; ref.cast, as well as ref.null above
+      (((and tag (or 'ref.test 'ref.cast)) 'null id . args)
        `(,@args ,tag 'null ,id))
-      (((and tag (or 'ref.test 'ref.cast)) (? id-or-idx? id) . args)
+      (((and tag (or 'ref.test 'ref.cast)) (? boolean? nullable?) id . args)
+       `(,@args ,tag ,nullable? ,id))
+      (((and tag (or 'ref.test 'ref.cast)) id . args)
        `(,@args ,tag ,id))
       (((and tag 'string.const) (? string? str) . args)
        `(,@args ,tag ,str))
@@ -542,7 +545,7 @@
                (lp/inst in `(,inst ,id)))))
            ('ref.null
             (match in
-              (((? id-or-idx? id) . in)
+              ((id . in)
                (lp/inst in `(,inst ,id)))))
            ((or 'table.set 'table.get 'table.size 'table.grow
                 'table.fill
@@ -576,6 +579,8 @@
             (match in
               (('null ht . in)
                (lp/inst in `(,inst #t ,(parse-heap-type ht))))
+              (((? boolean? nullable?) ht . in)
+               (lp/inst in `(,inst ,nullable? ,(parse-heap-type ht))))
               ((ht . in)
                (lp/inst in `(,inst #f ,(parse-heap-type ht))))))
            ('string.const

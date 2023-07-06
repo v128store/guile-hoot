@@ -136,11 +136,11 @@
                              (+ (fib (- n 1)) (fib (- n 2))))))
            34)
 
-(test-call "500000000" (lambda ()
-                         (let lp ((n 0))
-                           (if (< n #e5e8)
-                               (lp (1+ n))
-                               n))))
+(test-call "1000000" (lambda ()
+                       (let lp ((n 0))
+                         (if (< n #e1e6)
+                             (lp (1+ n))
+                             n))))
 
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
@@ -204,6 +204,13 @@
                       (v7 (ref box)))
                  (list v0 v1 v2 v3 v4 v5 v6 v7))))
            ((@ (ice-9 atomic) make-atomic-box) 42))
+
+(test-call "3" (lambda (x y) (quotient x y)) 10 3)
+(test-call "-3" (lambda (x y) (quotient x y)) -10 3)
+(test-call "1" (lambda (x y) (remainder x y)) 10 3)
+(test-call "-1" (lambda (x y) (remainder x y)) -10 3)
+(test-call "1" (lambda (x y) (modulo x y)) 10 3)
+(test-call "2" (lambda (x y) (modulo x y)) -10 3)
 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

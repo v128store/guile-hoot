@@ -576,8 +576,9 @@
                   ,(local.get a)
                   ,@slow-expr))))
 
-      (define (compile-binary-op/fixnum-fast-path a b block-type
-                                                  fast-expr slow-expr)
+      (define* (compile-binary-op/fixnum-fast-path a b block-type
+                                                   fast-expr slow-expr
+                                                   #:key (fast-checks '()))
         `((block #f ,block-type
                  ((block #f ,void-block-type
                          (,(local.get a)
@@ -601,6 +602,10 @@
                           (i32.const 1)
                           (i32.and)
                           (br_if 0)
+
+                          ,@(append-map (lambda (checks)
+                                          `(,@checks (br_if 0)))
+                                        fast-checks)
 
                           ,@fast-expr
                           (br 1)))
@@ -949,13 +954,53 @@
                 (i32.mul) (i31.new))
               '((unreachable))))
             (('div #f x y)
-             (error "unimplemented" exp))
+             `(,(local.get x)
+               ,(local.get y)
+               (call $div)))
             (('quo #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0) (i32.const 1) (i32.shr_s)
+                (local.get $i1) (i32.const 1) (i32.shr_s)
+                (i32.div_s)
+                (i32.const 1) (i32.shl)
+                (i31.new))
+              '((call $quo))
+              #:fast-checks '(((local.get $i1) (i32.eqz))
+                              ((local.get $i1) (i32.const -1) (i32.eq)))))
             (('rem #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              '((local.get $i0) (i32.const 1) (i32.shr_s)
+                (local.get $i1) (i32.const 1) (i32.shr_s)
+                (i32.rem_s)
+                (i32.const 1) (i32.shl)
+                (i31.new))
+              '((call $rem))
+              #:fast-checks '(((local.get $i1) (i32.eqz)))))
             (('mod #f x y)
-             (error "unimplemented" exp))
+             (compile-binary-op/fixnum-fast-path
+              x y scm-block-type
+              `((local.get $i0) (i32.const 1) (i32.shr_s)
+                (local.get $i1) (i32.const 1) (i32.shr_s)
+                (i32.rem_s)
+                ;; Tag as fixnum.
+                (i32.const 1) (i32.shl)
+                ;; Adjust if y and r have opposite signs.
+                (local.tee $i0)
+                (local.get $i1)
+                (i32.const 0)
+                (i32.gt_s)
+                (if #f ,i32-block-type
+                    ((local.get $i0) (i32.const 0) (i32.lt_s))
+                    ((local.get $i0) (i32.const 0) (i32.gt_s)))
+                (if #f ,i32-block-type
+                    ;; Adjust by adding tagged $i1.
+                    ((local.get $i0) (local.get $i1) (i32.add))
+                    ((local.get $i0)))
+                (i31.new))
+              '((call $mod))
+              #:fast-checks '(((local.get $i1) (i32.eqz)))))
 
             ;; Integer bitwise operations.  Fast path for fixnums and
             ;; callout otherwise.

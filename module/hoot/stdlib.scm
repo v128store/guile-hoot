@@ -381,6 +381,15 @@
            (param $ch i32)
            (unreachable))
 
+     (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (unreachable))
+     (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (unreachable))
+     (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (unreachable))
+     (func $mod (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (unreachable))
+
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))
      (table ,@(maybe-import '$ret-stack) 0 (ref null $kvarargs))

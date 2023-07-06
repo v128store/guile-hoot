@@ -374,8 +374,6 @@
            (unreachable))
      (func $slow-= (param $a (ref eq)) (param $b (ref eq)) (result i32)
            (unreachable))
-     (func $u64->bignum (param $i64 i64) (result (ref eq))
-           (unreachable))
 
      (func $string-set! (param $str (ref $string)) (param $idx i32)
            (param $ch i32)
@@ -413,8 +411,22 @@
            (unreachable))
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            (unreachable))
+
+     (func $u64->bignum (param $i64 i64) (result (ref eq))
+           (unreachable))
+     (func $s64->bignum (param $i64 i64) (result (ref eq))
+           (unreachable))
+
      (func $scm->u64 (param $a (ref eq)) (result i64)
            (unreachable))
+     (func $s64->scm (param $a i64) (result (ref eq))
+           (if (result (ref eq))
+               (i32.and (i64.ge_s (local.get $a) (i64.const ,(ash -1 29)))
+                        (i64.lt_s (local.get $a) (i64.const ,(ash 1 29))))
+               (then (i31.new
+                      (i32.shl (i32.wrap_i64 (local.get $a))
+                               (i32.const 1))))
+               (else (return_call $s64->bignum (local.get $a)))))
 
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))

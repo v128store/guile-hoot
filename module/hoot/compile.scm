@@ -1083,8 +1083,15 @@
             (('lsh #f x y)
              (compile-fixnum-u64-fast-path
               x y scm-block-type
-              `((unreachable))
-              '((call $lsh))))
+              `((local.get $i0)
+                (i32.const 1)
+                (i32.shr_s)
+                (i64.extend_i32_s)
+                ,(local.get y)
+                (i64.shl)
+                (call $s64->scm))
+              '((call $rsh))
+              #:fast-checks `((,(local.get y) (i64.const 32) (i64.gt_u)))))
             (('rsh/immediate y x)
              (error "unimplemented" exp))
             (('lsh/immediate y x)

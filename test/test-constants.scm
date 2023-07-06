@@ -217,6 +217,10 @@
 (test-call "16" (lambda (x n) (ash x n)) 32 -1)
 (test-call "0" (lambda (x n) (ash x n)) 32 -64)
 
+(test-call "4" (lambda (x n) (ash x n)) 1 2)
+(test-call "-2" (lambda (x n) (ash x n)) -1 1)
+(test-call "64" (lambda (x n) (ash x n)) 32 1)
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

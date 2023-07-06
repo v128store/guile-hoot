@@ -324,16 +324,25 @@
                             (or align (natural-alignment inst)))
               x)))
   (define (unfold-instruction inst)
+    (define (unparse-val-type type)
+      (match type
+        ((? symbol?) type)
+        (($ <ref-type> #f ht) `(ref ,ht))
+        (($ <ref-type> #t ht) `(ref null ,ht))))
+    (define (unfold-func-sig sig)
+      (match sig
+        (($ <func-sig> params results)
+         `(,@(map (match-lambda
+                   ((#f . vt) `(param ,(unparse-val-type vt)))
+                   ((id . vt) `(param ,id ,(unparse-val-type vt))))
+                  params)
+           (result ,@(map unparse-val-type results))))))
     (define (unfold-type-use type)
       (match type
-        (($ <type-use> #f ($ <func-sig> params results))
-         `(,@(map (match-lambda
-                   ((#f . vt) `(param ,vt))
-                   ((id . vt) `(param ,id ,vt)))
-                  params)
-           (result ,@results)))
-        (($ <type-use> idx _)
-         `((type ,idx)))))
+        (($ <type-use> #f sig)
+         (unfold-func-sig sig))
+        (($ <type-use> idx sig)
+         `((type ,idx) ,@(unfold-func-sig sig)))))
     (define (unfold-mem-arg arg)
       (match arg
         (($ <mem-arg> id offset align)

@@ -926,25 +926,27 @@
               x y scm-block-type
               ;; FIXME: Overflow to bignum.
               '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
-              '((unreachable))))
+              '((call $add))))
             (('sub #f x y)
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
               ;; FIXME: Overflow to bignum.
               '((local.get $i0) (local.get $i1) (i32.sub) (i31.new))
-              '((unreachable))))
+              '((call $sub))))
             (('add/immediate y x)
              (compile-unary-op/fixnum-fast-path
               x scm-block-type
               ;; FIXME: Overflow to bignum.
               `((local.get $i0) (i32.const ,(ash y 1)) (i32.add) (i31.new))
-              '((unreachable))))
+              `((i32.const ,y)
+                (call $add/immediate))))
             (('sub/immediate y x)
              (compile-unary-op/fixnum-fast-path
               x scm-block-type
               ;; FIXME: Overflow to bignum.
               `((local.get $i0) (i32.const ,(ash y 1)) (i32.sub) (i31.new))
-              '((unreachable))))
+              `((i32.const ,y)
+                (call $sub/immediate))))
             (('mul #f x y)
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
@@ -952,7 +954,7 @@
               '((local.get $i0)
                 (local.get $i1) (i32.const 1) (i32.shr_s)
                 (i32.mul) (i31.new))
-              '((unreachable))))
+              '((call $mul))))
             (('div #f x y)
              `(,(local.get x)
                ,(local.get y)
@@ -1008,17 +1010,17 @@
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.and) (i31.new))
-              '((unreachable))))
+              '((call $logand))))
             (('logior #f x y)           ;FIXME: implement slow path
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.or) (i31.new))
-              '((unreachable))))
+              '((call $logior))))
             (('logxor #f x y)           ;FIXME: implement slow path
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.xor) (i31.new))
-              '((unreachable))))
+              '((call $logxor))))
             (('logsub #f x y)           ;FIXME: implement slow path
              (compile-binary-op/fixnum-fast-path
               x y scm-block-type
@@ -1028,7 +1030,7 @@
                 (i32.xor)
                 (i32.and)
                 (i31.new))
-              '((unreachable))))
+              '((call $logsub))))
             (('rsh #f x y)
              (error "unimplemented" exp))
             (('lsh #f x y)

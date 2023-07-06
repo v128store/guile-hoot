@@ -74,6 +74,7 @@
 
 (define void-block-type (make-type-use #f (make-func-sig '() '())))
 (define i32-block-type (make-type-use #f (make-func-sig '() '(i32))))
+(define i64-block-type (make-type-use #f (make-func-sig '() '(i64))))
 
 ;; Codegen improvements:
 ;;
@@ -554,7 +555,7 @@
                     (cons (visit-ret ret-size) out)
                     raw-size scm-size (1+ ret-size))))))))
 
-      (define (compile-unary-op/fixnum-fast-path a block-type
+      (define (compile-fixnum-fast-path a block-type
                                                  fast-expr slow-expr)
         `((block #f ,block-type
                  ((block #f ,void-block-type
@@ -576,7 +577,7 @@
                   ,(local.get a)
                   ,@slow-expr))))
 
-      (define* (compile-binary-op/fixnum-fast-path a b block-type
+      (define* (compile-fixnum-fixnum-fast-path a b block-type
                                                    fast-expr slow-expr
                                                    #:key (fast-checks '()))
         `((block #f ,block-type
@@ -599,6 +600,34 @@
                           (i31.get_s)
                           (local.tee $i1)
                           (i32.or)
+                          (i32.const 1)
+                          (i32.and)
+                          (br_if 0)
+
+                          ,@(append-map (lambda (checks)
+                                          `(,@checks (br_if 0)))
+                                        fast-checks)
+
+                          ,@fast-expr
+                          (br 1)))
+                  ,(local.get a)
+                  ,(local.get b)
+                  ,@slow-expr))))
+
+      (define* (compile-fixnum-u64-fast-path a b block-type
+                                             fast-expr slow-expr
+                                             #:key (fast-checks '()))
+        `((block #f ,block-type
+                 ((block #f ,void-block-type
+                         (,(local.get a)
+                          (ref.test #f i31)
+                          (i32.eqz)
+                          (br_if 0)
+
+                          ,(local.get a)
+                          (ref.cast #f i31)
+                          (i31.get_s)
+                          (local.tee $i0)
                           (i32.const 1)
                           (i32.and)
                           (br_if 0)
@@ -922,33 +951,33 @@
             ;; Generic arithmetic.  Emit a fixnum fast-path and a
             ;; callout to runtime functions for the slow path.
             (('add #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               ;; FIXME: Overflow to bignum.
               '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
               '((call $add))))
             (('sub #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               ;; FIXME: Overflow to bignum.
               '((local.get $i0) (local.get $i1) (i32.sub) (i31.new))
               '((call $sub))))
             (('add/immediate y x)
-             (compile-unary-op/fixnum-fast-path
+             (compile-fixnum-fast-path
               x scm-block-type
               ;; FIXME: Overflow to bignum.
               `((local.get $i0) (i32.const ,(ash y 1)) (i32.add) (i31.new))
               `((i32.const ,y)
                 (call $add/immediate))))
             (('sub/immediate y x)
-             (compile-unary-op/fixnum-fast-path
+             (compile-fixnum-fast-path
               x scm-block-type
               ;; FIXME: Overflow to bignum.
               `((local.get $i0) (i32.const ,(ash y 1)) (i32.sub) (i31.new))
               `((i32.const ,y)
                 (call $sub/immediate))))
             (('mul #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               ;; FIXME: Overflow to bignum.
               '((local.get $i0)
@@ -960,7 +989,7 @@
                ,(local.get y)
                (call $div)))
             (('quo #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (i32.const 1) (i32.shr_s)
                 (local.get $i1) (i32.const 1) (i32.shr_s)
@@ -971,7 +1000,7 @@
               #:fast-checks '(((local.get $i1) (i32.eqz))
                               ((local.get $i1) (i32.const -1) (i32.eq)))))
             (('rem #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (i32.const 1) (i32.shr_s)
                 (local.get $i1) (i32.const 1) (i32.shr_s)
@@ -981,7 +1010,7 @@
               '((call $rem))
               #:fast-checks '(((local.get $i1) (i32.eqz)))))
             (('mod #f x y)
-             (compile-binary-op/fixnum-fast-path
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               `((local.get $i0) (i32.const 1) (i32.shr_s)
                 (local.get $i1) (i32.const 1) (i32.shr_s)
@@ -1006,23 +1035,23 @@
 
             ;; Integer bitwise operations.  Fast path for fixnums and
             ;; callout otherwise.
-            (('logand #f x y)           ;FIXME: implement slow path
-             (compile-binary-op/fixnum-fast-path
+            (('logand #f x y)
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.and) (i31.new))
               '((call $logand))))
-            (('logior #f x y)           ;FIXME: implement slow path
-             (compile-binary-op/fixnum-fast-path
+            (('logior #f x y)
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.or) (i31.new))
               '((call $logior))))
-            (('logxor #f x y)           ;FIXME: implement slow path
-             (compile-binary-op/fixnum-fast-path
+            (('logxor #f x y)
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.xor) (i31.new))
               '((call $logxor))))
-            (('logsub #f x y)           ;FIXME: implement slow path
-             (compile-binary-op/fixnum-fast-path
+            (('logsub #f x y)
+             (compile-fixnum-fixnum-fast-path
               x y scm-block-type
               '((local.get $i0)
                 (local.get $i1)
@@ -1032,9 +1061,30 @@
                 (i31.new))
               '((call $logsub))))
             (('rsh #f x y)
-             (error "unimplemented" exp))
+             (compile-fixnum-u64-fast-path
+              x y scm-block-type
+              `((local.get $i0)
+
+                ;; Clamp shift to 31 bits; fixnum is smaller than that.
+                (i64.const 31)
+                ,(local.get y)
+                (i64.lt_u)
+                (if #f ,i32-block-type
+                    ((i32.const 31))
+                    (,(local.get y)
+                     (i32.wrap_i64)))
+
+                (i32.shr_s)
+                ;; Mask off fixnum bit.
+                (i32.const -2)
+                (i32.and)
+                (i31.new))
+              '((call $rsh))))
             (('lsh #f x y)
-             (error "unimplemented" exp))
+             (compile-fixnum-u64-fast-path
+              x y scm-block-type
+              `((unreachable))
+              '((call $lsh))))
             (('rsh/immediate y x)
              (error "unimplemented" exp))
             (('lsh/immediate y x)
@@ -1172,7 +1222,13 @@
             (('scm->f64 #f src)
              (error "unimplemented" exp))
             (('scm->u64 #f src)
-             (error "unimplemented" exp))
+             (compile-fixnum-fast-path
+              src i64-block-type
+              `((local.get $i0)
+                (i32.const 1)
+                (i32.shr_s)
+                (i64.extend_i32_s))
+              '((call $scm->u64))))
             (('scm->u64/truncate #f src)
              (error "unimplemented" exp))
             (('u64->scm #f src)
@@ -1419,23 +1475,23 @@
           (#('heap-numbers-equal? #f (a b))
            `(,(local.get a) ,(local.get b) (call $heap-numbers-equal?)))
           (#('< #f (a b))
-           (compile-binary-op/fixnum-fast-path a b i32-block-type
-                                               '((local.get $i0)
-                                                 (local.get $i1)
-                                                 (i32.lt_s))
-                                               '((call $slow-<))))
+           (compile-fixnum-fixnum-fast-path a b i32-block-type
+                                            '((local.get $i0)
+                                              (local.get $i1)
+                                              (i32.lt_s))
+                                            '((call $slow-<))))
           (#('<= #f (a b))
-           (compile-binary-op/fixnum-fast-path a b i32-block-type
-                                               '((local.get $i0)
-                                                 (local.get $i1)
-                                                 (i32.le_s))
-                                               '((call $slow-<=))))
+           (compile-fixnum-fixnum-fast-path a b i32-block-type
+                                            '((local.get $i0)
+                                              (local.get $i1)
+                                              (i32.le_s))
+                                            '((call $slow-<=))))
           (#('= #f (a b))
-           (compile-binary-op/fixnum-fast-path a b i32-block-type
-                                               '((local.get $i0)
-                                                 (local.get $i1)
-                                                 (i32.eq))
-                                               '((call $slow-=))))
+           (compile-fixnum-fixnum-fast-path a b i32-block-type
+                                            '((local.get $i0)
+                                              (local.get $i1)
+                                              (i32.eq))
+                                            '((call $slow-=))))
           (#('u64-< #f (a b))
            `(,(local.get a)
              ,(local.get b)

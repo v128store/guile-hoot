@@ -409,6 +409,13 @@
      (func $logsub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
 
+     (func $rsh (param $a (ref eq)) (param $b i64) (result (ref eq))
+           (unreachable))
+     (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
+           (unreachable))
+     (func $scm->u64 (param $a (ref eq)) (result i64)
+           (unreachable))
+
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))
      (table ,@(maybe-import '$ret-stack) 0 (ref null $kvarargs))

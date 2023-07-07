@@ -445,6 +445,8 @@
 
      (func $scm->u64 (param $a (ref eq)) (result i64)
            (unreachable))
+     (func $scm->u64/truncate (param $a (ref eq)) (result i64)
+           (unreachable))
      (func $s64->scm (param $a i64) (result (ref eq))
            (if (result (ref eq))
                (i32.and (i64.ge_s (local.get $a) (i64.const ,(ash -1 29)))

@@ -1267,8 +1267,9 @@
 
             ;; Unboxing and boxing numbers.
             (('scm->f64 #f src)
-             (error "unimplemented" exp))
-            (('scm->u64 #f src)
+             `(,(local.get src)
+               (call $scm->f64)))
+            (((or 'scm->u64 'scm->s64) #f src)
              (compile-fixnum-fast-path
               src i64-block-type
               `((local.get $i0)
@@ -1277,7 +1278,13 @@
                 (i64.extend_i32_s))
               '((call $scm->u64))))
             (('scm->u64/truncate #f src)
-             (error "unimplemented" exp))
+             (compile-fixnum-fast-path
+              src i64-block-type
+              `((local.get $i0)
+                (i32.const 1)
+                (i32.shr_s)
+                (i64.extend_i32_s))
+              '((call $scm->u64/truncate))))
             (('u64->scm #f src)
              `(,(local.get src)
                (i64.const ,(ash 1 29))
@@ -1290,10 +1297,9 @@
                     (i31.new))
                    (,(local.get src)
                     (call $u64->bignum)))))
-            (('scm->s64 #f src)
-             (error "unimplemented" exp))
             (('s64->scm #f src)
-             (error "unimplemented" exp))
+             `(,(local.get src)
+               (call $s64->scm)))
 
             ;; For native Guile, these bytevector accesses take three
             ;; parameters: the object itself, which is unused but keeps

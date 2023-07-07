@@ -268,6 +268,21 @@
              (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
                (abs (- f64 100.0))))
            #vu8(184 30 133 235 81 88 69 64))
+(test-call "6.5337584895678535"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (sqrt (abs f64))))
+           #vu8(184 30 133 235 81 88 69 64))
+(test-call "42"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (floor f64)))
+           #vu8(184 30 133 235 81 88 69 64))
+(test-call "43"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (ceiling f64)))
+           #vu8(184 30 133 235 81 88 69 64))
 
 (test-call "3" (lambda (str) (string-length str)) "fox")
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")

@@ -233,6 +233,17 @@
              ((@ (rnrs bytevectors) bytevector-ieee-single-native-ref) bv 0))
            #vu8(143 194 42 66))
 
+(test-call "85.38"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (+ f64 f64)))
+           #vu8(184 30 133 235 81 88 69 64))
+(test-call "43.69"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (+ f64 1.0)))
+           #vu8(184 30 133 235 81 88 69 64))
+
 (test-call "3" (lambda (str) (string-length str)) "fox")
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")

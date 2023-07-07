@@ -240,7 +240,9 @@
 ;;       (copy-file arg "/tmp/arg.wasm")
 ;;       (pk (run-d8 "test-call.js" "--" proc arg))))))
 
-(when (and (batch-mode?) (not (test-passed?)))
+(when (and (batch-mode?)
+           (or (not (zero? (test-runner-fail-count (test-runner-get))))
+               (not (zero? (test-runner-xpass-count (test-runner-get))))))
   (exit 1))
 
 (test-end "test-constants")

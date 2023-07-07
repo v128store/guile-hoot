@@ -173,6 +173,58 @@
 (test-call "247" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u8-ref) bv 9))
            #vu8(0 #xff 2 #xfd 4 #xfb 6 #xf9 8 #xf7))
 
+(test-call "65280" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u16-native-ref) bv 0))
+           #vu8(#x00 #xff #xff #x00))
+(test-call "65535" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u16-native-ref) bv 1))
+           #vu8(#x00 #xff #xff #x00))
+(test-call "255" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u16-native-ref) bv 2))
+           #vu8(#x00 #xff #xff #x00))
+(test-call "-256" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s16-native-ref) bv 0))
+           #vu8(#x00 #xff #xff #x00))
+(test-call "-1" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s16-native-ref) bv 1))
+           #vu8(#x00 #xff #xff #x00))
+(test-call "255" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s16-native-ref) bv 2))
+           #vu8(#x00 #xff #xff #x00))
+
+(test-call "50463231" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u32-native-ref) bv 0))
+           #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+(test-call "67305985" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u32-native-ref) bv 1))
+           #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+;; FIXME: Enable once we have bignums.
+;; (test-call "4278452994" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u32-native-ref) bv 2))
+;;            #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+(test-call "50463231" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s32-native-ref) bv 0))
+           #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+(test-call "67305985" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s32-native-ref) bv 1))
+           #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+(test-call "-16514302" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s32-native-ref) bv 2))
+           #vu8(#xff #x01 #x02 #x03 #x04 #xff))
+
+(test-call "511" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u64-native-ref) bv 0))
+           #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+(test-call "1" (lambda (bv) ((@ (rnrs bytevectors) bytevector-u64-native-ref) bv 1))
+           #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+;; FIXME: Enable once we have bignums.
+;; (test-call "72057594037927936"
+;;            (lambda (bv) ((@ (rnrs bytevectors) bytevector-u64-native-ref) bv 2))
+;;            #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+;; (test-call "18374967954648334336"
+;;            (lambda (bv) ((@ (rnrs bytevectors) bytevector-u64-native-ref) bv 3))
+;;            #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+(test-call "511" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s64-native-ref) bv 0))
+           #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+(test-call "1" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s64-native-ref) bv 1))
+           #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+;; FIXME: Enable once we have bignums.
+;; (test-call "72057594037927936"
+;;            (lambda (bv) ((@ (rnrs bytevectors) bytevector-s64-native-ref) bv 2))
+;;            #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+;; (test-call "-71776119061217280"
+;;            (lambda (bv) ((@ (rnrs bytevectors) bytevector-s64-native-ref) bv 3))
+;;            #vu8(#xff 1 0 0 0 0 0 0 0 1 #xff))
+(test-call "-65025" (lambda (bv) ((@ (rnrs bytevectors) bytevector-s64-native-ref) bv 0))
+           #vu8(#xff 1 #xff #xff #xff #xff #xff #xff))
+
 (test-call "3" (lambda (str) (string-length str)) "fox")
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")

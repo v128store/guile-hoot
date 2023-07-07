@@ -1882,12 +1882,10 @@
                                (dump-wasm? #f)
                                (opts '()))
   (define (lower-and-tailify cps)
-    (with-target "wasm32-unknown-hoot"
-      (lambda ()
-        (define lower-cps
-          (let ((make-lower (language-lowerer (lookup-language 'cps))))
-            (make-lower optimization-level opts)))
-        (lower-cps cps env))))
+    (define lower-cps
+      (let ((make-lower (language-lowerer (lookup-language 'cps))))
+        (make-lower optimization-level opts)))
+    (lower-cps cps env))
   (let ((cps (lower-and-tailify cps)))
     (when dump-cps?
       (dump cps))
@@ -1910,19 +1908,21 @@
                   (dump-cps? #f)
                   (dump-wasm? #f)
                   (opts '()))
-  (define cps
-    (%compile exp #:env env #:from from #:to 'cps
-              #:optimization-level optimization-level
-              #:warning-level warning-level))
-  (high-level-cps->wasm cps
-                        #:import-abi? import-abi?
-                        #:export-abi? export-abi?
-                        #:env env
-                        #:optimization-level optimization-level
-                        #:warning-level warning-level
-                        #:dump-cps? dump-cps?
-                        #:dump-wasm? dump-wasm?
-                        #:opts opts))
+  (with-target "wasm32-unknown-hoot"
+    (lambda ()
+      (define cps
+        (%compile exp #:env env #:from from #:to 'cps
+                  #:optimization-level optimization-level
+                  #:warning-level warning-level))
+      (high-level-cps->wasm cps
+                            #:import-abi? import-abi?
+                            #:export-abi? export-abi?
+                            #:env env
+                            #:optimization-level optimization-level
+                            #:warning-level warning-level
+                            #:dump-cps? dump-cps?
+                            #:dump-wasm? dump-wasm?
+                            #:opts opts))))
 
 (define* (read-and-compile port #:key
                            (import-abi? #f)
@@ -1934,23 +1934,21 @@
                            (dump-cps? #f)
                            (dump-wasm? #f)
                            (opts '()))
-  ;; FIXME: Right now the tree-il->cps phase will expand primitives to
-  ;; Guile VM primitives, e.g. including `heap-object?` and so on.  We
-  ;; need to instead expand into more wasm-appropriate primitives, at
-  ;; some point anyway.
-  (define cps
-    (%read-and-compile port #:env env #:from from #:to 'cps
-                       #:optimization-level optimization-level
-                       #:warning-level warning-level))
-  (high-level-cps->wasm cps
-                        #:import-abi? import-abi?
-                        #:export-abi? export-abi?
-                        #:env env
-                        #:optimization-level optimization-level
-                        #:warning-level warning-level
-                        #:dump-cps? dump-cps?
-                        #:dump-wasm? dump-wasm?
-                        #:opts opts))
+  (with-target "wasm32-unknown-hoot"
+    (lambda ()
+      (define cps
+        (%read-and-compile port #:env env #:from from #:to 'cps
+                           #:optimization-level optimization-level
+                           #:warning-level warning-level))
+      (high-level-cps->wasm cps
+                            #:import-abi? import-abi?
+                            #:export-abi? export-abi?
+                            #:env env
+                            #:optimization-level optimization-level
+                            #:warning-level warning-level
+                            #:dump-cps? dump-cps?
+                            #:dump-wasm? dump-wasm?
+                            #:opts opts))))
 
 (define* (compile-file input-file #:key
                        (output-file (error "missing output file"))

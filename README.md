@@ -141,17 +141,24 @@ Here's how to build a Docker image for use in GitLab CI.  Guix
 produces the actual image, but Docker is required to upload it to the
 GitLab container registry.
 
-If this is your first time using the GitLab registry, login:
+Get `skopeo`:
 
 ```
-docker login registry.gitlab.com
+guix shell skopeo
+```
+
+If this is your first time using the GitLab registry, you need to
+login.  This requires setting up a [GitLab personal access
+token](https://gitlab.com/-/profile/personal_access_tokens) with
+`read_api` and `write_registry` permissions.  Once you have a token,
+run:
+
+```
+skopeo login registry.gitlab.com
 ```
 
 Build and upload the image:
 
 ```
-guix pack -m manifest.scm -f docker -S /bin=bin
-docker load < $pack-from-prev-cmd
-docker tag $image-name-from-prev-cmd:latest registry.gitlab.com/spritely/guile-hoot
-docker push registry.gitlab.com/spritely/guile-hoot
+./upload-ci-image
 ```

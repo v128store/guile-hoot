@@ -268,6 +268,14 @@
            (param (ref extern) (ref eq))
            (result i32))
 
+     (func $fsin (import "rt" "fsin") (param f64) (result f64))
+     (func $fcos (import "rt" "fcos") (param f64) (result f64))
+     (func $ftan (import "rt" "ftan") (param f64) (result f64))
+     (func $fasin (import "rt" "fasin") (param f64) (result f64))
+     (func $facos (import "rt" "facos") (param f64) (result f64))
+     (func $fatan (import "rt" "fatan") (param f64) (result f64))
+     (func $fatan2 (import "rt" "fatan2") (param f64 f64) (result f64))
+
      (func $die (import "rt" "die")
            (param (ref string) (ref eq)))
 

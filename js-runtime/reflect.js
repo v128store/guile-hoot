@@ -319,6 +319,14 @@ class SchemeModule {
         weak_map_set(map, k, v) { return map.set(k, v); },
         weak_map_delete(map, k) { return map.delete(k); },
 
+        fsin: Math.sin,
+        fcos: Math.cos,
+        ftan: Math.tan,
+        fasin: Math.asin,
+        facos: Math.acos,
+        fatan: Math.atan,
+        fatan2: Math.atan2,
+
         die(tag, data) { throw new SchemeTrapError(tag, data); }
     };
 

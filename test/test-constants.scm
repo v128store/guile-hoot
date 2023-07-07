@@ -284,6 +284,23 @@
                (ceiling f64)))
            #vu8(184 30 133 235 81 88 69 64))
 
+(test-call "(-0.9614691168217643 0.2749129633138033 -3.497358237429792)"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (list (sin f64)
+                     (cos f64)
+                     (tan f64))))
+           #vu8(184 30 133 235 81 88 69 64))
+
+;; Not testing fasin, facos for now because apparently Guile doesn't emit those!
+
+(test-call "(1.5473759202633208 0.7853981633974483)"
+           (lambda (bv)
+             (let ((f64 ((@ (rnrs bytevectors) bytevector-ieee-double-native-ref) bv 0)))
+               (list (atan f64)
+                     (atan f64 f64))))
+           #vu8(184 30 133 235 81 88 69 64))
+
 (test-call "3" (lambda (str) (string-length str)) "fox")
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")

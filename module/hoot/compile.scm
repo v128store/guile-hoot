@@ -1093,9 +1093,34 @@
               '((call $rsh))
               #:fast-checks `((,(local.get y) (i64.const 32) (i64.gt_u)))))
             (('rsh/immediate y x)
-             (error "unimplemented" exp))
+             (compile-fixnum-fast-path
+              x scm-block-type
+              (if (< y 31)
+                   `((local.get $i0)
+                     (i32.const ,(1+ y))
+                     (i32.shr_s)
+                     (i32.const -2)
+                     (i32.and)
+                     (i31.new))
+                   `((i32.const 0)
+                     (i31.new)))
+              `((i64.const ,y)
+                (call $rsh))))
             (('lsh/immediate y x)
-             (error "unimplemented" exp))
+             (if (<= y 32)
+                 (compile-fixnum-fast-path
+                  x scm-block-type
+                  `((local.get $i0)
+                    (i32.const 1)
+                    (i32.shr_s)
+                    (i64.extend_i32_s)
+                    (i64.const ,y)
+                    (i64.shl)
+                    (call $s64->scm))
+                  `((i64.const ,y)
+                    (call $lsh)))
+                 `((i64.const ,y)
+                   (call $lsh))))
 
             ;; Arithmetic on real numbers.
             (('inexact #f x)

@@ -402,6 +402,11 @@
            (i32.const -1)
            (if (i32.eq) (then (unreachable))))
 
+     (func $wrong-num-args (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (call $die (string.const "wrong-number-of-args") (local.get $arg0))
+           (unreachable))
+
      (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
            (unreachable))
      (func $slow-<= (param $a (ref eq)) (param $b (ref eq)) (result i32)

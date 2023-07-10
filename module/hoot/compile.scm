@@ -2018,25 +2018,48 @@
                   (when (not (null? opt)) (error "optargs unimplemented"))
                   (match (intmap-ref cps kbody)
                     (($ $kargs names vars)
-                     (when (and rest (var-used? (car (last-pair vars))))
-                       (error "rest args unimplemented"))
-                     (let ((body `(,@(append-map
-                                      (lambda (arg idx)
-                                        (if (var-used? arg)
-                                            `(,@(arg-ref
-                                                 (if has-closure? (1+ idx) idx))
-                                              ,(local.set arg))
-                                            '()))
-                                      vars (iota (length req)))
-                                   ,@(do-branch label kbody ctx))))
-                       (cond
-                        (elide-arity-check? body)
-                        (else
-                         `((local.get $nargs)
-                           (i32.const ,((if has-closure? 1+ identity)
-                                        (length req)))
-                           ,(if rest '(i32.ge_u) '(i32.eq))
-                           (if #f ,void-block-type ,body ((unreachable))))))))))
+                     (let ((nreq (length req))
+                           (nopt (length opt)))
+                       (define req-vars (list-head vars nreq))
+                       (define opt-vars (list-head (list-tail vars nreq) nopt))
+                       (define rest-var
+                         (and rest (car (list-tail vars (+ nreq nopt)))))
+                       (define (req-prelude)
+                         (define inits
+                           (append-map
+                            (lambda (arg idx)
+                              (if (var-used? arg)
+                                  `(,@(arg-ref idx)
+                                    ,(local.set arg))
+                                  '()))
+                            vars (iota nreq (if has-closure? 1 0))))
+                         (if elide-arity-check?
+                             inits
+                             `((local.get $nargs)
+                               (i32.const ,(if has-closure? (1+ nreq) nreq))
+                               ,(if rest '(i32.lt_u) '(i32.ne))
+                               (if #f ,void-block-type
+                                   ((local.get $nargs)
+                                    (local.get $arg0)
+                                    (local.get $arg1)
+                                    (local.get $arg2)
+                                    (return_call $wrong-num-args))
+                                   ())
+                               ,@inits)))
+                       (define (opt-prelude)
+                         (error "opt and rest args unimplemented"))
+                       (define (kw-prelude)
+                         (error "keyword args unimplemented"))
+                       (define prelude
+                         (cond
+                          ((or allow-other-keys? (pair? kw))
+                           (kw-prelude))
+                          ((or (and rest-var (var-used? rest-var)) (pair? opt))
+                           (opt-prelude))
+                          (else
+                           (req-prelude))))
+                       `(,@prelude
+                         ,@(do-branch label kbody ctx))))))
                  (($ $ktail)
                   '())))
               (y

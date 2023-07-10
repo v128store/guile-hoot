@@ -194,6 +194,27 @@
         (_ used)))
     cps empty-intset)))
 
+(define (compute-join-vars cps preds)
+  (define (adjoin var joins)
+    (intset-add! joins var))
+  (define (adjoin* vars joins)
+    (fold1 adjoin vars joins))
+  (define (join-cont? k)
+    (< 1 (fold1 (lambda (pred count)
+                  (if (< pred k) (1+ count) count))
+                (intmap-ref preds k)
+                0)))
+  (persistent-intset
+   (intmap-fold
+    (lambda (k cont joins)
+      (match cont
+        (($ $kargs names syms)
+         (if (and (pair? syms) (join-cont? k))
+             (adjoin* syms joins)
+             joins))
+        (_ joins)))
+    cps empty-intset)))
+
 (define* (lower-to-wasm cps #:key import-abi?)
   ;; interning constants into constant table
   ;; finalizing constant table
@@ -367,6 +388,7 @@
       (define used-vars (compute-used-vars cps))
       (define (var-used? var) (intset-ref used-vars var))
       (define preds (compute-predecessors cps kfun))
+      (define join-vars (compute-join-vars cps preds))
       (define idoms (compute-idoms cps kfun))
       (define dom-children (invert-tree idoms))
       (define (merge-cont? label)
@@ -2113,7 +2135,8 @@
                `((block #f ,void-block-type
                         ,(node-within label ys (push-block y ctx)))
                  ,@(do-tree y ctx)))))))
-      (define code (do-tree kfun (make-ctx #f '())))
+      (define code
+        (do-tree kfun (make-ctx #f '())))
       (define (type-for-repr repr)
         (match repr
           ('scm scm-type)
@@ -2157,6 +2180,7 @@
               (lambda (a b)
                 (string<? (match a (($ <local> id) (symbol->string id)))
                           (match b (($ <local> id) (symbol->string id)))))))
+      (define reprs (compute-var-representations cps))
       (define locals
         (append
          (add-locals-from-code code)
@@ -2164,7 +2188,22 @@
                               (cons (make-local (var-label var)
                                                 (type-for-repr repr))
                                     out))
-                            (compute-var-representations cps) '())))
+                            reprs '())))
+      (define (init-joins code)
+        (intset-fold (lambda (var code)
+                       (if (var-used? var)
+                           (match (intmap-ref reprs var)
+                             ((or 'f64 's64 'u64) code)
+                             ((or 'code 'raw-bytevector)
+                              (error "unexpected join repr" var))
+                             ('scm
+                              `((i32.const 57)
+                                (i31.new)
+                                ,(local.set var)
+                                . ,code)))
+                           code))
+                     join-vars
+                     code))
       ;; FIXME: Here attach a name, other debug info to the function
       (make-func (func-label kfun)
                  (match (known-arity kfun)
@@ -2176,7 +2215,7 @@
                                               vars)
                                          '()))))
                  locals
-                 code)))
+                 (init-joins code))))
 
   (define (compute-globals)
     (fold1 (lambda (entry globals)

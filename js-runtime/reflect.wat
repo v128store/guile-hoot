@@ -271,10 +271,13 @@
   ;; These grow functions try to grow their corresponding tables,
   ;; filling in a sensible default value so as to not require the
   ;; tables to be nullable, and abort if that fails.
-  (func $grow-argv (param $diff i32)
+  (func $grow-argv (param $nargs i32)
     (br_if 0 (i32.le_s (i32.const 0)
-                       (table.grow $argv (i31.new (i32.const 0))
-                                   (local.get $diff))))
+                       (table.grow
+                        $argv
+                        (i31.new (i32.const 0))
+                        (i32.sub (i32.sub (local.get $nargs) (i32.const 8))
+                                 (table.size $argv)))))
     (unreachable))
   (func $grow-ret-stack (param $diff i32)
     (br_if 0 (i32.le_s (i32.const 0)
@@ -603,6 +606,11 @@
                                   $nargsN
                                   (array.len (local.get $vals))))
                       (local.set $i (i32.const 8))
+                      (if (i32.lt_u (table.size $argv)
+                                    (i32.sub (array.len (local.get $vals))
+                                             (i32.const 8)))
+                          (then
+                           (call $grow-argv (array.len (local.get $vals)))))
                       (loop
                        (table.set $argv
                                   (i32.sub (local.get $i) (i32.const 8))

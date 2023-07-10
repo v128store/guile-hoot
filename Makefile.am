@@ -14,7 +14,7 @@ SUFFIXES = .wat .wasm
 # different directory than the project root.
 .wat.wasm:
 	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
-	  $(top_builddir)/pre-inst-env guild assemble-wasm -o "$@" "$<"
+	  $(top_builddir)/pre-inst-env $(GUILD) assemble-wasm -o "$@" "$<"
 
 TEST_EXTENSIONS = .js .scm
 SCM_LOG_COMPILER = $(top_builddir)/pre-inst-env $(GUILE)

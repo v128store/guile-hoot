@@ -217,7 +217,32 @@
           (field $field0 (mut (ref eq)))
           (field $field1 (mut (ref eq)))
           (field $field2 (mut (ref eq)))
-          (field $field3 (mut (ref eq)))))))
+          (field $field3 (mut (ref eq))))))
+    (type $dyn (struct))
+    (type $dynwind
+      (sub $dyn
+        (struct
+          (field $wind (ref $kvarargs))
+          (field $unwind (ref $kvarargs)))))
+    (type $dynprompt
+      (sub $dyn
+        (struct
+          (field $raw-sp i32)
+          (field $scm-sp i32)
+          (field $ret-sp i32)
+          (field $dyn-sp i32)
+          (field $unwind-only? i8)
+          (field $key (ref eq))
+          (field $handler (ref $kvarargs)))))
+    (type $dynfluid
+      (sub $dyn
+        (struct
+          (field $fluid (ref $fluid))
+          (field $val (mut (ref eq))))))
+    (type $dynstate
+      (sub $dyn
+        (struct
+          (field $state (mut (ref eq)))))))
 
   ;; Storage locations for parameters and stack-allocated continuations.
   ;; Note that $arg0, $arg1, and $arg2 are function parameters.

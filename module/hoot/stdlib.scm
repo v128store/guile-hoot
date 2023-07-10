@@ -239,7 +239,33 @@
                (field $field0 (mut (ref eq)))
                (field $field1 (mut (ref eq)))
                (field $field2 (mut (ref eq)))
-               (field $field3 (mut (ref eq)))))))
+               (field $field3 (mut (ref eq))))))
+
+      (type $dyn (struct))
+      (type $dynwind
+            (sub $dyn
+              (struct
+               (field $wind (ref $kvarargs))
+               (field $unwind (ref $kvarargs)))))
+      (type $dynprompt
+            (sub $dyn
+              (struct
+               (field $raw-sp i32)
+               (field $scm-sp i32)
+               (field $ret-sp i32)
+               (field $dyn-sp i32)
+               (field $unwind-only? i8)
+               (field $key (ref eq))
+               (field $handler (ref $kvarargs)))))
+      (type $dynfluid
+            (sub $dyn
+              (struct
+               (field $fluid (ref $fluid))
+               (field $val (mut (ref eq))))))
+      (type $dynstate
+            (sub $dyn
+              (struct
+               (field $state (mut (ref eq)))))))
 
      (func $bignum-from-i64 (import "rt" "bignum_from_i64")
            (param i64)
@@ -467,6 +493,7 @@
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))
      (table ,@(maybe-import '$ret-stack) 0 (ref null $kvarargs))
+     (table ,@(maybe-import '$dyn-stack) 0 (ref null $dyn))
 
      (memory ,@(maybe-import '$raw-stack) 0)
 
@@ -477,4 +504,5 @@
      (global ,@(maybe-import '$arg7) (mut (ref eq)) ,@maybe-init-i31-zero)
      (global ,@(maybe-import '$ret-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$scm-sp) (mut i32) ,@maybe-init-i32-zero)
-     (global ,@(maybe-import '$raw-sp) (mut i32) ,@maybe-init-i32-zero))))
+     (global ,@(maybe-import '$raw-sp) (mut i32) ,@maybe-init-i32-zero)
+     (global ,@(maybe-import '$dyn-sp) (mut i32) ,@maybe-init-i32-zero))))

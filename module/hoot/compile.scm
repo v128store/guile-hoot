@@ -1756,7 +1756,8 @@
              (ref.eq)))
           (#('undefined? #f (a))
            `(,(local.get a)
-             ,@(compile-constant (if #f #f))
+             (i32.const 57)
+             (i31.new)
              (ref.eq)))
           (#('null? #f (a))
            `(,(local.get a)
@@ -2037,7 +2038,6 @@
                   (when kalt (error "case-lambda unimplemented"))
                   (when allow-other-keys? (error "allow-other-keys? unimplemented"))
                   (when (not (null? kw)) (error "kwargs unimplemented"))
-                  (when (not (null? opt)) (error "optargs unimplemented"))
                   (match (intmap-ref cps kbody)
                     (($ $kargs names vars)
                      (let ((nreq (length req))
@@ -2090,7 +2090,7 @@
                                   `(,@(arg-ref idx)
                                     ,(local.set arg))
                                   '()))
-                            vars (iota min (add-closure 0))))
+                            req-vars (iota min (add-closure 0))))
                          (define init-opt
                            (append-map
                             (lambda (arg idx)
@@ -2104,7 +2104,7 @@
                                          (i31.new)))
                                     ,(local.set arg))
                                   '()))
-                            vars (iota (- max min) (add-closure min))))
+                            opt-vars (iota (- max min) (add-closure min))))
                          (define init-rest
                            (if (and rest-var (var-used? rest-var))
                                `((local.get $nargs)

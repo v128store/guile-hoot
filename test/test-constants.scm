@@ -352,6 +352,14 @@
 (test-call "-2" (lambda (x) (ash x 1)) -1)
 (test-call "-1" (lambda (x) (ash x -1)) -1)
 
+;; Doesn't work yet: need rest args, and apply and values primitives
+;; (test-call "42" (lambda (f tag)
+;;                   (call-with-prompt tag
+;;                     (lambda () (f))
+;;                     (lambda (k) #f)))
+;;                 (lambda () 42)
+;;                 (make-prompt-tag))
+
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file
 ;;  (compile '(lambda (n)

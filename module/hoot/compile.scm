@@ -692,12 +692,28 @@
                     ((save . restore)
                      (restore spill-sizes))))
                  (append-map restore-var analyzed))))
-            (('push-prompt escape? tag handler)
-             (error "unimplemented" exp))
-
-            ;; WebAssembly doesn't need loop instrumentation.
-            (('instrument-loop #f)
-             '())
+            (('push-prompt escape-only? tag handler)
+             `((global.get $dyn-sp)
+               (local.tee $dyn-sp)
+               (i32.const 1)
+               (i32.add)
+               (global.set $dyn-sp)
+               (local.get $dyn-sp)
+               (table.size $dyn-stack)
+               (i32.ge_u)
+               (if #f ,void-block-type
+                   ((call $grow-dyn-stack))
+                   ())
+               (local.get $dyn-sp)
+               (global.get $raw-sp)
+               (global.get $scm-sp)
+               (global.get $ret-sp)
+               (local.get $dyn-sp)
+               (i32.const ,(if escape-only? 1 0))
+               ,(local.get tag)
+               ,(local.get handler)
+               (struct.new $dynprompt)
+               (table.set $dyn-stack)))
 
             ;; Primcalls related to the module system.  Not sure if we
             ;; will need these, at least in this form; the whole-program
@@ -1672,7 +1688,10 @@
             (('wind #f winder unwinder)
              (error "unimplemented" exp))
             (('unwind #f)
-             (error "unimplemented" exp))
+             `((global.get $dyn-sp)
+               (i32.const 1)
+               (i32.sub)
+               (global.set $dyn-sp)))
 
             ((name param . args)
              (error "unexpected primcall" name param args))))
@@ -2049,7 +2068,7 @@
              (visit-expr body))
             (((or 'local.set 'local.tee) label)
              (let ((type (match label
-                           ((or '$raw-sp '$scm-sp '$ret-sp) 'i32)
+                           ((or '$raw-sp '$scm-sp '$ret-sp '$dyn-sp) 'i32)
                            ((or '$i0 '$i1 '$i2) 'i32)
                            ('$str_iter (make-ref-type #f 'stringview_iter))
                            ('$s0 scm-type)

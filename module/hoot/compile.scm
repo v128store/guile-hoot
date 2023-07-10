@@ -2024,40 +2024,87 @@
                        (define opt-vars (list-head (list-tail vars nreq) nopt))
                        (define rest-var
                          (and rest (car (list-tail vars (+ nreq nopt)))))
-                       (define (req-prelude)
-                         (define inits
+                       (define (check-positional min max strict?)
+                         (define (check count test)
+                           (let ((count (if has-closure? (1+ count) count)))
+                             `((local.get $nargs)
+                               (i32.const ,count)
+                               ,test)))
+                         (let ((check-req
+                                (if (or elide-arity-check?
+                                        (and (not strict?) (zero? min)))
+                                    '()
+                                    (check min
+                                           (if (and strict? (eqv? min max))
+                                               '(i32.ne)
+                                               '(i32.lt_u)))))
+                               (check-opt
+                                (if (or elide-arity-check?
+                                        (eqv? min max) (not strict?))
+                                    '()
+                                    (check max '(i32.gt_u)))))
+                           (define (combine-checks a b)
+                             (cond
+                              ((null? a) b)
+                              ((null? b) a)
+                              (else `(,@a ,@b (i32.or)))))
+                           (let ((checks (combine-checks check-req check-opt)))
+                             (if (null? checks)
+                                 '()
+                                 `(,@checks
+                                   (if #f ,void-block-type
+                                       ((local.get $nargs)
+                                        (local.get $arg0)
+                                        (local.get $arg1)
+                                        (local.get $arg2)
+                                        (return_call $wrong-num-args))
+                                       ()))))))
+                       (define (init-positional min max)
+                         (define (add-closure n) (if has-closure? (1+ n) n))
+                         (define init-req
                            (append-map
                             (lambda (arg idx)
                               (if (var-used? arg)
                                   `(,@(arg-ref idx)
                                     ,(local.set arg))
                                   '()))
-                            vars (iota nreq (if has-closure? 1 0))))
-                         (if elide-arity-check?
-                             inits
-                             `((local.get $nargs)
-                               (i32.const ,(if has-closure? (1+ nreq) nreq))
-                               ,(if rest '(i32.lt_u) '(i32.ne))
-                               (if #f ,void-block-type
-                                   ((local.get $nargs)
-                                    (local.get $arg0)
-                                    (local.get $arg1)
-                                    (local.get $arg2)
-                                    (return_call $wrong-num-args))
-                                   ())
-                               ,@inits)))
-                       (define (opt-prelude)
-                         (error "opt and rest args unimplemented"))
+                            vars (iota min (add-closure 0))))
+                         (define init-opt
+                           (append-map
+                            (lambda (arg idx)
+                              (if (var-used? arg)
+                                  `((local.get $nargs)
+                                    (i32.const ,idx)
+                                    (i32.gt_u)
+                                    (if #f ,scm-block-type
+                                        (,@(arg-ref idx))
+                                        ((i32.const 57) ; undefined
+                                         (i31.new)))
+                                    ,(local.set arg))
+                                  '()))
+                            vars (iota (- max min) (add-closure min))))
+                         (define init-rest
+                           (if (and rest-var (var-used? rest-var))
+                               `((local.get $nargs)
+                                 (local.get $arg0)
+                                 (local.get $arg1)
+                                 (local.get $arg2)
+                                 (i32.const ,(add-closure max))
+                                 (call $collect-rest-args)
+                                 ,(local.set rest-var))
+                               '()))
+                         `(,@init-req ,@init-opt ,@init-rest))
+                       (define (positional-prelude)
+                         `(,@(check-positional nreq (+ nreq nopt) (not rest))
+                           ,@(init-positional nreq (+ nreq nopt))))
                        (define (kw-prelude)
                          (error "keyword args unimplemented"))
                        (define prelude
                          (cond
                           ((or allow-other-keys? (pair? kw))
                            (kw-prelude))
-                          ((or (and rest-var (var-used? rest-var)) (pair? opt))
-                           (opt-prelude))
                           (else
-                           (req-prelude))))
+                           (positional-prelude))))
                        `(,@prelude
                          ,@(do-branch label kbody ctx))))))
                  (($ $ktail)

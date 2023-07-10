@@ -352,6 +352,28 @@
 (test-call "-2" (lambda (x) (ash x 1)) -1)
 (test-call "-1" (lambda (x) (ash x -1)) -1)
 
+(test-call "()" (lambda args args))
+(test-call "(1)" (lambda args args) 1)
+(test-call "(1 2)" (lambda args args) 1 2)
+(test-call "(1 2 3)" (lambda args args) 1 2 3)
+(test-call "(1 2 3 4)" (lambda args args) 1 2 3 4)
+(test-call "(1 2 3 4 5)" (lambda args args) 1 2 3 4 5)
+(test-call "(1 2 3 4 5 6)" (lambda args args) 1 2 3 4 5 6)
+(test-call "(1 2 3 4 5 6 7)" (lambda args args) 1 2 3 4 5 6 7)
+(test-call "(1 2 3 4 5 6 7 8)" (lambda args args) 1 2 3 4 5 6 7 8)
+(test-call "(1 2 3 4 5 6 7 8 9)" (lambda args args) 1 2 3 4 5 6 7 8 9)
+(test-call "(1 2 3 4 5 6 7 8 9 10)" (lambda args args) 1 2 3 4 5 6 7 8 9 10)
+
+(test-call "(1 2)" (lambda (a . args) (cons* a args)) 1 2)
+(test-call "(1 2 3)" (lambda (a b . args) (cons* a b args)) 1 2 3)
+(test-call "(1 2 3 4)" (lambda (a b c . args) (cons* a b c args)) 1 2 3 4)
+(test-call "(1 2 3 4 5)" (lambda (a b c d . args) (cons* a b c d args)) 1 2 3 4 5)
+(test-call "(1 2 3 4 5 6 7 8 9 10 11 12)"
+           (lambda (a b c d e f g h i j . args)
+             (cons* a b c d e f g h i j args))
+           1 2 3 4 5 6 7 8 9 10 11 12)
+
+
 ;; Doesn't work yet: need rest args, and apply and values primitives
 ;; (test-call "42" (lambda (f tag)
 ;;                   (call-with-prompt tag

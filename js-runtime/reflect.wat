@@ -376,21 +376,24 @@
             (block $Ltrue
               (block $Lunspecified
                 (block $Leof
-                  (block $Lchar
-                    (block $Lfixnum
-                      (local.set $tmp (i31.get_s (ref.cast i31 (local.get $scm))))
-                      (br_if $Lfixnum (i32.eqz (i32.and (local.get $tmp) (i32.const 1))))
-                      (br_if $Lchar (i32.eq (i32.and (local.get $tmp) (i32.const 3))
-                                            (i32.const 3)))
-                      (br_if $Lfalse (i32.eq (local.get $tmp) (i32.const 1)))
-                      (br_if $Lnil (i32.eq (local.get $tmp) (i32.const 5)))
-                      (br_if $Lnull (i32.eq (local.get $tmp) (i32.const 13)))
-                      (br_if $Ltrue (i32.eq (local.get $tmp) (i32.const 17)))
-                      (br_if $Lunspecified (i32.eq (local.get $tmp) (i32.const 33)))
-                      (br_if $Leof (i32.eq (local.get $tmp) (i32.const 41)))
-                      (unreachable))
-                    (br $Ldone (string.const "fixnum")))
-                  (br $Ldone (string.const "char")))
+                  (block $Lundefined
+                    (block $Lchar
+                      (block $Lfixnum
+                        (local.set $tmp (i31.get_s (ref.cast i31 (local.get $scm))))
+                        (br_if $Lfixnum (i32.eqz (i32.and (local.get $tmp) (i32.const 1))))
+                        (br_if $Lchar (i32.eq (i32.and (local.get $tmp) (i32.const 3))
+                                              (i32.const 3)))
+                        (br_if $Lfalse (i32.eq (local.get $tmp) (i32.const 1)))
+                        (br_if $Lnil (i32.eq (local.get $tmp) (i32.const 5)))
+                        (br_if $Lnull (i32.eq (local.get $tmp) (i32.const 13)))
+                        (br_if $Ltrue (i32.eq (local.get $tmp) (i32.const 17)))
+                        (br_if $Lunspecified (i32.eq (local.get $tmp) (i32.const 33)))
+                        (br_if $Leof (i32.eq (local.get $tmp) (i32.const 41)))
+                        (br_if $Lundefined (i32.eq (local.get $tmp) (i32.const 57)))
+                        (unreachable))
+                      (br $Ldone (string.const "fixnum")))
+                    (br $Ldone (string.const "char")))
+                  (br $Ldone (string.const "undefined")))
                 (br $Ldone (string.const "eof")))
               (br $Ldone (string.const "unspecified")))
             (br $Ldone (string.const "true")))

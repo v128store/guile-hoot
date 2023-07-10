@@ -127,6 +127,7 @@ Otherwise, the possible payloads are:
   - `#b010001`: 17: `#t`
   - `#b100001`: 33: the unspecified value
   - `#b101001`: 41: EOF
+  - `#b111001`: 57: the undefined value (used internally)
 
 Some common oddball tests:
   - `null?`: check for null or nil; `(= (logand payload #b110111) #b001001)`

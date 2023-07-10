@@ -677,6 +677,11 @@
           (($ $code k)
            `((ref.func ,(func-label k))))
 
+          (($ $prim name)
+           (match name
+             ('values `((global.get $values-primitive)))
+             ('apply `((global.get $apply-primitive)))))
+
           (($ $primcall name param args)
            (match-primcall
             name param args

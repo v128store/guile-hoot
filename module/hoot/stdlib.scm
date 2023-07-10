@@ -402,6 +402,15 @@
            (i32.const -1)
            (if (i32.eq) (then (unreachable))))
 
+     (func $grow-dyn-stack
+           ;; Grow as in $grow-raw-stack.
+           (ref.null $dyn)
+           (i32.add (i32.shr_u (table.size $dyn-stack) (i32.const 1))
+                    (i32.const 1))
+           (table.grow $dyn-stack)
+           (i32.const -1)
+           (if (i32.eq) (then (unreachable))))
+
      (func $wrong-num-args (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (call $die (string.const "wrong-number-of-args") (local.get $arg0))
@@ -497,6 +506,224 @@
                        (struct.new $pair (i32.const 0)
                                    (local.get $arg0) (local.get $ret))))
            (local.get $ret))
+
+     (func $values (param $nargs i32) (param $arg0 (ref eq))
+           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (block
+            $done
+            (local.set $arg0 (local.get $arg1))
+            (local.set $arg1 (local.get $arg2))
+            (br_if $done (i32.le_u (local.get $nargs) (i32.const 3)))
+            (local.set $arg2 (global.get $arg3))
+            (global.set $arg3 (global.get $arg4))
+            (global.set $arg4 (global.get $arg5))
+            (global.set $arg5 (global.get $arg6))
+            (global.set $arg6 (global.get $arg7))
+            (br_if $done (i32.le_u (local.get $nargs) (i32.const 8)))
+            (global.set $arg7 (ref.as_non_null (table.get $argv (i32.const 0))))
+            (table.copy $argv $argv (i32.const 0) (i32.const 1)
+                        (i32.sub (local.get $nargs) (i32.const 9)))
+            (i32.sub (local.get $nargs) (i32.const 1))
+            (local.get $arg0)
+            (local.get $arg1)
+            (local.get $arg2)
+            (global.set $ret-sp (i32.sub (global.get $ret-sp) (i32.const 1)))
+            (global.get $ret-sp)
+            (table.get $ret-stack)
+            (return_call_ref $kvarargs)))
+     (global $values-primitive (ref eq)
+             (struct.new $proc (i32.const 0) (ref.func $values)))
+
+     (func $arg-ref (param $n i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (result (ref eq))
+           (block
+            $n0
+            (block
+             $n1
+             (block
+              $n2
+              (block
+               $n3
+               (block
+                $n4
+                (block
+                 $n5
+                 (block
+                  $n6
+                  (block
+                   $n7
+                   (block
+                    $nv
+                    (br_table $n0
+                              $n1
+                              $n2
+                              $n3
+                              $n4
+                              $n5
+                              $n6
+                              $n7
+                              $nv
+                              (local.get $n)))
+                   (return (ref.as_non_null
+                            (table.get $argv (i32.sub (local.get $n) (i32.const 8))))))
+                  (return (global.get $arg7)))
+                 (return (global.get $arg6)))
+                (return (global.get $arg5)))
+               (return (global.get $arg4)))
+              (return (global.get $arg3)))
+             (return (local.get $arg2)))
+            (return (local.get $arg1)))
+           (return (local.get $arg0)))
+
+     (func $collect-apply-args
+           (param $nargs i32) (param $arg0 (ref eq))
+           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (result (ref eq))
+           (local $ret (ref eq))
+           (local.set $ret
+                      (call $arg-ref
+                            (local.tee $nargs
+                                       (i32.sub (local.get $nargs)
+                                                (i32.const 1)))
+                            (local.get $arg0)
+                            (local.get $arg1)
+                            (local.get $arg2)))
+           (loop $lp
+             (if (i32.lt_u (i32.const 3) (local.get $nargs))
+                 (then
+                  (local.set $ret
+                             (struct.new
+                              $pair
+                              (i32.const 0)
+                              (call $arg-ref
+                                    (local.tee $nargs
+                                               (i32.sub (local.get $nargs)
+                                                        (i32.const 1)))
+                                    (local.get $arg0)
+                                    (local.get $arg1)
+                                    (local.get $arg2))
+                              (local.get $ret)))
+                  (br $lp))))
+           (local.get $ret))
+
+     (func $apply (param $nargs i32) (param $arg0 (ref eq))
+           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (local $args (ref eq))
+           (if (i32.lt_u (local.get $nargs) (i32.const 3))
+               (then (return_call $wrong-num-args
+                                  (local.get $nargs)
+                                  (local.get $arg0)
+                                  (local.get $arg1)
+                                  (local.get $arg2))))
+           (local.set $arg0 (local.get $arg1))
+           (local.set $args
+                      (if (ref eq)
+                          (i32.eq (local.get $nargs) (i32.const 3))
+                          (then (local.get $arg2))
+                          (else (call $collect-apply-args
+                                      (local.get $nargs)
+                                      (local.get $arg0)
+                                      (local.get $arg1)
+                                      (local.get $arg2)))))
+           (if
+            (ref.test $pair (local.get $args))
+            (then
+             (local.set $arg1
+                        (struct.get $pair $car
+                                    (ref.cast $pair (local.get $args))))
+             (if
+              (ref.test
+               $pair
+               (local.tee $args
+                          (struct.get $pair $cdr
+                                      (ref.cast $pair (local.get $args)))))
+              (then
+               (local.set $arg2
+                          (struct.get $pair $car
+                                      (ref.cast $pair (local.get $args))))
+               (if
+                (ref.test
+                 $pair
+                 (local.tee $args
+                            (struct.get $pair $cdr
+                                        (ref.cast $pair (local.get $args)))))
+                (then
+                 (global.set $arg3
+                            (struct.get $pair $car
+                                        (ref.cast $pair (local.get $args))))
+                 (if
+                  (ref.test
+                   $pair
+                   (local.tee $args
+                              (struct.get $pair $cdr
+                                          (ref.cast $pair (local.get $args)))))
+                  (then
+                   (global.set $arg4
+                               (struct.get $pair $car
+                                           (ref.cast $pair (local.get $args))))
+                   (if
+                    (ref.test
+                     $pair
+                     (local.tee $args
+                                (struct.get $pair $cdr
+                                            (ref.cast $pair (local.get $args)))))
+                    (then
+                     (global.set $arg5
+                                 (struct.get $pair $car
+                                             (ref.cast $pair (local.get $args))))
+                     (if
+                      (ref.test
+                       $pair
+                       (local.tee $args
+                                  (struct.get $pair $cdr
+                                              (ref.cast $pair (local.get $args)))))
+                      (then
+                       (global.set $arg6
+                                   (struct.get $pair $car
+                                               (ref.cast $pair (local.get $args))))
+                       (if
+                        (ref.test
+                         $pair
+                         (local.tee $args
+                                    (struct.get $pair $cdr
+                                                (ref.cast $pair (local.get $args)))))
+                        (then
+                         (global.set $arg7
+                                     (struct.get $pair $car
+                                                 (ref.cast $pair (local.get $args))))
+                         (local.set $nargs (i32.const 8))
+                         (loop $lp
+                           (if
+                            (ref.test
+                             $pair
+                             (local.tee $args
+                                        (struct.get $pair $cdr
+                                                    (ref.cast $pair (local.get $args)))))
+                            (then
+                             (table.set $argv
+                                        (i32.sub (local.get $nargs) (i32.const 8))
+                                        (struct.get $pair $car
+                                                 (ref.cast $pair (local.get $args))))
+                             (local.set $nargs (i32.add (local.get $nargs) (i32.const 1)))
+                             (br $lp)))))
+                        (else (local.set $nargs (i32.const 7)))))
+                      (else (local.set $nargs (i32.const 6)))))
+                    (else (local.set $nargs (i32.const 5)))))
+                  (else (local.set $nargs (i32.const 4)))))
+                (else (local.set $nargs (i32.const 3)))))
+              (else (local.set $nargs (i32.const 2)))))
+            (else (local.set $nargs (i32.const 1))))
+           ;; FIXME: error if callee not a $proc
+           (return_call_ref $kvarargs
+                            (local.get $nargs)
+                            (local.get $arg0)
+                            (local.get $arg1)
+                            (local.get $arg2)
+                            (struct.get $proc $func
+                                        (ref.cast $proc (local.get $arg0)))))
+     (global $apply-primitive (ref eq)
+             (struct.new $proc (i32.const 0) (ref.func $apply)))
 
      (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
            (unreachable))

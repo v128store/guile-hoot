@@ -407,6 +407,97 @@
            (call $die (string.const "wrong-number-of-args") (local.get $arg0))
            (unreachable))
 
+     (func $collect-rest-args (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (param $npositional i32)
+           (result (ref eq))
+           (local $ret (ref eq))
+           (local.set $ret (i31.new (i32.const 13))) ;; null
+           (block
+            $done
+            (block
+             $nargs1
+             (block
+              $nargs2
+              (block
+               $nargs3
+               (block
+                $nargs4
+                (block
+                 $nargs5
+                 (block
+                  $nargs6
+                  (block
+                   $nargs7
+                   (block
+                    $nargs8
+                    (block
+                     $nargsN
+                     (br_table $done
+                               $nargs1
+                               $nargs2
+                               $nargs3
+                               $nargs4
+                               $nargs5
+                               $nargs6
+                               $nargs7
+                               $nargs8
+                               $nargsN
+                               (local.get $nargs)))
+                    (loop $lp
+                      (if (i32.gt_u (local.get $nargs) (i32.const 8))
+                          (then
+                           (br_if $done (i32.le_u (local.get $nargs)
+                                                  (local.get $npositional)))
+                           (local.set
+                            $ret
+                            (struct.new
+                             $pair
+                             (i32.const 0)
+                             (ref.as_non_null
+                              (table.get
+                               $argv
+                               (i32.sub
+                                (local.tee $nargs
+                                           (i32.sub (local.get $nargs) (i32.const 1)))
+                                (i32.const 8))))
+                             (local.get $ret)))
+                           (br $lp)))))
+                   (br_if $done (i32.le_u (i32.const 8) (local.get $npositional)))
+                   (local.set $ret
+                              (struct.new $pair (i32.const 0)
+                                          (global.get $arg7) (local.get $ret))))
+                  (br_if $done (i32.le_u (i32.const 7) (local.get $npositional)))
+                  (local.set $ret
+                             (struct.new $pair (i32.const 0)
+                                         (global.get $arg6) (local.get $ret))))
+                 (br_if $done (i32.le_u (i32.const 6) (local.get $npositional)))
+                 (local.set $ret
+                            (struct.new $pair (i32.const 0)
+                                        (global.get $arg5) (local.get $ret))))
+                (br_if $done (i32.le_u (i32.const 5) (local.get $npositional)))
+                (local.set $ret
+                           (struct.new $pair (i32.const 0)
+                                       (global.get $arg4) (local.get $ret))))
+               (br_if $done (i32.le_u (i32.const 4) (local.get $npositional)))
+               (local.set $ret
+                          (struct.new $pair (i32.const 0)
+                                      (global.get $arg3) (local.get $ret))))
+              (br_if $done (i32.le_u (i32.const 3) (local.get $npositional)))
+              (local.set $ret
+                         (struct.new $pair (i32.const 0)
+                                     (local.get $arg2) (local.get $ret))))
+             (br_if $done (i32.le_u (i32.const 2) (local.get $npositional)))
+             (local.set $ret
+                        (struct.new $pair (i32.const 0)
+                                    (local.get $arg1) (local.get $ret)))
+             )
+            (br_if $done (i32.le_u (i32.const 1) (local.get $npositional)))
+            (local.set $ret
+                       (struct.new $pair (i32.const 0)
+                                   (local.get $arg0) (local.get $ret))))
+           (local.get $ret))
+
      (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
            (unreachable))
      (func $slow-<= (param $a (ref eq)) (param $b (ref eq)) (result i32)

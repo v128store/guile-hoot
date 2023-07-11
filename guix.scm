@@ -37,7 +37,7 @@
         (base32 "07bwkav6b67jpxmzxkhb8lg2g14xhcb5pb2zm9ir8j223vxp8xwi")))))))
 
 (define gn
-  (let ((commit "b25a2f8c2d33f02082f0f258350f5e22c0973108")
+  (let ((commit "1de45d1a11cc9f8cb5c75a031386151e1c384847")
         (revision "1"))
     (package
       (name "gn")
@@ -50,7 +50,7 @@
                (commit commit)))
          (file-name (git-file-name name version))
          (sha256
-          (base32 "075p4jwk1apvwmqmvhwfw5f669ci7nxwjq9mz5aa2g5lz4fkdm4c"))))
+          (base32 "12bcpmgxyb3i6qvr7ipw9dfhvbj5dllg8r2gm9ahkgh4zlf40jfk"))))
       (build-system gnu-build-system)
       (arguments
        (list #:tests? #f
@@ -105,28 +105,28 @@
 ;; Based on the dependencies listed in the DEPS file in the v8 repo.
 (define-chromium-origin depot-tools
   "chromium/tools/depot_tools"
-  "019e73a13bf58542f2572daba6fbc5e389c40607"
-  "16i23b97m68gvw1hix4sm4dhxvyyyh28ycfgp1ypyy50dlc3v30v")
+  "e5277508c83c3dd1596504daf64b6ea8fe7d2dd1"
+  "18bbb9dgjxvmab9v7rl9cnh4prig69n3c68kb4c1a332ll5m7k7s")
 
 (define-chromium-origin buildtools
   "chromium/src/buildtools"
-  "64174283d074639f036ba9496f694bce2fe98f46"
-  "0yipxzdi3qiprsprp4a1w40k7j44r1a1hsd8dn5xy921fzmzbq32")
+  "1cc82962cb50a35f6008b25a165782c568edac27"
+  "1lvacf9rfqjwx8h5dqz0w8y1vl4d66ws5v887a93dhrlhp7li1s6")
 
 (define-chromium-origin chromium-build
   "chromium/src/build"
-  "8d69f8b8423a1af5d1d85ba7b3921918b40a942a"
-  "18qn58fx2racn7rg2a1w8hwpidcidd53x1bmmxakwwhysqdv1sx8")
+  "143d726c8ef21c30bc50ec4436a4d10aca156f4c"
+  "17a255dpgxm3b0qgjkbylgbb75qsfhnp4c1ik7fw85ifr89mm2d1")
 
 (define-chromium-origin icu
   "chromium/deps/icu"
-  "d8daa943f64cd5dd2a55e9baf2e655ab4bfa5ae9"
-  "0rfv6a820nc5w68isph5hrlbpyfxylwhw03s7ffijv85j9pz3dg3")
+  "e8c3bc9ea97d4423ad0515e5f1c064f486dae8b1"
+  "0h6lw8gv6yfashza969y6g3m3cbg3wm7g7hqf3z65rcqdvms5xa8")
 
 (define-chromium-origin zlib
   "chromium/src/third_party/zlib"
-  "b890619bc2b193b8fbe9c1c053f4cd19a9791d92"
-  "1qg86yx20zqqn67qsf5lcwafr2jsd9l270vk7gppmf3j311pgbz9")
+  "7eff33bc00be3e2ddb55a94991689fad9dcbe85d"
+  "01qssvqgls1plyfpr4775fkrm0jmsjw8ywqr8cf6mi2aw804m84i")
 
 (define-chromium-origin googletest
   "external/github.com/google/googletest"
@@ -140,13 +140,18 @@
 
 (define-chromium-origin jinja2
   "chromium/src/third_party/jinja2"
-  "264c07d7e64f2874434a3b8039e101ddf1b01e7e"
-  "0danznscxcqai4427370h7prpz8k9qw0nf59dr9zs9252cq18j2p")
+  "515dd10de9bf63040045902a4a310d2ba25213a0"
+  "0gh8xpnbl9lq82ggxpv0q7a67pvcdmcrl7r8z3hk9awdjq4dbvvy")
 
 (define-chromium-origin markupsafe
   "chromium/src/third_party/markupsafe"
-  "13f4e8c9e206567eeb13bf585406ddc574005748"
-  "1kpqw2ld1n7l99ya6d77d0pcqgsk3waxjasrhqpk29bvk2n5sffy")
+  "006709ba3ed87660a17bd4548c45663628f5ed85"
+  "1ql3sdwjwc0b19hbz4v55m81sf3capl9xc5ya9nq1l7kclj72m06")
+
+(define-chromium-origin abseil-cpp
+  "chromium/src/third_party/abseil-cpp"
+  "ae5ee2a38fc234109fb54e3845e6b427667406b8"
+  "1f4qmcqj9s9hz4i2kpxfnq6lg4dq2l9v5r1bbpfavsfialg0i7j0")
 
 ;; V8 uses the gold linker, so we need to wrap it in order for the
 ;; Guix runpath magic to work.
@@ -156,11 +161,11 @@
                    #:linker "ld.gold"))
 
 (define v8
-  (let ((commit "54924a08c59282af37576a44e556bca1ca770798")
+  (let ((commit "b04b184405b8f1989f15844105cfacf0500817a8")
         (revision "1"))
     (package
       (name "v8")
-      (version (git-version "11.4" revision commit))
+      (version (git-version "11.7" revision commit))
       (source
        (origin
          (method git-fetch)
@@ -169,7 +174,7 @@
                (commit commit)))
          (file-name (git-file-name name version))
          (sha256
-          (base32 "0b3asl2msvjiijsdjcibmc5aa99fjcvqca2xw2xsnrq7p7rahrlr"))))
+          (base32 "1zvp8kzpbsg6x7lwgc0xyx6vd5dswkjp5f0g0wlahfp5f8ia6bcn"))))
       (build-system gnu-build-system)
       (arguments
        (list #:tests? #f
@@ -190,6 +195,7 @@
                      (copy-recursively #$googletest "third_party/googletest/src")
                      (copy-recursively #$jinja2 "third_party/jinja2")
                      (copy-recursively #$markupsafe "third_party/markupsafe")
+                     (copy-recursively #$abseil-cpp "third_party/abseil-cpp")
                      ;; Install Google's ninja wrapper executable.
                      (install-file (string-append #$gn "/bin/gn")
                                    "buildtools/linux64")

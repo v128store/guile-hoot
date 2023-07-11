@@ -1,14 +1,8 @@
 var waitFor;
 if (typeof drainJobQueue !== 'undefined') {
     waitFor = function waitFor(p) { drainJobQueue(); return p; };
-} else if (typeof testRunner !== 'undefined') {
-    waitFor = function waitFor(p) {
-        testRunner.waitUntilDone();
-        return p.then(val=> { testRunner.notifyDone(); return val; },
-                      err=> { throw err });
-    };
 } else {
-    // JSC will drain promises before exiting and doesn't require a
+    // JSC and V8 will drain promises before exiting and don't require a
     // specific waiter.
     waitFor = function waitFor(p) { return p; };
 }

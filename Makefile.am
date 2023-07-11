@@ -37,6 +37,8 @@ TESTS =						\
 EXTRA_DIST = 					\
   $(WATS)					\
   $(TESTS)					\
+  bin/eval.scm					\
+  bin/call.scm					\
   bootstrap.sh					\
   COPYING					\
   examples/hof.gwat				\

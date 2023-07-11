@@ -392,12 +392,13 @@
 (test-call "20" (lambda (f . args) (apply f args)) (lambda (x y) (+ x y)) 12 8)
 (test-call "12\n8" (lambda (f . args) (apply f args)) values 12 8)
 
-;; (test-call "42" (lambda (f tag)
-;;                   (call-with-prompt tag
-;;                     (lambda () (f))
-;;                     (lambda (k) #f)))
-;;                 (lambda () 42)
-;;                 "hey")
+(test-call "42" (lambda (f tag)
+                  (call-with-prompt tag
+                    (lambda () (f))
+                    (lambda (k) #f)))
+                (lambda () 42)
+                "hey")
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

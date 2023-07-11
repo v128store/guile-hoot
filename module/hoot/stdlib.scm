@@ -607,6 +607,11 @@
                   (br $lp))))
            (local.get $ret))
 
+     (func $apply-to-non-list (param $tail (ref eq))
+           (unreachable))
+     (func $get-callee-code (param $callee (ref eq)) (result (ref $kvarargs))
+           (unreachable))
+
      (func $apply (param $nargs i32) (param $arg0 (ref eq))
            (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (local $args (ref eq))
@@ -714,14 +719,18 @@
                 (else (local.set $nargs (i32.const 3)))))
               (else (local.set $nargs (i32.const 2)))))
             (else (local.set $nargs (i32.const 1))))
-           ;; FIXME: error if callee not a $proc
+           (if (i32.eqz (ref.eq (local.get $args) (i31.new (i32.const 13))))
+               (then (return_call $apply-to-non-list (local.get $args))))
            (return_call_ref $kvarargs
                             (local.get $nargs)
                             (local.get $arg0)
                             (local.get $arg1)
                             (local.get $arg2)
-                            (struct.get $proc $func
-                                        (ref.cast $proc (local.get $arg0)))))
+                            (if (ref $kvarargs)
+                                (ref.test #f $proc (local.get $arg0))
+                                (then (struct.get $proc $func
+                                                  (ref.cast $proc (local.get $arg0))))
+                                (else (call $get-callee-code (local.get $arg0))))))
      (global $apply-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $apply)))
 

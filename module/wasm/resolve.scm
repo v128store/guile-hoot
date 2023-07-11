@@ -281,8 +281,11 @@
 
      (define (resolve-block-type x)
        (match x
-         (($ <type-use> #f ($ <func-sig> () (or () (_))))
+         (($ <type-use> #f ($ <func-sig> () ()))
           x)
+         (($ <type-use> #f ($ <func-sig> () (ret)))
+          (let ((ret (resolve-val-type ret)))
+            (make-type-use #f (make-func-sig '() (list ret)))))
          (_ (resolve-type-use-as-idx x))))
 
      (define (resolve-instructions insts locals labels)

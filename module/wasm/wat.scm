@@ -38,12 +38,6 @@
 ;; strings have guile string syntax; bytevectors also for data.  could
 ;; write standard-compliant parser instead (port from wassemble).
 
-(define (fold1 f l s0)
-  (let lp ((l l) (s0 s0))
-    (match l
-      (() s0)
-      ((elt . l) (lp l (f elt s0))))))
-
 (define (natural-alignment inst)
   (case inst
     ((i32.load8_s
@@ -141,13 +135,17 @@
                (reverse exports) start (reverse elems)
                (reverse datas) (reverse tags) strings '()))
 
-  (define (parse-heap-type x)
+  (define (valid-heap-type? x)
     (match x
       ((or 'func 'extern 'any 'none 'noextern 'nofunc 'eq 'struct 'array 'i31
            'string 'stringview_iter 'stringview_wtf8 'stringview_wtf16
            (? id-or-idx?))
-       x)
-      (_ (error "bad heaptype" x))))
+       #t)
+      (_ #f)))
+  (define (parse-heap-type x)
+    (if (valid-heap-type? x)
+        x
+        (error "bad heaptype" x)))
   (define* (parse-ref-type x #:key (error-message "bad reftype"))
     (match x
       (('ref 'null ht) (make-ref-type #t (parse-heap-type ht)))
@@ -414,11 +412,11 @@
          `(,@args ,tag ,@(unfold-mem-arg mem-arg))))
       (((and tag (or 'i32.const 'i64.const 'f32.const 'f64.const)) val . insts)
        `(,@insts ,tag ,val))
-      (('ref.func id . args)
+      (('ref.func (? id-or-idx? id) . args)
        `(,@args ref.func ,id))
       (((and tag (or 'call_ref 'return_call_ref)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
-      (((and tag 'ref.null) id . args)
+      (((and tag 'ref.null) (? valid-heap-type? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'table.set 'table.get 'table.size 'table.grow
                      'table.fill
@@ -441,13 +439,9 @@
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
-      ;; FIXME: check that ID designates a heap type for ref.test and
-      ;; ref.cast, as well as ref.null above
-      (((and tag (or 'ref.test 'ref.cast)) 'null id . args)
-       `(,@args ,tag 'null ,id))
-      (((and tag (or 'ref.test 'ref.cast)) (? boolean? nullable?) id . args)
-       `(,@args ,tag ,nullable? ,id))
-      (((and tag (or 'ref.test 'ref.cast)) id . args)
+      (((and tag (or 'ref.test 'ref.cast)) 'null (? valid-heap-type? id) . args)
+       `(,@args ,tag null ,id))
+      (((and tag (or 'ref.test 'ref.cast)) (? valid-heap-type? id) . args)
        `(,@args ,tag ,id))
       (((and tag 'string.const) (? string? str) . args)
        `(,@args ,tag ,str))
@@ -555,7 +549,7 @@
            ('ref.null
             (match in
               ((id . in)
-               (lp/inst in `(,inst ,id)))))
+               (lp/inst in `(,inst ,(parse-heap-type id))))))
            ((or 'table.set 'table.get 'table.size 'table.grow
                 'table.fill
                 'memory.size 'memory.grow 'memory.fill)
@@ -588,8 +582,6 @@
             (match in
               (('null ht . in)
                (lp/inst in `(,inst #t ,(parse-heap-type ht))))
-              (((? boolean? nullable?) ht . in)
-               (lp/inst in `(,inst ,nullable? ,(parse-heap-type ht))))
               ((ht . in)
                (lp/inst in `(,inst #f ,(parse-heap-type ht))))))
            ('string.const

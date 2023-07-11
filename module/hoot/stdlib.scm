@@ -727,7 +727,7 @@
                             (local.get $arg1)
                             (local.get $arg2)
                             (if (ref $kvarargs)
-                                (ref.test #f $proc (local.get $arg0))
+                                (ref.test $proc (local.get $arg0))
                                 (then (struct.get $proc $func
                                                   (ref.cast $proc (local.get $arg0))))
                                 (else (call $get-callee-code (local.get $arg0))))))

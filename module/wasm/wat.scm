@@ -598,7 +598,7 @@
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
            (_
-            (lp/inst in inst)))))))
+            (lp/inst in (list inst))))))))
   (define (parse-offset x)
     (parse-block (match x
                    (('offset . offset) offset)

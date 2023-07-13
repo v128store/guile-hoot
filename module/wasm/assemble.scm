@@ -137,6 +137,7 @@
   (define (emit-block-type port bt)
     (match bt
       (#f (emit-u8 port #x40))
+      ((? exact-integer?) (emit-u32 port bt))
       ((or (? symbol?) ($ <ref-type>)) (emit-val-type port bt))
       (($ <type-use> #f ($ <func-sig> () ())) (emit-u8 port #x40))
       (($ <type-use> #f ($ <func-sig> () (vt))) (emit-val-type port vt))

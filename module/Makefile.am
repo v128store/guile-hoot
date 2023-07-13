@@ -12,6 +12,7 @@ SOURCES = 					\
   wasm/link.scm					\
   wasm/parse.scm				\
   wasm/symbolify.scm				\
+  wasm/vm.scm					\
   hoot/compile.scm				\
   hoot/stdlib.scm				\
   scripts/assemble-wasm.scm                     \

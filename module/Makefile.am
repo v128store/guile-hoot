@@ -11,6 +11,7 @@ SOURCES = 					\
   wasm/dump.scm					\
   wasm/link.scm					\
   wasm/parse.scm				\
+  wasm/stack.scm				\
   wasm/symbolify.scm				\
   hoot/compile.scm				\
   hoot/stdlib.scm				\

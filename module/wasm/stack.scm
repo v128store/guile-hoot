@@ -23,7 +23,6 @@
   #:use-module (ice-9 match)
   #:use-module ((srfi srfi-1) #:select (append-map filter-map))
   #:use-module (srfi srfi-9)
-  #:use-module (srfi srfi-11)
   #:use-module (wasm types)
   #:export (make-func-env
             initial-ctx
@@ -139,12 +138,6 @@
                  (make-block id branch-arg-types block)
                  param-types)))))
 
-(define (push ctx . types)
-  (match ctx
-    (($ <ctx> info block stack)
-     (make-ctx info block (append (reverse types) stack)))
-    ((or ($ <unreachable-ctx>) ($ <invalid-ctx>)) ctx)))
-
 (define (peek ctx)
   (match ctx
     (($ <ctx> info block stack)
@@ -152,21 +145,6 @@
        ((top . stack) top)
        (() #f)))
     ((or ($ <unreachable-ctx>) ($ <invalid-ctx>)) #f)))
-
-(define (pop ctx)
-  (match ctx
-    ((or ($ <unreachable-ctx>) ($ <invalid-ctx>)) (values #f ctx))
-    (($ <ctx> info block stack)
-     (match stack
-       ((top . stack)
-        (values top (make-ctx info block stack)))
-       (()
-        (values #f (make-invalid-ctx "pop of empty stack")))))))
-
-(define (pop2 ctx)
-  (let*-values (((b ctx) (pop ctx))
-                ((a ctx) (pop ctx)))
-    (values a b ctx)))
 
 (define (vector-assq v k)
   (let lp ((i 0))
@@ -716,8 +694,8 @@
 (define (apply-stack-effect ctx effect)
   (define (heap-type-sub-type? sub super)
     (or (eq? sub super)
-        (let lp ((sub sub))
-          (match (lookup-type ctx sub)
+        (let lp ((sub (lookup-type ctx sub)))
+          (match sub
             (($ <sub-type> supers type)
              (or (memq super supers)
                  (lp type)))

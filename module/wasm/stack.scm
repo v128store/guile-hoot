@@ -24,8 +24,7 @@
   #:use-module ((srfi srfi-1) #:select (append-map filter-map))
   #:use-module (srfi srfi-9)
   #:use-module (wasm types)
-  #:export (make-func-env
-            initial-ctx
+  #:export (initial-ctx
             push-block
             compute-stack-effect
             apply-stack-effect))

@@ -1000,14 +1000,44 @@
             (('add #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
+              `((local.get $i0)
+                (i32.const 1)
+                (i32.shr_s)
+                (local.get $i1)
+                (i32.const 1)
+                (i32.shr_s)
+                (i32.add)
+                (local.tee $i0)
+                (i32.const 29)
+                (i32.shr_u)
+                (local.tee $i1)
+                (i32.eqz)
+                (local.get $i1)
+                (i32.const 7)
+                (i32.eq)
+                (i32.or)
+                (if #f ,scm-block-type
+                    ((local.get $i0) (i32.const 1) (i32.shl) (i31.new))
+                    ((local.get $i0) (call $i32->bignum))))
               '((call $add))))
             (('sub #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0) (local.get $i1) (i32.sub) (i31.new))
+              `((local.get $i0) (i32.const 1) (i32.shr_s)
+                (local.get $i1) (i32.const 1) (i32.shr_s)
+                (i32.sub)
+                (local.tee $i0)
+                (i32.const 29)
+                (i32.shr_u)
+                (local.tee $i1)
+                (i32.eqz)
+                (local.get $i1)
+                (i32.const 7)
+                (i32.eq)
+                (i32.or)
+                (if #f ,scm-block-type
+                    ((local.get $i0) (i32.const 1) (i32.shl) (i31.new))
+                    ((local.get $i0) (call $i32->bignum))))
               '((call $sub))))
             (('add/immediate y x)
              (compile-fixnum-fast-path
@@ -1026,10 +1056,14 @@
             (('mul #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0)
-                (local.get $i1) (i32.const 1) (i32.shr_s)
-                (i32.mul) (i31.new))
+              `((i32.const 0)
+                (local.get $i0) (i32.const 1) (i32.shr_s) (i64.extend_i32_s)
+                (local.get $i1) (i32.const 1) (i32.shr_s) (i64.extend_i32_s)
+                (i64.mul)
+                (i32.wrap_i64)
+                (i32.const 1)
+                (i32.shl)
+                (i31.new))
               '((call $mul))))
             (('div #f x y)
              `(,(local.get x)

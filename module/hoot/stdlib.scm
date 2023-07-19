@@ -745,6 +745,12 @@
            (param $ch i32)
            (unreachable))
 
+     (func $i32->bignum (param $a i32) (result (ref eq))
+           (struct.new $bignum
+                       (i32.const 0)
+                       (call $bignum-from-i64
+                             (i64.extend_i32_s (local.get $a)))))
+
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))

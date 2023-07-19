@@ -142,6 +142,13 @@
                              (lp (1+ n))
                              n))))
 
+;; (1+ most-positive-fixnum)
+(test-call "536870912" (lambda (a b) (+ a b)) 536870911 1)
+(test-call "536870954" (lambda (a b) (+ a b)) 536870911 1)
+;; (1- most-negative-fixnum)
+(test-call "-536870913" (lambda (a b) (- a b)) -536870912 1)
+(test-call "-1073741823" (lambda (a b) (- a b)) -536870912 536870911)
+
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)

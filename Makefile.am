@@ -25,7 +25,8 @@ CLEANFILES += $(SCM_TESTS:test/%.scm=%.log)
 
 SCM_TESTS = 					\
   test/test-wasm-assembler.scm			\
-  test/test-constants.scm
+  test/test-constants.scm			\
+  test/test-vm.scm
 
 JS_TESTS = 					\
   examples/basic-types.js

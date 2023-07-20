@@ -406,6 +406,25 @@
                 (lambda (tag) (abort-to-prompt tag 69))
                 "hey")
 
+(test-call "69"
+           (lambda (abort-to-prompt tag)
+             (call-with-prompt tag
+                               (lambda ()
+                                 (dynamic-wind values
+                                     (lambda () 42)
+                                     (lambda () (abort-to-prompt tag 69))))
+                               (lambda (k v) v)))
+           abort-to-prompt "hey")
+(test-call "69"
+           (lambda (abort-to-prompt tag)
+             (call-with-prompt tag
+                               (lambda ()
+                                 (dynamic-wind values
+                                     (lambda () (abort-to-prompt tag 42))
+                                     (lambda () (abort-to-prompt tag 69))))
+                               (lambda (k v) v)))
+           abort-to-prompt "hey")
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

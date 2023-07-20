@@ -536,6 +536,16 @@
      (global $values-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $values)))
 
+     (func $push-dyn (param $dyn (ref $dyn))
+           (local $dyn-sp i32)
+           (global.set $dyn-sp
+                       (i32.add (local.tee $dyn-sp (global.get $dyn-sp))
+                                (i32.const 1)))
+           (if (i32.ge_u (local.get $dyn-sp)
+                         (table.size $dyn-stack))
+               (then (call $grow-dyn-stack)))
+           (table.set $dyn-stack (local.get $dyn-sp) (local.get $dyn)))
+
      (func $find-prompt (param $tag (ref eq)) (result (ref $dynprompt))
            (local $dyn (ref $dyn))
            (local $prompt (ref $dynprompt))

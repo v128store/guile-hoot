@@ -435,7 +435,7 @@
        `(,@args ,tag 0 0))
       (((and tag (or 'struct.new)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
-      (((and tag (or 'struct.set 'struct.get))
+      (((and tag (or 'struct.set 'struct.get 'struct.get_s 'struct.get_u))
         (? id-or-idx? ti)
         (? id-or-idx? fi) . args)
        `(,@args ,tag ,ti ,fi))
@@ -574,7 +574,7 @@
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
-           ((or 'struct.set 'struct.get)
+           ((or 'struct.set 'struct.get 'struct.get_s 'struct.get_u)
             (match in
               (((? id-or-idx? ti) (? id-or-idx? fi) . in)
                (lp/inst in `(,inst ,ti ,fi)))))

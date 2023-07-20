@@ -255,9 +255,6 @@
       (type $dynwind
             (sub $dyn
               (struct
-               (field $raw-sp i32)
-               (field $scm-sp i32)
-               (field $ret-sp i32)
                (field $wind (ref $proc))
                (field $unwind (ref $proc)))))
       (type $dynprompt
@@ -713,16 +710,6 @@
              (if (ref.test $dynwind (local.get $dyn))
                  (then
                   (local.set $dynwind (ref.cast $dynwind (local.get $dyn)))
-                  (global.set $raw-sp (struct.get $dynwind $raw-sp
-                                                  (local.get $dynwind)))
-                  (global.set $scm-sp
-                              (i32.add (struct.get $dynwind $scm-sp
-                                                   (local.get $dynwind))
-                                       (i32.const 3)))
-                  (global.set $ret-sp
-                              (i32.add (struct.get $dynwind $ret-sp
-                                                   (local.get $dynwind))
-                                       (i32.const 1)))
                   (if (i32.lt_u (global.get $scm-sp) (table.size $scm-stack))
                       (then
                        (call $grow-scm-stack (i32.const 3))))

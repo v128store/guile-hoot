@@ -222,9 +222,6 @@
     (type $dynwind
       (sub $dyn
         (struct
-          (field $raw-sp i32)
-          (field $scm-sp i32)
-          (field $ret-sp i32)
           (field $wind (ref $proc))
           (field $unwind (ref $proc)))))
     (type $dynprompt

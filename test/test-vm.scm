@@ -482,6 +482,57 @@
          #:imports `(("globals" . (("bar" . ,(make-wasm-global 38 #f)))))
          #:d8? #f)
 
+(test-vm "drop"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (i32.const 13)
+                 (drop))))
+
+(test-vm "drop in unreachable code"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (return)
+                 (drop))))
+
+(test-vm "select first"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (i32.const 13)
+                 (i32.const 1)
+                 (select))))
+
+(test-vm "select second"
+         13
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (i32.const 13)
+                 (i32.const 0)
+                 (select))))
+
+(test-vm "select in unreachable code"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (return)
+                 (select))))
+
+(test-vm "select in unreachable code with i32 on top"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i32.const 42)
+                 (return)
+                 (i32.const 0)
+                 (select))))
+
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))
                (not (zero? (test-runner-xpass-count (test-runner-get))))))

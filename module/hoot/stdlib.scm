@@ -245,17 +245,19 @@
       (type $dynwind
             (sub $dyn
               (struct
-               (field $wind (ref $kvarargs))
-               (field $unwind (ref $kvarargs)))))
+               (field $raw-sp i32)
+               (field $scm-sp i32)
+               (field $ret-sp i32)
+               (field $wind (ref $proc))
+               (field $unwind (ref $proc)))))
       (type $dynprompt
             (sub $dyn
               (struct
                (field $raw-sp i32)
                (field $scm-sp i32)
                (field $ret-sp i32)
-               (field $dyn-sp i32)
                (field $unwind-only? i8)
-               (field $key (ref eq))
+               (field $tag (ref eq))
                (field $handler (ref $kvarargs)))))
       (type $dynfluid
             (sub $dyn

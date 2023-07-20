@@ -735,7 +735,6 @@
                (global.get $raw-sp)
                (global.get $scm-sp)
                (global.get $ret-sp)
-               (local.get $dyn-sp)
                (i32.const ,(if escape-only? 1 0))
                ,(local.get tag)
                ,(local.get handler)

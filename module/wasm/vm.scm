@@ -258,7 +258,7 @@
            (('i32.const x)
             (assert-s32 x)
             (push stack 'i32))
-           (((or 'i32.eqz))
+           (((or 'i32.eqz 'i32.clz 'i32.ctz 'i32.popcnt))
             (push (pop stack 'i32) 'i32))
            (((or 'i32.add 'i32.sub 'i32.mul 'i32.div_s 'i32.div_u
                  'i32.rem_s 'i32.rem_u 'i32.eq 'i32.ne 'i32.lt_s 'i32.lt_u
@@ -563,6 +563,8 @@ bytevector, an input port, or a <wasm> record produced by
   ;; Convenience macros.
   (define-syntax-rule (unop proc)
     (push (proc (pop))))
+  (define-syntax-rule (u32-unop proc)
+    (unop (lambda (a) (proc (s32->u32 a)))))
   (define-syntax-rule (binop proc)
     (let ((b (pop)) (a (pop))) (push (proc a b))))
   (define-syntax-rule (compare pred)
@@ -580,6 +582,25 @@ bytevector, an input port, or a <wasm> record produced by
   (define (shr n k) (ash n (- k)))
   (define (rotl32 n k) (logior (shl n k) (shr n (- 32 k))))
   (define (rotr32 n k) (logior (shr n k) (shl n (- 32 k))))
+  (define (clz32 n)
+    (let loop ((i 31)
+               (k 0))
+      (if (or (= i -1) (logbit? i n))
+          k
+          (loop (- i 1) (+ k 1)))))
+  (define (ctz32 n)
+    (let loop ((i 0)
+               (k 0))
+      (if (or (= i 32) (logbit? i n))
+          k
+          (loop (+ i 1) (+ k 1)))))
+  (define (popcnt32 n)
+    (let loop ((i 0)
+               (k 0))
+      (cond
+       ((= i 32) k)
+       ((logbit? i n) (loop (+ i 1) (+ k 1)))
+       (else (loop (+ i 1) k)))))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
   (match instr
@@ -652,6 +673,9 @@ bytevector, an input port, or a <wasm> record produced by
     (('i32.shr_u) (u32-binop shr))
     (('i32.rotl) (u32-binop rotl32))
     (('i32.rotr) (u32-binop rotr32))
+    (('i32.clz) (u32-unop clz32))
+    (('i32.ctz) (u32-unop ctz32))
+    (('i32.popcnt) (u32-unop popcnt32))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

@@ -680,7 +680,9 @@
           (($ $prim name)
            (match name
              ('values `((global.get $values-primitive)))
-             ('apply `((global.get $apply-primitive)))))
+             ('apply `((global.get $apply-primitive)))
+             ('abort-to-prompt '((global.get $abort-to-prompt-primitive)))
+             (_ (error "unhandled $prim" name))))
 
           (($ $primcall name param args)
            (match-primcall

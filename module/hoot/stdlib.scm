@@ -536,6 +536,184 @@
      (global $values-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $values)))
 
+     (func $find-prompt (param $tag (ref eq)) (result (ref $dynprompt))
+           (local $dyn (ref $dyn))
+           (local $prompt (ref $dynprompt))
+           (local $sp i32)
+           (local.set $sp (global.get $dyn-sp))
+           (loop $lp
+             (if (local.get $sp)
+                 (then
+                  (local.set $sp (i32.sub (local.get $sp) (i32.const 1)))
+                  ;; FIXME: could br_on_cast_fail to $lp; need to fix
+                  ;; the assembler.
+                  (local.set $dyn (ref.as_non_null
+                                   (table.get $dyn-stack (local.get $sp))))
+                  (if (ref.test $dynprompt (local.get $dyn))
+                      (then
+                       (local.set $prompt
+                                  (ref.cast $dynprompt (local.get $dyn)))
+                       (if (ref.eq (struct.get $dynprompt $tag
+                                               (local.get $prompt))
+                                   (local.get $tag))
+                           (then (return (local.get $prompt)))
+                           (else (br $lp)))))
+                  (br $lp))
+                 (else
+                  (call $die (string.const "prompt not found")
+                        (local.get $tag)))))
+           (unreachable))
+
+     (func $capture-continuation (param $prompt (ref $dynprompt))
+           (result (ref eq))
+           (if (result (ref eq))
+               (struct.get_u $dynprompt $unwind-only? (local.get $prompt))
+               (then (i31.new (i32.const 1)))
+               (else (unreachable))))
+
+     (func $keep-unwinding (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (local $tag (ref eq))
+           (local $cont (ref eq))
+           (local $args (ref eq))
+           (local.set $tag
+                      (ref.as_non_null
+                       (table.get $scm-stack
+                                  (i32.sub (global.get $scm-sp) (i32.const 3)))))
+           (local.set $cont
+                      (ref.as_non_null
+                       (table.get $scm-stack
+                                  (i32.sub (global.get $scm-sp) (i32.const 2)))))
+           (local.set $args
+                      (ref.as_non_null
+                       (table.get $scm-stack
+                                  (i32.sub (global.get $scm-sp) (i32.const 1)))))
+           (global.set $scm-sp (i32.sub (global.get $scm-sp) (i32.const 3)))
+           (return_call $unwind-to-prompt
+                        (local.get $tag) (local.get $cont) (local.get $args)))
+
+     (func $unwind-dynfluid (param $fluid (ref $dynfluid))
+           (unreachable))
+     (func $unwind-dynstate (param $fluid (ref $dynstate))
+           (unreachable))
+
+     (func $unwind-to-prompt
+           (param $tag (ref eq)) (param $cont (ref eq)) (param $args (ref eq))
+           (local $prompt (ref $dynprompt))
+           (local $dynwind (ref $dynwind))
+           (local $dyn (ref $dyn))
+           ;; During an abort-to-prompt that crosses a dynamic-wind,
+           ;; after the dynamic-wind unwinder returns, it could be that
+           ;; the dynamic stack is different from where the
+           ;; abort-to-prompt started.  It could be that the prompt is
+           ;; no longer in the continuation; that's why we look it up
+           ;; again here.  More annoyingly, it could be that the prompt
+           ;; becomes not unwind-only!  FIXME to check that if $cont is
+           ;; #f, that the prompt is indeed still unwind-only.
+           (local.set $prompt (call $find-prompt (local.get $tag)))
+           (loop $lp
+             (global.set $dyn-sp
+                         (i32.sub (global.get $dyn-sp) (i32.const 1)))
+             (local.set $dyn (ref.as_non_null
+                              (table.get $dyn-stack (global.get $dyn-sp))))
+             (if (ref.eq (local.get $dyn) (local.get $prompt))
+                 (then
+                  ;; Unwind control stacks.
+                  (global.set $raw-sp (struct.get $dynprompt $raw-sp
+                                                  (local.get $prompt)))
+                  (global.set $scm-sp (struct.get $dynprompt $scm-sp
+                                                  (local.get $prompt)))
+                  (global.set $ret-sp (struct.get $dynprompt $ret-sp
+                                                  (local.get $prompt)))
+                  ;; Use apply + values to pass values to handler.
+                  (global.set $ret-sp
+                              (i32.add (global.get $ret-sp) (i32.const 1)))
+                  (if (i32.lt_u (global.get $ret-sp) (table.size $ret-stack))
+                      (then
+                       (call $grow-ret-stack (i32.const 1))))
+                  (table.set $ret-stack
+                             (i32.sub (global.get $ret-sp) (i32.const 1))
+                             (struct.get $dynprompt $handler
+                                         (local.get $prompt)))
+                  (return_call $apply (i32.const 3)
+                               (global.get $apply-primitive)
+                               (global.get $values-primitive)
+                               (struct.new $pair (i32.const 0)
+                                           (local.get $cont)
+                                           (local.get $args)))))
+             ;; Something else is on the stack; what is it?
+             (if (ref.test $dynwind (local.get $dyn))
+                 (then
+                  (local.set $dynwind (ref.cast $dynwind (local.get $dyn)))
+                  (global.set $raw-sp (struct.get $dynwind $raw-sp
+                                                  (local.get $dynwind)))
+                  (global.set $scm-sp
+                              (i32.add (struct.get $dynwind $scm-sp
+                                                   (local.get $dynwind))
+                                       (i32.const 3)))
+                  (global.set $ret-sp
+                              (i32.add (struct.get $dynwind $ret-sp
+                                                   (local.get $dynwind))
+                                       (i32.const 1)))
+                  (if (i32.lt_u (global.get $scm-sp) (table.size $scm-stack))
+                      (then
+                       (call $grow-scm-stack (i32.const 3))))
+                  (if (i32.lt_u (global.get $ret-sp) (table.size $ret-stack))
+                      (then
+                       (call $grow-ret-stack (i32.const 1))))
+                  (table.set $scm-stack
+                             (i32.sub (global.get $scm-sp) (i32.const 3))
+                             (local.get $tag))
+                  (table.set $scm-stack
+                             (i32.sub (global.get $scm-sp) (i32.const 2))
+                             (local.get $cont))
+                  (table.set $scm-stack
+                             (i32.sub (global.get $scm-sp) (i32.const 1))
+                             (local.get $args))
+                  (table.set $ret-stack
+                             (i32.sub (global.get $ret-sp) (i32.const 1))
+                             (ref.func $keep-unwinding))
+                  (return_call_ref $kvarargs
+                                   (i32.const 1)
+                                   (struct.get $dynwind $unwind
+                                               (local.get $dynwind))
+                                   (i31.new (i32.const 0))
+                                   (i31.new (i32.const 0))
+                                   (struct.get
+                                    $proc $func
+                                    (struct.get $dynwind $unwind
+                                                (local.get $dynwind))))))
+             (br_if $lp (ref.test $dynprompt (local.get $dyn)))
+             (if (ref.test $dynfluid (local.get $dyn))
+                 (then
+                  (call $unwind-dynfluid (ref.cast $dynfluid (local.get $dyn)))
+                  (br $lp)))
+             (if (ref.test $dynstate (local.get $dyn))
+                 (then
+                  (call $unwind-dynstate (ref.cast $dynstate (local.get $dyn)))
+                  (br $lp)))
+             (unreachable)))
+
+     (func $abort-to-prompt (param $nargs i32) (param $arg0 (ref eq))
+           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (if (i32.lt_u (local.get $nargs) (i32.const 2))
+               (then
+                (call $wrong-num-args (local.get $nargs) (local.get $arg0)
+                      (local.get $arg1) (local.get $arg2))
+                (unreachable)))
+           ;; $arg0 is the closure, $arg1 is tag, and the values are in
+           ;; $arg2 and up, which we collect to a rest list.
+           (return_call $unwind-to-prompt (local.get $arg1)
+                        (call $capture-continuation
+                              (call $find-prompt (local.get $arg1)))
+                        (call $collect-rest-args (local.get $nargs)
+                              (local.get $arg0)
+                              (local.get $arg1)
+                              (local.get $arg2)
+                              (i32.const 2))))
+     (global $abort-to-prompt-primitive (ref eq)
+             (struct.new $proc (i32.const 0) (ref.func $abort-to-prompt)))
+
      (func $arg-ref (param $n i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (result (ref eq))

@@ -126,28 +126,44 @@
       (make-exception-with-message
        (format #f "WASM validation error: ~a" msg))
       (make-exception-with-irritants irritants))))
-  (define (push stack . types)
-    (let loop ((stack stack)
-               (types types))
-      (match types
-        (() stack)
-        ((head . tail)
-         (loop (cons head stack) tail)))))
-  (define (pop stack . types)
-    (let loop ((stack stack)
-               (types types))
-      (match types
-        (() stack)
-        ((type . rest-types)
-         (match stack
-           ((stack-type . rest-stack)
-            (if (eq? stack-type type)
-                (loop rest-stack rest-types)
-                (validation-error
-                 (format #f "stack type mismatch; expected ~a, got ~a"
-                         type stack-type))))
-           (_
-            (validation-error "not enough values on stack")))))))
+  ;; -> performs stack manipulation and type checking. Stacks are
+  ;; represented as lists of types.  Some operations invalidate the
+  ;; stack, such as 'br', and the invalid stack is represented as #f.
+  ;; Thus a stack may be a proper list like '(i32 i32) or an improper
+  ;; list like '(i32 . #f).
+  (define* (-> stack inputs outputs #:key block-end?)
+    (define-values (stack* stack-types)
+      ;; Pop as many types off of the stack as there are inputs.  Or,
+      ;; in end-of-block case, pop all types off of the stack.
+      (let loop ((stack stack)
+                 (types (reverse inputs))
+                 (result '()))
+        (match types
+          (()
+           ;; Type checking the end of a block requires matching
+           ;; against the *entire* stack, not just the top n types.
+           (if block-end?
+               (match stack
+                 ;; Terminate if stack is empty or invalid.
+                 (#f (values #f result))
+                 (() (values '() result))
+                 ;; Otherwise, continue popping types.
+                 ((top . rest-stack)
+                  (loop rest-stack '() (cons top result))))
+               (values stack result)))
+          ((type . rest-types)
+           (match stack
+             ;; Popping from the invalid stack always gives you the
+             ;; type you are checking for.
+             (#f (loop #f rest-types (cons type result)))
+             (() (values '() result))
+             ((_ . rest-stack)
+              (loop rest-stack rest-types (cons type result))))))))
+    (if (equal? inputs stack-types)
+        (fold cons stack* outputs)
+        (validation-error
+         (format #f "type mismatch; expected ~a, got ~a"
+                 inputs stack-types))))
   (define (assert-s32 x)
     (unless (s32? x)
       (validation-error "i32 constant out of range" x)))
@@ -160,7 +176,7 @@
       (match instr
         (('i32.const x)
          (assert-s32 x)
-         (push stack 'i32))
+         (-> stack '() '(i32)))
         (invalid
          (validation-error "invalid global initializer instruction"
                            global instr))))
@@ -191,15 +207,6 @@
            (($ <func-sig> ((= param-type param-types) ...) _)
             param-types)))
        (define block-type-results func-sig-results)
-       (define (check-types stack types)
-         (let ((stack-types (reverse stack)))
-           (unless (equal? types stack-types)
-             (validation-error
-              (format #f "type mismatch; expected ~a, got ~a"
-                      types stack-types)))))
-       (define (check-bounds v idx)
-         (unless (and (>= idx 0) (< idx (vector-length v)))
-           (validation-error "index out of bounds" idx)))
        (define (validate-instr instr stack control)
          (define (check-label l)
            (unless (and (>= l 0) (< l (length control)))
@@ -208,78 +215,86 @@
            ;; Control
            (('nop) stack)
            (('unreachable) #f)
-           (('if _ (= lookup-block-type block-type) consequent alternate)
-            (let ((new-stack (pop stack 'i32)))
-              (check-types new-stack (block-type-params block-type))
-              (validate-block block-type consequent new-stack control)
-              (validate-block block-type alternate new-stack control)))
-           (((or 'block 'loop) _ (= lookup-block-type block-type) body)
-            (check-types stack (block-type-params block-type))
-            (validate-block block-type body stack control))
+           (('if _ (= lookup-block-type bt) consequent alternate)
+            (let* ((params (block-type-params bt))
+                   (results (block-type-results bt))
+                   (stack* (-> stack `(,@params i32) results)))
+              (validate-branch consequent params control results results)
+              (validate-branch alternate params control results results)
+              stack*))
+           (('block _ (= lookup-block-type bt) body)
+            (let* ((params (block-type-params bt))
+                   (results (block-type-results bt))
+                   (stack* (-> stack params results)))
+              (validate-branch body params control results results)
+              stack*))
+           (('loop _ (= lookup-block-type bt) body)
+            (let* ((params (block-type-params bt))
+                   (results (block-type-results bt))
+                   (stack* (-> stack params results)))
+              (validate-branch body params control params results)
+              stack*))
            (('call idx)
             (match (vector-ref func-sigs idx)
-              (($ <func-sig> (($ <param> _ param-types) ...)
-                             (result-types ...))
-               (apply push (apply pop stack param-types) result-types))))
+              (($ <func-sig> (($ <param> _ params) ...) (results ...))
+               (-> stack params results))))
            (('return)
             (match control
-              ((_ ... block)
-               (check-types stack (block-type-results block))
+              ((_ ... types)
+               (-> stack types '())
                #f)))
            (('br l)
             (check-label l)
-            (check-types stack (block-type-results (list-ref control l)))
+            (-> stack (list-ref control l) '())
             #f)
            (('br_if l)
-            (let ((new-stack (pop stack 'i32)))
-              (check-label l)
-              (check-types new-stack (block-type-results (list-ref control l)))
-              new-stack))
+            (check-label l)
+            (-> stack `(,@(list-ref control l) i32) '())
+            (-> stack '(i32) '()))
            ;; Locals
            (('local.get idx)
-            (push stack (vector-ref local-types idx)))
+            (-> stack '() (list (vector-ref local-types idx))))
            (('local.set idx)
-            (pop stack (vector-ref local-types idx)))
+            (-> stack (list (vector-ref local-types idx)) '()))
            (('local.tee idx)
             (let ((type (vector-ref local-types idx)))
-              (push (pop stack type) type)))
+              (-> stack (list type) (list type))))
            ;; Globals
            (('global.get idx)
             (match (vector-ref global-types idx)
               (($ <global-type> _ type)
-                 (push stack type))))
+               (-> stack '() (list type)))))
            (('global.set idx)
             (match (vector-ref global-types idx)
               (($ <global-type> mutable? type)
                (unless mutable?
                  (validation-error "global is immutable" idx))
-               (pop stack type))))
+               (-> stack (list type) '()))))
            ;; Numeric
            (('i32.const x)
             (assert-s32 x)
-            (push stack 'i32))
+            (-> stack '() '(i32)))
            (((or 'i32.eqz 'i32.clz 'i32.ctz 'i32.popcnt))
-            (push (pop stack 'i32) 'i32))
+            (-> stack '(i32) '(i32)))
            (((or 'i32.add 'i32.sub 'i32.mul 'i32.div_s 'i32.div_u
                  'i32.rem_s 'i32.rem_u 'i32.eq 'i32.ne 'i32.lt_s 'i32.lt_u
                  'i32.le_s 'i32.le_u 'i32.gt_s 'i32.gt_u 'i32.ge_s 'i32.ge_u
                  'i32.and 'i32.or 'i32.xor 'i32.shl 'i32.shr_s 'i32.shr_u
                  'i32.rotl 'i32.rotr))
-            (push (pop stack 'i32 'i32) 'i32))
+            (-> stack '(i32 i32) '(i32)))
            (instr
             (validation-error "unimplemented instruction" instr))))
-       (define (validate-block block-type instrs stack control)
-         (let ((control* (cons block-type control)))
+       (define (validate-branch instrs stack control br-params results)
+         (let ((control* (cons br-params control)))
            (let loop ((instrs instrs)
                       (stack stack))
-             (and stack
-                  (match instrs
-                    (()
-                     (check-types stack (block-type-results block-type))
-                     stack)
-                    ((instr . rest)
-                     (loop rest (validate-instr instr stack control*))))))))
-       (validate-block type body '() '()))))
+             (match instrs
+               (()
+                (-> stack results '() #:block-end? #t))
+               ((instr . rest)
+                (loop rest (validate-instr instr stack control*)))))))
+       (let ((results (block-type-results type)))
+         (validate-branch body '() '() results results)))))
   (for-each validate-global (wasm-globals wasm))
   (for-each validate-func (wasm-funcs wasm))
   (%make-wasm-module wasm))
@@ -354,6 +369,13 @@ bytevector, an input port, or a <wasm> record produced by
     ((head . rest)
      (set-wasm-stack-items! stack rest)
      head)))
+
+(define (stack-pop-n! stack n)
+  (let loop ((n n)
+             (result '()))
+    (if (= n 0)
+        result
+        (loop (- n 1) (cons (stack-pop! stack) result)))))
 
 ;; TODO: Replace with global weak hash table that maps procedures to
 ;; signatures.
@@ -444,6 +466,7 @@ bytevector, an input port, or a <wasm> record produced by
            (($ <func> _ ($ <type-use> _ ($ <type> _ sig)) locals body)
             (let* ((local-types (map local-type locals))
                    (n-params (length (func-sig-params sig)))
+                   (n-results (length (func-sig-results sig)))
                    (n-locals (length local-types)))
               (define (wasm-proc . args)
                 (let ((stack (make-wasm-stack))
@@ -469,7 +492,7 @@ bytevector, an input port, or a <wasm> record produced by
                    (lambda (tag)
                      (execute* body (list func) instance stack (list tag) locals))
                    (lambda () 'return))
-                  (apply values (reverse (wasm-stack-items stack)))))
+                  (apply values (stack-pop-n! stack n-results))))
               (make-wasm-func wasm-proc sig)))))
        ;; Process imports.
        (let loop ((wasm-imports wasm-imports)

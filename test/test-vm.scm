@@ -21,21 +21,80 @@
 
 (use-modules (ice-9 binary-ports)
              (ice-9 exceptions)
+             (ice-9 popen)
+             (ice-9 textual-ports)
              (srfi srfi-64)
              (wasm assemble)
              (wasm vm))
 
 (define s32-overflow (@@ (wasm vm) s32-overflow))
 
-(define (eval-wat wat func args imports)
-  (let* ((wasm (wat->wasm wat))
-         (module (make-wasm-module wasm))
+(define d8 (or (getenv "D8") "d8"))
+(define srcdir (or (getenv "SRCDIR") (getcwd)))
+
+(define (scope-file file-name)
+  (string-append srcdir "/" file-name))
+
+(define (unwind-protect body unwind)
+  (call-with-values
+      (lambda ()
+        (with-exception-handler
+         (lambda (exn)
+           (unwind)
+           (raise-exception exn))
+         body))
+    (lambda vals
+      (unwind)
+      (apply values vals))))
+
+(define (call-with-wasm-file wasm f)
+  (let* ((wasm-port (mkstemp "/tmp/tmp-wasm-XXXXXX"))
+         (wasm-file-name (port-filename wasm-port)))
+    (put-bytevector wasm-port wasm)
+    (close-port wasm-port)
+    (unwind-protect
+     (lambda () (f wasm-file-name))
+     (lambda () (delete-file wasm-file-name)))))
+
+(define (run-d8 . args)
+  (let* ((args (cons* "--experimental-wasm-gc"
+                      "--experimental-wasm-stringref"
+                      "--experimental-wasm-return-call"
+                      args))
+         (port (apply open-pipe* OPEN_READ d8 args))
+         (result (string-trim-both (get-string-all port))))
+    (if (zero? (close-pipe port))
+        (call-with-input-string result read)
+        (error result))))
+
+(define (run-wasm-in-d8 wasm func args)
+  (call-with-wasm-file
+   wasm
+   (lambda (wasm-file-name)
+     (apply run-d8 (scope-file "test/load-wasm-and-print-primitive.js")
+            "--" wasm-file-name func
+            (map (lambda (arg) (format #f "~a" arg)) args)))))
+
+(define (run-wasm-in-vm wasm func args imports)
+  (let* ((module (make-wasm-module wasm))
          (instance (make-wasm-instance module #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
+(define (eval-wat wat func args imports d8?)
+  (let* ((wasm (wat->wasm wat))
+         (our-result (run-wasm-in-vm wasm func args imports)))
+    (when d8?
+      (let ((d8-result (run-wasm-in-d8 wasm func args)))
+        (unless (equal? our-result d8-result)
+          (error "our result differs from d8" our-result d8-result))))
+    our-result))
+
 (define* (test-vm name expected wat #:key
-                  (func "main") (args '()) (imports '()))
-  (test-equal name expected (eval-wat wat func args imports)))
+                  (func "main") (args '()) (imports '()) (d8? #t))
+  (let ((wasm (wat->wasm wat)))
+    (test-equal name
+      expected
+      (eval-wat wat func args imports d8?))))
 
 (test-begin "test-vm")
 
@@ -334,7 +393,7 @@
                    (func (export "main") (result i32)
                          (i32.const 1)
                          (i32.const 2)))))
-        (eval-wat wat "main" '() '())
+        (eval-wat wat "main" '() '() #f)
         #f))
     #:unwind? #t
     #:unwind-for-type &wasm-validation-error))
@@ -348,7 +407,7 @@
                          (return) ; stack is invalid after this
                          (i32.const 2)
                          (i32.const 3)))))
-        (eval-wat wat "main" '() '())
+        (eval-wat wat "main" '() '() #f)
         #f))
     #:unwind? #t
     #:unwind-for-type &wasm-validation-error))
@@ -401,7 +460,8 @@
            (func (export "main") (param $x i32) (result i32)
                  (call $add42 (local.get $x))))
          #:imports `(("lib" . (("add42" . ,(lambda (x) (+ x 42))))))
-         #:args '(38))
+         #:args '(38)
+         #:d8? #f)
 
 (test-vm "mutable globals"
          42
@@ -419,7 +479,8 @@
            (global $bar (import "globals" "bar") i32)
            (func (export "main") (result i32)
                  (i32.add (global.get $foo) (global.get $bar))))
-         #:imports `(("globals" . (("bar" . ,(make-wasm-global 38 #f))))))
+         #:imports `(("globals" . (("bar" . ,(make-wasm-global 38 #f)))))
+         #:d8? #f)
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

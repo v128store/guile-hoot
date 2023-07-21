@@ -980,14 +980,12 @@
             (('add #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0) (local.get $i1) (i32.add) (i31.new))
+              '((local.get $i0) (local.get $i1) (call $fixnum-add))
               '((call $add))))
             (('sub #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0) (local.get $i1) (i32.sub) (i31.new))
+              '((local.get $i0) (local.get $i1) (call $fixnum-sub))
               '((call $sub))))
             (('add/immediate y x)
              (compile-fixnum-fast-path

@@ -935,6 +935,40 @@
            (param $ch i32)
            (unreachable))
 
+     (func $i32->bignum (param $a i32) (result (ref eq))
+           (struct.new $bignum
+                       (i32.const 0)
+                       (call $bignum-from-i64
+                             (i64.extend_i32_s (local.get $a)))))
+
+     ;; The $A and $B parameters are 30-bit fixnums, with a zero LSB bit
+     ;; as the fixnum tag. We examine the top three bits of the result:
+     ;; if they're identical, no overflow has occurred and the result is
+     ;; represented as a fixnum; otherwise, the result won't fit into a
+     ;; fixnum and must be returned as a bignum.
+     (func $fixnum-add (param $a i32) (param $b i32) (result (ref eq))
+           (local $c i32)
+           (local $d i32)
+           (local.set $c (i32.add (local.get $a) (local.get $b)))
+           (local.set $d (i32.shr_u (local.get $c) (i32.const 29)))
+           (if (result (ref eq))
+               (i32.or (i32.eqz (local.get $d))
+                       (i32.eq (local.get $d)
+                               (i32.const #b111)))
+               (then (i31.new (local.get $c)))
+               (else (call $i32->bignum (i32.shr_s (local.get $c) (i32.const 1))))))
+     (func $fixnum-sub (param $a i32) (param $b i32) (result (ref eq))
+           (local $c i32)
+           (local $d i32)
+           (local.set $c (i32.sub (local.get $a) (local.get $b)))
+           (local.set $d (i32.shr_u (local.get $c) (i32.const 29)))
+           (if (result (ref eq))
+               (i32.or (i32.eqz (local.get $d))
+                       (i32.eq (local.get $d)
+                               (i32.const #b111)))
+               (then (i31.new (local.get $c)))
+               (else (call $i32->bignum (i32.shr_s (local.get $c) (i32.const 1))))))
+
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))

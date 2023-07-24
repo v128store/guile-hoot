@@ -49,6 +49,7 @@
             wasm-instance?
             wasm-instance-module
             wasm-instance-export-ref
+            wasm-instance-export-names
 
             &wasm-validation-error
             wasm-validation-error?
@@ -562,6 +563,10 @@ bytevector, an input port, or a <wasm> record produced by
 
 (define (wasm-instance-export-ref instance name)
   (hash-ref (wasm-instance-exports instance) name))
+
+(define (wasm-instance-export-names instance)
+  (hash-fold (lambda (k v memo) (cons k memo))
+             '() (wasm-instance-exports instance)))
 
 (define (wasm-instance-global-ref instance idx)
   (vector-ref (wasm-instance-globals instance) idx))

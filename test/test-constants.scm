@@ -146,6 +146,9 @@
 ;; would use `add/immediate' and `sub/immediate' instead)
 (test-call "536870912" (lambda (a b) (+ a b)) 536870911 1)
 (test-call "-536870913" (lambda (a b) (- a b)) -536870912 1)
+;; mul
+(test-call "391" (lambda (a b) (* a b)) 17 23)
+(test-call "536895241" (lambda (a) (* a a)) 23171)
 
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)

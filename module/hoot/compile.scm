@@ -1004,10 +1004,7 @@
             (('mul #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
-              ;; FIXME: Overflow to bignum.
-              '((local.get $i0)
-                (local.get $i1) (i32.const 1) (i32.shr_s)
-                (i32.mul) (i31.new))
+              '((local.get $i0) (local.get $i1) (call $fixnum-mul))
               '((call $mul))))
             (('div #f x y)
              `(,(local.get x)

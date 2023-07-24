@@ -968,6 +968,27 @@
                                (i32.const #b111)))
                (then (i31.new (local.get $c)))
                (else (call $i32->bignum (i32.shr_s (local.get $c) (i32.const 1))))))
+     (func $fixnum-mul (param $a32 i32) (param $b32 i32) (result (ref eq))
+           (local $a i64)
+           (local $b i64)
+           (local $c i64)
+           ;; Shift off one operand's tag bit so that the result is also
+           ;; properly tagged.
+           (local.set $a (i64.extend_i32_s
+                          (i32.shr_s (local.get $a32) (i32.const 1))))
+           (local.set $b (i64.extend_i32_s (local.get $b32)))
+           (local.set $c (i64.mul (local.get $a) (local.get $b)))
+           (if (result (ref eq))
+               ;; Return a bignum if the (tagged) result lies outside of
+               ;; [2^30-1, 2^30].
+               (i32.and (i64.ge_s (local.get $c) (i64.const #x-40000000))
+                        (i64.le_s (local.get $c) (i64.const #x03FFFFFFF)))
+               (then (i31.new (i32.wrap_i64 (local.get $c))))
+               (else
+                (struct.new $bignum
+                            (i32.const 0)
+                            (call $bignum-from-i64
+                                  (i64.shr_s (local.get $c) (i64.const 1)))))))
 
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))

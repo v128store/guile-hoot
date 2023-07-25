@@ -142,10 +142,15 @@
                              (lp (1+ n))
                              n))))
 
-;; Fixnum overflow (for the `add' and `sub' primcalls; `1+' and `1-'
-;; would use `add/immediate' and `sub/immediate' instead)
+;;; Fixnum overflow
+;; add and sub
 (test-call "536870912" (lambda (a b) (+ a b)) 536870911 1)
 (test-call "-536870913" (lambda (a b) (- a b)) -536870912 1)
+;; add/immediate and sub/immediate
+(test-call "536870912" (lambda (a) (1+ a)) 536870911)
+(test-call "-536870913" (lambda (a) (1- a)) -536870912)
+(test-call "536870953" (lambda (a) (+ a 42)) 536870911)
+(test-call "-536870954" (lambda (a) (- a 42)) -536870912)
 ;; mul
 (test-call "391" (lambda (a b) (* a b)) 17 23)
 (test-call "536895241" (lambda (a) (* a a)) 23171)

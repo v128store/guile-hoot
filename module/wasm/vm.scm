@@ -718,6 +718,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (push x) (stack-push! stack x))
   (define (push-all lst) (stack-push-all! stack lst))
   (define (pop) (or (stack-pop! stack) (runtime-error "empty stack")))
+  (define (pop-n n) (stack-pop-n! stack n))
   (define (peek) (or (stack-peek stack) (runtime-error "empty stack")))
   ;; Control helpers.
   (define (block body branch)
@@ -809,8 +810,7 @@ bytevector, an input port, or a <wasm> record produced by
      (match (vector-ref (wasm-instance-funcs instance) idx)
        (($ <wasm-func> proc ($ <func-sig> params))
         ;; Pop n args, apply proc, and push m return values.
-        (call-with-values (lambda ()
-                            (apply proc (map (lambda (_) (pop)) params)))
+        (call-with-values (lambda () (apply proc (pop-n (length params))))
           (lambda vals (push-all vals))))))
     (('return)
      ;; The current function's tag is at the bottom.

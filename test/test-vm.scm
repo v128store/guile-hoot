@@ -547,13 +547,13 @@
          #:args '(4))
 
 (test-vm "inner function call"
-         80
+         11
          '(module
-           (func $add-42 (param $x i32) (result i32)
-                 (i32.add (local.get $x) (i32.const 42)))
+           (func $y (param $m i32) (param $x i32) (param $b i32) (result i32)
+                 (i32.add (i32.mul (local.get $m) (local.get $x)) (local.get $b)))
            (func (export "main") (param $x i32) (result i32)
-                 (call $add-42 (local.get $x))))
-         #:args '(38))
+                 (call $y (i32.const 2) (local.get $x) (i32.const 3))))
+         #:args '(4))
 
 (test-vm "imported function call"
          80

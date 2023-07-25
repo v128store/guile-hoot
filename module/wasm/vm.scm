@@ -668,6 +668,8 @@ bytevector, an input port, or a <wasm> record produced by
                         (bytevector-copy! init 0 (wasm-memory-bytes memory)
                                           offset (bytevector-length init))))))
                  datas)
+       ;; Call start function, if present.
+       (when start ((wasm-func-proc (vector-ref func-vec start))))
        ;; Populate export table.
        (for-each (match-lambda
                    (($ <export> name 'func idx)

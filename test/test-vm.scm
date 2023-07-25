@@ -636,6 +636,17 @@
                  (i32.const 0)
                  (select))))
 
+(test-vm "start function"
+         42
+         '(module
+           (global $foo (mut i32) (i32.const 13))
+           (func $init
+                 (global.set $foo (i32.const 42)))
+           (start $init)
+           (func (export "main") (result i32)
+                 (global.get $foo))))
+
+
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))
                (not (zero? (test-runner-xpass-count (test-runner-get))))))

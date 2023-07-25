@@ -59,6 +59,8 @@
             wasm-instance-export-ref
             wasm-instance-export-names
 
+            current-instruction-listener
+
             &wasm-validation-error
             wasm-validation-error?
             wasm-validation-error-module

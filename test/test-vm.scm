@@ -264,6 +264,24 @@
                             ,(s32-overflow #b11110000111100001111000011110000))
                            (i32.const 2)))))
 
+(test-vm "i32.clz"
+         7
+         `(module
+           (func (export "main") (result i32)
+                 (i32.clz (i32.const ,(ash 1 24))))))
+
+(test-vm "i32.ctz"
+         24
+         `(module
+           (func (export "main") (result i32)
+                 (i32.ctz (i32.const ,(ash 1 24))))))
+
+(test-vm "i32.popcnt"
+         16
+         `(module
+           (func (export "main") (result i32)
+                 (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
+
 (test-vm "if"
          37
          '(module

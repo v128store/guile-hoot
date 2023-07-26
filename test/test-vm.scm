@@ -20,6 +20,7 @@
 ;;; Code:
 
 (use-modules (ice-9 binary-ports)
+             (ice-9 exceptions)
              (srfi srfi-64)
              (wasm assemble)
              (wasm vm))
@@ -304,7 +305,7 @@
          42
          '(module
            (func (export "main") (result i32)
-                 (block $foo
+                 (block $foo (result i32)
                         (i32.const 42)
                         (return)
                         (unreachable)))))
@@ -317,6 +318,41 @@
                  (br 0)
                  (unreachable))))
 
+(test-vm "return with extra values on stack"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (i32.const 13)
+                        (i32.const 42)
+                        (return)))))
+
+(test-assert "fallthrough with too many values on stack"
+  (with-exception-handler (lambda (e) #t)
+    (lambda ()
+      (let ((wat '(module
+                   (func (export "main") (result i32)
+                         (i32.const 1)
+                         (i32.const 2)))))
+        (eval-wat wat "main" '() '())
+        #f))
+    #:unwind? #t
+    #:unwind-for-type &wasm-validation-error))
+
+(test-assert "fallthrough with too many values on invalid stack"
+  (with-exception-handler (lambda (e) #t)
+    (lambda ()
+      (let ((wat '(module
+                   (func (export "main") (result i32)
+                         (i32.const 1)
+                         (return) ; stack is invalid after this
+                         (i32.const 2)
+                         (i32.const 3)))))
+        (eval-wat wat "main" '() '())
+        #f))
+    #:unwind? #t
+    #:unwind-for-type &wasm-validation-error))
+
 (test-vm "branching in a loop"
          24
          '(module
@@ -324,7 +360,7 @@
            (func (export "main") (param $n i32) (result i32)
                  (local $result i32)
                  (local.set $result (i32.const 1))
-                 (loop $loop
+                 (loop $loop (result i32)
                        (if (result i32)
                            (i32.eq (local.get $n) (i32.const 1))
                            (then (local.get $result))

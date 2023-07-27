@@ -342,6 +342,109 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
+(test-vm "i32.store + i32.load"
+         42
+         '(module
+           (memory 1)
+           (func (export "main") (result i32)
+                 (i32.store (i32.const 0) (i32.const 42))
+                 (i32.load (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -42))
+                 (i32.load16_s (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -65537))
+                 (i32.load16_s (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_u"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const 65535))
+                 (i32.load16_u (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_u wrap"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -65537))
+                 (i32.load16_u (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -42))
+                 (i32.load8_s (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -257))
+                 (i32.load8_s (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_u"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const 255))
+                 (i32.load8_u (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_u wrap"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -257))
+                 (i32.load8_u (i32.const 0)))))
+
+(test-vm "memory.size"
+         1
+         '(module
+           (memory 1)
+           (func (export "main") (result i32)
+                 (memory.size))))
+
+(test-vm "memory.grow within limits"
+         2
+         '(module
+           (memory 2 3)
+           (func (export "main") (result i32)
+                 (i32.const 1)
+                 (memory.grow))))
+
+(test-vm "memory.grow outside limits"
+         -1
+         '(module
+           (memory 1 1)
+           (func (export "main") (result i32)
+                 (i32.const 1)
+                 (memory.grow))))
+
+(test-vm "memory.grow no-op"
+         1
+         '(module
+           (memory 1 1)
+           (func (export "main") (result i32)
+                 (i32.const 0)
+                 (memory.grow))))
+
 (test-vm "if"
          37
          '(module
@@ -444,13 +547,13 @@
          #:args '(4))
 
 (test-vm "inner function call"
-         80
+         11
          '(module
-           (func $add-42 (param $x i32) (result i32)
-                 (i32.add (local.get $x) (i32.const 42)))
+           (func $y (param $m i32) (param $x i32) (param $b i32) (result i32)
+                 (i32.add (i32.mul (local.get $m) (local.get $x)) (local.get $b)))
            (func (export "main") (param $x i32) (result i32)
-                 (call $add-42 (local.get $x))))
-         #:args '(38))
+                 (call $y (i32.const 2) (local.get $x) (i32.const 3))))
+         #:args '(4))
 
 (test-vm "imported function call"
          80
@@ -532,6 +635,17 @@
                  (return)
                  (i32.const 0)
                  (select))))
+
+(test-vm "start function"
+         42
+         '(module
+           (global $foo (mut i32) (i32.const 13))
+           (func $init
+                 (global.set $foo (i32.const 42)))
+           (start $init)
+           (func (export "main") (result i32)
+                 (global.get $foo))))
+
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

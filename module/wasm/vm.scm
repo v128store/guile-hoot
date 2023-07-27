@@ -26,6 +26,7 @@
   #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
+  #:use-module (srfi srfi-9 gnu)
   #:use-module (wasm parse)
   #:use-module (wasm types)
   #:export (make-wasm-module
@@ -38,6 +39,13 @@
             wasm-global-set!
             wasm-global-mutable?
 
+            make-wasm-memory
+            wasm-memory?
+            wasm-memory-bytes
+            wasm-memory-size
+            wasm-memory-limits
+            wasm-memory-grow!
+
             wasm-position?
             wasm-position-instructions
             wasm-position-index
@@ -49,6 +57,9 @@
             wasm-instance?
             wasm-instance-module
             wasm-instance-export-ref
+            wasm-instance-export-names
+
+            current-instruction-listener
 
             &wasm-validation-error
             wasm-validation-error?
@@ -116,9 +127,22 @@
              (map global-type (wasm-globals wasm)))))
   (define func-sigs
     (list->vector
-     (map (match-lambda
-            (($ <func> _ ($ <type-use> _ ($ <type> _ sig))) sig))
-          (wasm-funcs wasm))))
+     (append (filter-map
+              (match-lambda
+                (($ <import> _ _ 'func _ ($ <type-use> _ ($ <type> _ sig)))
+                 sig)
+                (_ #f))
+              (wasm-imports wasm))
+             (map (match-lambda
+                    (($ <func> _ ($ <type-use> _ ($ <type> _ sig))) sig))
+                  (wasm-funcs wasm)))))
+  (define memories
+    (list->vector
+     (append (filter-map (match-lambda
+                           (($ <import> _ _ 'memory _ type) type)
+                           (_ #f))
+                         (wasm-imports wasm))
+             (wasm-memories wasm))))
   (define (validation-error msg . irritants)
     (raise-exception
      (make-exception
@@ -211,6 +235,9 @@
          (define (check-label l)
            (unless (and (>= l 0) (< l (length control)))
              (validation-error "invalid label" l)))
+         (define (check-memory id)
+           (unless (< -1 id (vector-length memories))
+             (error "invalid memory" id)))
          (match instr
            ;; Control
            (('nop) stack)
@@ -301,6 +328,21 @@
                  'i32.and 'i32.or 'i32.xor 'i32.shl 'i32.shr_s 'i32.shr_u
                  'i32.rotl 'i32.rotr))
             (-> stack '(i32 i32) '(i32)))
+           ;; Memory
+           (('memory.size id)
+            (check-memory id)
+            (-> stack '() '(i32)))
+           (('memory.grow id)
+            (check-memory id)
+            (-> stack '(i32) '(i32)))
+           (((or 'i32.load 'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u)
+             ($ <mem-arg> id _ _))
+            (check-memory id)
+            (-> stack '(i32) '(i32)))
+           (((or 'i32.store 'i32.store8 'i32.store16 'i32.store32)
+             ($ <mem-arg> id _ _))
+            (check-memory id)
+            (-> stack '(i32 i32) '()))
            (instr
             (validation-error "unimplemented instruction" instr))))
        (define (validate-branch instrs stack control br-params results)
@@ -415,13 +457,61 @@ bytevector, an input port, or a <wasm> record produced by
       (%wasm-global-set! global val)
       (error "WASM global is immutable" global)))
 
+(define %page-size (* 64 1024))
+(define %max-pages (/ (ash 1 32) %page-size))
+
+(define (clamp-to-limits x limits)
+  (match limits
+    (($ <limits> min max)
+     (let ((max* (or max %max-pages)))
+       (cond
+        ((< x min) min)
+        ((> x max*) max*)
+        (else x))))))
+
+(define-record-type <wasm-memory>
+  (%make-wasm-memory bytes size limits)
+  wasm-memory?
+  (bytes wasm-memory-bytes set-wasm-memory-bytes!)
+  (size wasm-memory-size set-wasm-memory-size!)
+  (limits wasm-memory-limits))
+
+(define (make-bytevector/pages n)
+  (make-bytevector (* n %page-size) 0))
+
+(define* (make-wasm-memory size #:optional (limits (make-limits 1 #f)))
+  (let ((size* (clamp-to-limits size limits)))
+    (%make-wasm-memory (make-bytevector/pages size*) size* limits)))
+
+(define (wasm-memory-grow! memory n)
+  (match memory
+    (($ <wasm-memory> old-bytes old-size limits)
+     (if (= n 0)
+         old-size
+         (let ((new-size (clamp-to-limits
+                          (+ (wasm-memory-size memory) n) limits)))
+           (if (= new-size old-size)
+               -1
+               (let ((new-bytes (make-bytevector/pages new-size)))
+                 (bytevector-copy! old-bytes 0 new-bytes 0
+                                   (* old-size %page-size))
+                 (set-wasm-memory-bytes! memory new-bytes)
+                 (set-wasm-memory-size! memory new-size)
+                 old-size)))))))
+
 (define-record-type <wasm-instance>
-  (%make-wasm-instance module globals funcs exports)
+  (%make-wasm-instance module globals funcs memories exports)
   wasm-instance?
   (module wasm-instance-module)
   (globals wasm-instance-globals)
   (funcs wasm-instance-funcs)
+  (memories wasm-instance-memories)
   (exports wasm-instance-exports))
+
+(set-record-type-printer! <wasm-instance>
+                          (lambda (instance port)
+                            (format port "#<wasm-instance ~a>"
+                                    (object-address instance))))
 
 (define-exception-type &wasm-instance-error &wasm-error
   make-wasm-instance-error
@@ -436,7 +526,6 @@ bytevector, an input port, or a <wasm> record produced by
     (make-exception-with-irritants irritants))))
 
 ;; TODO: Support tables.
-;; TODO: Support memories.
 (define* (make-wasm-instance module #:key (imports '()))
   (define (lookup-import mod name)
     (assoc-ref (or (assoc-ref imports mod) '()) name))
@@ -452,11 +541,13 @@ bytevector, an input port, or a <wasm> record produced by
              0 wasm-imports))
      (let* ((n-global-imports (count-imports 'global))
             (n-func-imports (count-imports 'func))
+            (n-memory-imports (count-imports 'memory))
             (global-vec (make-vector (+ n-global-imports (length globals))))
             (func-vec (make-vector (+ n-func-imports (length funcs))))
+            (memory-vec (make-vector (+ n-memory-imports (length memories))))
             (export-table (make-hash-table))
             (instance (%make-wasm-instance module global-vec func-vec
-                                           export-table)))
+                                           memory-vec export-table)))
        (define (type-check vals types)
          (unless (every is-a? vals types)
            (error (format #f "type mismatch; expected ~a" types)
@@ -516,19 +607,28 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Process imports.
        (let loop ((wasm-imports wasm-imports)
                   (global-idx 0)
-                  (func-idx 0))
+                  (func-idx 0)
+                  (memory-idx 0))
          (match wasm-imports
            (() #t)
            ((($ <import> mod name 'func _ ($ <type-use> _ ($ <type> _ sig))) . rest)
             (match (lookup-import mod name)
               ((? procedure? proc)
                (vector-set! func-vec func-idx (make-wasm-func proc sig))
-               (loop rest global-idx (+ func-idx 1)))))
+               (loop rest global-idx (+ func-idx 1) memory-idx))
+              (x (instance-error "invalid function import" x))))
            ((($ <import> mod name 'global _ type) . rest)
             (match (lookup-import mod name)
               ((? wasm-global? global)
                (vector-set! global-vec global-idx global)
-               (loop rest (+ global-idx 1) func-idx))))))
+               (loop rest (+ global-idx 1) func-idx memory-idx))
+              (x (instance-error "invalid global import" x))))
+           ((($ <import> mod name 'memory _ type) . rest)
+            (match (lookup-import mod name)
+              ((? wasm-memory? memory)
+               (vector-set! memory-vec memory-idx memory)
+               (loop rest global-idx func-idx (+ memory-idx 1)))
+              (x (instance-error "invalid memory import" x))))))
        ;; Initialize globals.
        (let loop ((globals globals)
                   (idx n-global-imports))
@@ -550,6 +650,28 @@ bytevector, an input port, or a <wasm> record produced by
            ((func . rest)
             (vector-set! func-vec idx (instantiate-func func))
             (loop rest (+ idx 1)))))
+       ;; Initialize memories.
+       (let loop ((memories memories)
+                  (idx n-memory-imports))
+         (match memories
+           (() #t)
+           ((($ <mem-type> (and ($ <limits> min) limits)) . rest)
+            (vector-set! memory-vec idx (make-wasm-memory min limits))
+            (loop rest (+ idx 1)))))
+       ;; Copy data into memory.
+       (for-each (match-lambda
+                   ((and ($ <data> _ mode mem-id instrs init) data)
+                    ;; Invoke the VM to process the constant
+                    ;; expressions that produce the offset value.
+                    (let ((stack (make-wasm-stack))
+                          (memory (vector-ref memory-vec mem-id)))
+                      (execute* instrs (list data) instance stack '() #())
+                      (let ((offset (stack-pop! stack)))
+                        (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                          offset (bytevector-length init))))))
+                 datas)
+       ;; Call start function, if present.
+       (when start ((wasm-func-proc (vector-ref func-vec start))))
        ;; Populate export table.
        (for-each (match-lambda
                    (($ <export> name 'func idx)
@@ -562,6 +684,10 @@ bytevector, an input port, or a <wasm> record produced by
 
 (define (wasm-instance-export-ref instance name)
   (hash-ref (wasm-instance-exports instance) name))
+
+(define (wasm-instance-export-names instance)
+  (hash-fold (lambda (k v memo) (cons k memo))
+             '() (wasm-instance-exports instance)))
 
 (define (wasm-instance-global-ref instance idx)
   (vector-ref (wasm-instance-globals instance) idx))
@@ -594,6 +720,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (push x) (stack-push! stack x))
   (define (push-all lst) (stack-push-all! stack lst))
   (define (pop) (or (stack-pop! stack) (runtime-error "empty stack")))
+  (define (pop-n n) (stack-pop-n! stack n))
   (define (peek) (or (stack-peek stack) (runtime-error "empty stack")))
   ;; Control helpers.
   (define (block body branch)
@@ -643,6 +770,26 @@ bytevector, an input port, or a <wasm> record produced by
        ((= i 32) k)
        ((logbit? i n) (loop (+ i 1) (+ k 1)))
        (else (loop (+ i 1) k)))))
+  (define (wrap n k)
+    (modulo n (ash 1 (* k 8))))
+  ;; Memory helpers
+  (define (memory-ref id)
+    (vector-ref (wasm-instance-memories instance) id))
+  (define (memory-bytes id)
+    (wasm-memory-bytes (memory-ref id)))
+  (define (load32 id offset ref length)
+    (let* ((i (+ (s32->u32 (pop)) offset))
+           (bv (memory-bytes id)))
+      (push (ref bv i (endianness little) length))))
+  (define (load-s32 id offset length)
+    (load32 id offset bytevector-sint-ref length))
+  (define (load-u32 id offset length)
+    (load32 id offset bytevector-uint-ref length))
+  (define (store32 id offset length)
+    (let* ((c (wrap (s32->u32 (pop)) length))
+           (i (+ (s32->u32 (pop)) offset))
+           (bv (memory-bytes id)))
+      (bytevector-uint-set! bv i c (endianness little) length)))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
   (match instr
@@ -665,8 +812,7 @@ bytevector, an input port, or a <wasm> record produced by
      (match (vector-ref (wasm-instance-funcs instance) idx)
        (($ <wasm-func> proc ($ <func-sig> params))
         ;; Pop n args, apply proc, and push m return values.
-        (call-with-values (lambda ()
-                            (apply proc (map (lambda (_) (pop)) params)))
+        (call-with-values (lambda () (apply proc (pop-n (length params))))
           (lambda vals (push-all vals))))))
     (('return)
      ;; The current function's tag is at the bottom.
@@ -726,6 +872,17 @@ bytevector, an input port, or a <wasm> record produced by
     (('i32.clz) (u32-unop clz32))
     (('i32.ctz) (u32-unop ctz32))
     (('i32.popcnt) (u32-unop popcnt32))
+    ;; Linear memory:
+    (('i32.load ($ <mem-arg> id offset _)) (load-s32 id offset 4))
+    (('i32.load16_s ($ <mem-arg> id offset _)) (load-s32 id offset 2))
+    (('i32.load16_u ($ <mem-arg> id offset _)) (load-u32 id offset 2))
+    (('i32.load8_s ($ <mem-arg> id offset _)) (load-s32 id offset 1))
+    (('i32.load8_u ($ <mem-arg> id offset _)) (load-u32 id offset 1))
+    (('i32.store ($ <mem-arg> id offset _)) (store32 id offset 4))
+    (('i32.store16 ($ <mem-arg> id offset _)) (store32 id offset 2))
+    (('i32.store8 ($ <mem-arg> id offset _)) (store32 id offset 1))
+    (('memory.size id) (push (wasm-memory-size (memory-ref id))))
+    (('memory.grow id) (push (wasm-memory-grow! (memory-ref id) (pop))))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

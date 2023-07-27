@@ -342,6 +342,109 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
+(test-vm "i32.store + i32.load"
+         42
+         '(module
+           (memory 1)
+           (func (export "main") (result i32)
+                 (i32.store (i32.const 0) (i32.const 42))
+                 (i32.load (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -42))
+                 (i32.load16_s (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -65537))
+                 (i32.load16_s (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_u"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const 65535))
+                 (i32.load16_u (i32.const 0)))))
+
+(test-vm "i32.store16 + i32.load16_u wrap"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store16 (i32.const 0) (i32.const -65537))
+                 (i32.load16_u (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -42))
+                 (i32.load8_s (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -257))
+                 (i32.load8_s (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_u"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const 255))
+                 (i32.load8_u (i32.const 0)))))
+
+(test-vm "i32.store8 + i32.load8_u wrap"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i32)
+                 (i32.store8 (i32.const 0) (i32.const -257))
+                 (i32.load8_u (i32.const 0)))))
+
+(test-vm "memory.size"
+         1
+         '(module
+           (memory 1)
+           (func (export "main") (result i32)
+                 (memory.size))))
+
+(test-vm "memory.grow within limits"
+         2
+         '(module
+           (memory 2 3)
+           (func (export "main") (result i32)
+                 (i32.const 1)
+                 (memory.grow))))
+
+(test-vm "memory.grow outside limits"
+         -1
+         '(module
+           (memory 1 1)
+           (func (export "main") (result i32)
+                 (i32.const 1)
+                 (memory.grow))))
+
+(test-vm "memory.grow no-op"
+         1
+         '(module
+           (memory 1 1)
+           (func (export "main") (result i32)
+                 (i32.const 0)
+                 (memory.grow))))
+
 (test-vm "if"
          37
          '(module

@@ -303,6 +303,7 @@ class SchemeTrapError extends Error {
 class SchemeModule {
     #instance;
     static #rt = {
+        bignum_from_i32(n) { return BigInt(n); },
         bignum_from_i64(n) { return n; },
         bignum_from_u64(n) { return n < 0n ? 0xffff_ffff_ffff_ffffn + (n + 1n) : n; },
         bignum_is_i64(n) {
@@ -313,6 +314,8 @@ class SchemeModule {
         },
         // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
         bignum_get_i64(n) { return n; },
+
+        bignum_add(a, b) { return a + b },
 
         make_weak_map() { return new WeakMap; },
         weak_map_get(map, k) { return map.get(k); },

@@ -251,6 +251,25 @@
             (check-label l)
             (-> stack `(,@(list-ref control l) i32) '())
             (-> stack '(i32) '()))
+           ;; Parametric
+           (('drop)
+            (match stack
+              ;; Invalid stack, no type check needed.
+              (#f #f)
+              ((type . _)
+               (-> stack (list type) '()))))
+           ;; TODO: 'select' with specific types.  Seems to be a bug
+           ;; preventing such instructions from assembling right now.
+           (('select)
+            ;; We need to peek at the second from the top type on the
+            ;; stack.  However, the stack may be invalid.
+            (match stack
+              (#f #f)
+              ;; One type on top, rest of stack invalid.
+              ((_ . #f)
+               (-> stack '(i32) '()))
+              ((_ type . _)
+               (-> stack (list type type 'i32) (list type)))))
            ;; Locals
            (('local.get idx)
             (-> stack '() (list (vector-ref local-types idx))))
@@ -659,6 +678,14 @@ bytevector, an input port, or a <wasm> record produced by
     (('br_if l)
      (unless (= (pop) 0)
        (abort-to-prompt (list-ref blocks l))))
+    ;; Parametric:
+    (('drop) (pop))
+    (('select)
+     (if (= (pop) 0)
+         (let ((x (pop)))
+           (pop)
+           (push x))
+         (pop)))
     ;; Locals:
     (('local.get idx) (push (vector-ref locals idx)))
     (('local.set idx) (vector-set! locals idx (pop)))

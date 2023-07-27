@@ -117,9 +117,15 @@
              (map global-type (wasm-globals wasm)))))
   (define func-sigs
     (list->vector
-     (map (match-lambda
-            (($ <func> _ ($ <type-use> _ ($ <type> _ sig))) sig))
-          (wasm-funcs wasm))))
+     (append (filter-map
+              (match-lambda
+                (($ <import> _ _ 'func _ ($ <type-use> _ ($ <type> _ sig)))
+                 sig)
+                (_ #f))
+              (wasm-imports wasm))
+             (map (match-lambda
+                    (($ <func> _ ($ <type-use> _ ($ <type> _ sig))) sig))
+                  (wasm-funcs wasm)))))
   (define (validation-error msg . irritants)
     (raise-exception
      (make-exception

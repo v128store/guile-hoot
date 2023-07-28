@@ -987,19 +987,18 @@
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (call $fixnum-sub))
               '((call $sub))))
+            ;; FIXME: Reimplement fast paths
             (('add/immediate y x)
              (compile-fixnum-fast-path
               x scm-block-type
-              ;; FIXME: Overflow to bignum.
-              `((local.get $i0) (i32.const ,(ash y 1)) (i32.add) (i31.new))
-              `((i32.const ,y)
+              `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-add))
+              `((i32.const ,(ash y 1))
                 (call $add/immediate))))
             (('sub/immediate y x)
              (compile-fixnum-fast-path
               x scm-block-type
-              ;; FIXME: Overflow to bignum.
-              `((local.get $i0) (i32.const ,(ash y 1)) (i32.sub) (i31.new))
-              `((i32.const ,y)
+              `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-sub))
+              `((i32.const ,(ash y 1))
                 (call $sub/immediate))))
             (('mul #f x y)
              (compile-fixnum-fixnum-fast-path

@@ -28,6 +28,7 @@
              (wasm vm))
 
 (define s32-overflow (@@ (wasm vm) s32-overflow))
+(define s64-overflow (@@ (wasm vm) s64-overflow))
 
 (define d8 (or (getenv "D8") "d8"))
 (define srcdir (or (getenv "SRCDIR") (getcwd)))
@@ -342,6 +343,250 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
+(test-vm "i64.eqz true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.eqz (i64.const 0)))))
+
+(test-vm "i64.eqz false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.eqz (i64.const 42)))))
+
+(test-vm "i64.eq true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.eq (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.eq false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.eq (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.ne true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ne (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.ne false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ne (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.lt_s true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.lt_s (i64.const -42) (i64.const 42)))))
+
+(test-vm "i64.lt_s false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.lt_s (i64.const 42) (i64.const -42)))))
+
+(test-vm "i64.lt_u true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.lt_s (i64.const 7) (i64.const 42)))))
+
+(test-vm "i64.lt_u false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.lt_s (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.le_s true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.le_s (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.le_s false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.le_s (i64.const 42) (i64.const -42)))))
+
+(test-vm "i64.le_u true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.le_s (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.le_u false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.le_s (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.gt_s true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.gt_s (i64.const 42) (i64.const -42)))))
+
+(test-vm "i64.gt_s false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.gt_s (i64.const -42) (i64.const 42)))))
+
+(test-vm "i64.gt_u true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.gt_s (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.gt_u false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.gt_s (i64.const 7) (i64.const 42)))))
+
+(test-vm "i64.ge_s true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ge_s (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.ge_s false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ge_s (i64.const -42) (i64.const 42)))))
+
+(test-vm "i64.ge_u true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ge_s (i64.const 42) (i64.const 42)))))
+
+(test-vm "i64.ge_u false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (i64.ge_s (i64.const 7) (i64.const 42)))))
+
+(test-vm "i64.add"
+         80
+         '(module
+           (func (export "main") (result i64)
+                 (i64.add (i64.const 42) (i64.const 38)))))
+
+(test-vm "i64.sub"
+         4
+         '(module
+           (func (export "main") (result i64)
+                 (i64.sub (i64.const 42) (i64.const 38)))))
+
+(test-vm "i64.mul"
+         42
+         '(module
+           (func (export "main") (result i64)
+                 (i64.mul (i64.const 7) (i64.const 6)))))
+
+(test-vm "i64.div_s"
+         -6
+         '(module
+           (func (export "main") (result i64)
+                 (i64.div_s (i64.const -42) (i64.const 7)))))
+
+(test-vm "i64.div_u"
+         6
+         '(module
+           (func (export "main") (result i64)
+                 (i64.div_u (i64.const 42) (i64.const 7)))))
+
+(test-vm "i64.rem_s"
+         -2
+         '(module
+           (func (export "main") (result i64)
+                 (i64.rem_s (i64.const -42) (i64.const 5)))))
+
+(test-vm "i64.rem_u"
+         2
+         '(module
+           (func (export "main") (result i64)
+                 (i64.rem_u (i64.const 42) (i64.const 5)))))
+
+(test-vm "i64.and"
+         #b1010
+         '(module
+           (func (export "main") (result i64)
+                 (i64.and (i64.const #b1111) (i64.const #b1010)))))
+
+(test-vm "i64.or"
+         #b1111
+         '(module
+           (func (export "main") (result i64)
+                 (i64.or (i64.const #b0101) (i64.const #b1010)))))
+
+(test-vm "i64.xor"
+         #b1110
+         '(module
+           (func (export "main") (result i64)
+                 (i64.or (i64.const #b1010) (i64.const #b0100)))))
+
+(test-vm "i64.shl"
+         #b1000
+         '(module
+           (func (export "main") (result i64)
+                 (i64.shl (i64.const #b0001) (i64.const 3)))))
+
+(test-vm "i64.shr_s"
+         -2
+         '(module
+           (func (export "main") (result i64)
+                 (i64.shr_s (i64.const -16) (i64.const 3)))))
+
+(test-vm "i64.shr_u"
+         #b0001
+         '(module
+           (func (export "main") (result i64)
+                 (i64.shr_u (i64.const #b1000) (i64.const 3)))))
+
+(test-vm "i64.rotl"
+         (s64-overflow #xfff0000ffff0000f)
+         `(module
+           (func (export "main") (result i64)
+                 (i64.rotl (i64.const
+                            ,(s64-overflow #xffff0000ffff0000))
+                           (i64.const 4)))))
+
+(test-vm "i64.rotr"
+         (s64-overflow #xffff0000ffff0000)
+         `(module
+           (func (export "main") (result i64)
+                 (i64.rotr (i64.const
+                            ,(s64-overflow #xfff0000ffff0000f))
+                           (i64.const 4)))))
+
+(test-vm "i64.clz"
+         15
+         `(module
+           (func (export "main") (result i64)
+                 (i64.clz (i64.const ,(ash 1 48))))))
+
+(test-vm "i64.ctz"
+         48
+         `(module
+           (func (export "main") (result i64)
+                 (i64.ctz (i64.const ,(ash 1 48))))))
+
+(test-vm "i64.popcnt"
+         32
+         `(module
+           (func (export "main") (result i64)
+                 (i64.popcnt (i64.const ,(s64-overflow #xaaaaAAAAaaaaAAAA))))))
+
 (test-vm "i32.store + i32.load"
          42
          '(module
@@ -413,6 +658,110 @@
            (func (export "main") (result i32)
                  (i32.store8 (i32.const 0) (i32.const -257))
                  (i32.load8_u (i32.const 0)))))
+
+(test-vm "i64.store + i64.load"
+         42
+         '(module
+           (memory 1)
+           (func (export "main") (result i64)
+                 (i64.store (i32.const 0) (i64.const 42))
+                 (i64.load (i32.const 0)))))
+
+(test-vm "i64.store32 + i64.load32_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store32 (i32.const 0) (i64.const -42))
+                 (i64.load32_s (i32.const 0)))))
+
+(test-vm "i64.store32 + i64.load32_s wrap"
+         -1
+         `(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store32 (i32.const 0) (i64.const ,(- (ash 1 32) 1)))
+                 (i64.load32_s (i32.const 0)))))
+
+(test-vm "i64.store32 + i64.load32_u"
+         (- (ash 1 32) 1)
+         `(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store32 (i32.const 0) (i64.const ,(- (ash 1 32) 1)))
+                 (i64.load32_u (i32.const 0)))))
+
+(test-vm "i64.store32 + i64.load32_u wrap"
+         (- (ash 1 32) 1)
+         `(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store32 (i32.const 0) (i64.const ,(- (ash -1 32) 1)))
+                 (i64.load32_u (i32.const 0)))))
+
+(test-vm "i64.store16 + i64.load16_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store16 (i32.const 0) (i64.const -42))
+                 (i64.load16_s (i32.const 0)))))
+
+(test-vm "i64.store16 + i64.load16_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store16 (i32.const 0) (i64.const -65537))
+                 (i64.load16_s (i32.const 0)))))
+
+(test-vm "i64.store16 + i64.load16_u"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store16 (i32.const 0) (i64.const 65535))
+                 (i64.load16_u (i32.const 0)))))
+
+(test-vm "i64.store16 + i64.load16_u wrap"
+         65535
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store16 (i32.const 0) (i64.const -65537))
+                 (i64.load16_u (i32.const 0)))))
+
+(test-vm "i64.store8 + i64.load8_s"
+         -42
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store8 (i32.const 0) (i64.const -42))
+                 (i64.load8_s (i32.const 0)))))
+
+(test-vm "i64.store8 + i64.load8_s wrap"
+         -1
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store8 (i32.const 0) (i64.const -257))
+                 (i64.load8_s (i32.const 0)))))
+
+(test-vm "i64.store8 + i64.load8_u"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store8 (i32.const 0) (i64.const 255))
+                 (i64.load8_u (i32.const 0)))))
+
+(test-vm "i64.store8 + i64.load8_u wrap"
+         255
+         '(module
+           (memory $memory 1)
+           (func (export "main") (result i64)
+                 (i64.store8 (i32.const 0) (i64.const -257))
+                 (i64.load8_u (i32.const 0)))))
 
 (test-vm "memory.size"
          1

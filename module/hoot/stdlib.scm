@@ -269,6 +269,9 @@
               (struct
                (field $state (mut (ref eq)))))))
 
+     (func $bignum-from-i32 (import "rt" "bignum_from_i32")
+           (param i32)
+           (result (ref extern)))
      (func $bignum-from-i64 (import "rt" "bignum_from_i64")
            (param i64)
            (result (ref extern)))
@@ -284,6 +287,11 @@
      (func $bignum-get-i64 (import "rt" "bignum_get_i64")
            (param (ref extern))
            (result i64))
+
+     (func $bignum-add (import "rt" "bignum_add")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
 
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
@@ -990,8 +998,77 @@
                             (call $bignum-from-i64
                                   (i64.shr_s (local.get $c) (i64.const 1)))))))
 
+     (func $fixnum-add* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
+           (call $fixnum-add
+                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
+                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+
+     (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-add
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           (block
+            $L5
+            (block
+             $L4
+             (block
+              $L3
+              (block
+               $L2
+               (block
+                $L1
+                (block
+                 $L0
+                 (ref.test i31 (local.get $a))
+                 (br_if $L0)
+                 (ref.test $bignum (local.get $a))
+                 (br_if $L1)
+                 (unreachable))
+                ;; $a is a fixnum
+                (ref.test i31 (local.get $b))
+                (br_if $L2)
+                (ref.test $bignum (local.get $b))
+                (br_if $L3)
+                (unreachable))
+               ;; $a is a bignum
+               (ref.test i31 (local.get $b))
+               (br_if $L4)
+               (ref.test $bignum (local.get $b))
+               (br_if $L5)
+               (unreachable))
+              ;; $a and $b are fixnums
+              (return (call $fixnum-add*
+                            (ref.cast i31 (local.get $a))
+                            (ref.cast i31 (local.get $b))))
+              (unreachable))
+             ;; $a is a fixnum, $b a bignum
+             (return (call $bignum-add*
+                           (struct.new $bignum
+                                       (i32.const 0)
+                                       (call $bignum-from-i32
+                                             (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                        (i32.const 1))))
+                           (ref.cast $bignum (local.get $b))))
+             (unreachable))
+            ;; $a is a bignum, $b a fixnum
+            (return (call $bignum-add*
+                          (ref.cast $bignum (local.get $a))
+                          (struct.new $bignum
+                                      (i32.const 0)
+                                      (call $bignum-from-i32
+                                            (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                       (i32.const 1))))))
+            (unreachable))
+           ;; $a and $b are bignums
+           (return (call $bignum-add*
+                         (ref.cast $bignum (local.get $a))
+                         (ref.cast $bignum (local.get $b)))))
+
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
      (func $add/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))

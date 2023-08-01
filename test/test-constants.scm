@@ -155,6 +155,12 @@
 (test-call "391" (lambda (a b) (* a b)) 17 23)
 (test-call "536895241" (lambda (a) (* a a)) 23171)
 
+;; Construct two bignums and add them (vs. previous tests producing
+;; bignum sums from fixnum inputs)
+(test-call "1073741824" (lambda (a b) (+ (+ a b) (+ a b))) 536870911 1)
+(test-call "536870954" (lambda (a b c) (+ (+ a b) c)) 536870911 1 42)
+(test-call "536870954" (lambda (a b c) (+ c (+ a b))) 536870911 1 42)
+
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)

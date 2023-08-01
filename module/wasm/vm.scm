@@ -28,6 +28,7 @@
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
   #:use-module (wasm parse)
+  #:use-module (wasm stack)
   #:use-module (wasm types)
   #:export (make-wasm-module
             wasm-module?
@@ -159,239 +160,94 @@
       (make-exception-with-message
        (format #f "WASM validation error: ~a" msg))
       (make-exception-with-irritants irritants))))
-  ;; -> performs stack manipulation and type checking. Stacks are
-  ;; represented as lists of types.  Some operations invalidate the
-  ;; stack, such as 'br', and the invalid stack is represented as #f.
-  ;; Thus a stack may be a proper list like '(i32 i32) or an improper
-  ;; list like '(i32 . #f).
-  (define* (-> stack inputs outputs #:key block-end?)
-    (define-values (stack* stack-types)
-      ;; Pop as many types off of the stack as there are inputs.  Or,
-      ;; in end-of-block case, pop all types off of the stack.
-      (let loop ((stack stack)
-                 (types (reverse inputs))
-                 (result '()))
-        (match types
-          (()
-           ;; Type checking the end of a block requires matching
-           ;; against the *entire* stack, not just the top n types.
-           (if block-end?
-               (match stack
-                 ;; Terminate if stack is empty or invalid.
-                 (#f (values #f result))
-                 (() (values '() result))
-                 ;; Otherwise, continue popping types.
-                 ((top . rest-stack)
-                  (loop rest-stack '() (cons top result))))
-               (values stack result)))
-          ((type . rest-types)
-           (match stack
-             ;; Popping from the invalid stack always gives you the
-             ;; type you are checking for.
-             (#f (loop #f rest-types (cons type result)))
-             (() (values '() result))
-             ((top . rest-stack)
-              (loop rest-stack rest-types (cons top result))))))))
-    (if (equal? inputs stack-types)
-        (fold cons stack* outputs)
-        (validation-error
-         (format #f "type mismatch; expected ~a, got ~a"
-                 inputs stack-types))))
   (define (assert-s32 x)
     (unless (s32? x)
       (validation-error "i32 constant out of range" x)))
   (define (assert-s64 x)
     (unless (s64? x)
       (validation-error "i64 constant out of range" x)))
+  (define (validate-constant instr)
+    (match instr
+      (('i32.const x)
+       (assert-s32 x))
+      (('i64.const x)
+       (assert-s64 x))))
   (define (validate-global global)
-    ;; There's redundancy here with the more general function
-    ;; validator, but there are only a very limited set of constant
-    ;; instructions that are valid for initializing globals.
-    (define (validate-instr instr stack)
-      ;; TODO: Support all constant instructions.
+    (define (validate-instr ctx instr)
       (match instr
-        (('i32.const x)
-         (assert-s32 x)
-         (-> stack '() '(i32)))
-        (invalid
-         (validation-error "invalid global initializer instruction"
-                           global instr))))
+        ;; TODO: Support all constant instructions.
+        (((or 'i32.const 'i64.const) . _)
+         (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
+           (($ <invalid-ctx> reason)
+            (validation-error reason instr))
+           (ctx ctx)))))
     (match global
-      (($ <global> _ type instrs)
+      (($ <global> _ _ instrs)
        (let loop ((instrs instrs)
-                  (stack '()))
+                  (ctx '()))
          (match instrs
            (() #t)
            ((instr . rest)
-            (loop rest (validate-instr instr stack))))))))
+            (loop rest (validate-instr (initial-ctx wasm global) instr))))))))
   (define (validate-func func)
     (match func
       (($ <func> _ ($ <type-use> _ ($ <type> _ type)) _ body)
-       (define local-types
-         (list->vector
-          (append (match type
-                    (($ <func-sig> (($ <param> _ types) ...))
-                     types))
-                  (map local-type (func-locals func)))))
        (define (lookup-block-type bt)
          (match bt
            (#f (make-func-sig '() '()))
            ((? exact-integer? idx) (type-val (list-ref (wasm-types wasm) idx)))
            ((? symbol? type) (make-func-sig '() (list type)))))
-       (define (block-type-params bt)
+       (define (push-block* ctx bt loop?)
          (match bt
-           (($ <func-sig> ((= param-type param-types) ...) _)
-            param-types)))
-       (define block-type-results func-sig-results)
-       (define (validate-instr instr stack control)
-         (define (check-label l)
-           (unless (and (>= l 0) (< l (length control)))
-             (validation-error "invalid label" l)))
-         (define (check-memory id)
-           (unless (< -1 id (vector-length memories))
-             (error "invalid memory" id)))
-         (match instr
-           ;; Control
-           (('nop) stack)
-           (('unreachable) #f)
-           (('if _ (= lookup-block-type bt) consequent alternate)
-            (let* ((params (block-type-params bt))
-                   (results (block-type-results bt))
-                   (stack* (-> stack `(,@params i32) results)))
-              (validate-branch consequent params control results results)
-              (validate-branch alternate params control results results)
-              stack*))
-           (('block _ (= lookup-block-type bt) body)
-            (let* ((params (block-type-params bt))
-                   (results (block-type-results bt))
-                   (stack* (-> stack params results)))
-              (validate-branch body params control results results)
-              stack*))
-           (('loop _ (= lookup-block-type bt) body)
-            (let* ((params (block-type-params bt))
-                   (results (block-type-results bt))
-                   (stack* (-> stack params results)))
-              (validate-branch body params control params results)
-              stack*))
-           (('call idx)
-            (match (vector-ref func-sigs idx)
-              (($ <func-sig> (($ <param> _ params) ...) (results ...))
-               (-> stack params results))))
-           (('return)
-            (match control
-              ((_ ... types)
-               (-> stack types '())
-               #f)))
-           (('br l)
-            (check-label l)
-            (-> stack (list-ref control l) '())
-            #f)
-           (('br_if l)
-            (check-label l)
-            (-> stack `(,@(list-ref control l) i32) '())
-            (-> stack '(i32) '()))
-           ;; Parametric
-           (('drop)
-            (match stack
-              ;; Invalid stack, no type check needed.
-              (#f #f)
-              ((type . _)
-               (-> stack (list type) '()))))
-           ;; TODO: 'select' with specific types.  Seems to be a bug
-           ;; preventing such instructions from assembling right now.
-           (('select)
-            ;; We need to peek at the second from the top type on the
-            ;; stack.  However, the stack may be invalid.
-            (match stack
-              (#f #f)
-              ;; One type on top, rest of stack invalid.
-              ((_ . #f)
-               (-> stack '(i32) '()))
-              ((_ type . _)
-               (-> stack (list type type 'i32) (list type)))))
-           ;; Locals
-           (('local.get idx)
-            (-> stack '() (list (vector-ref local-types idx))))
-           (('local.set idx)
-            (-> stack (list (vector-ref local-types idx)) '()))
-           (('local.tee idx)
-            (let ((type (vector-ref local-types idx)))
-              (-> stack (list type) (list type))))
-           ;; Globals
-           (('global.get idx)
-            (match (vector-ref global-types idx)
-              (($ <global-type> _ type)
-               (-> stack '() (list type)))))
-           (('global.set idx)
-            (match (vector-ref global-types idx)
-              (($ <global-type> mutable? type)
-               (unless mutable?
-                 (validation-error "global is immutable" idx))
-               (-> stack (list type) '()))))
-           ;; Numeric
-           (('i32.const x)
-            (assert-s32 x)
-            (-> stack '() '(i32)))
-           (((or 'i32.eqz 'i32.clz 'i32.ctz 'i32.popcnt))
-            (-> stack '(i32) '(i32)))
-           (((or 'i32.add 'i32.sub 'i32.mul 'i32.div_s 'i32.div_u
-                 'i32.rem_s 'i32.rem_u 'i32.eq 'i32.ne 'i32.lt_s 'i32.lt_u
-                 'i32.le_s 'i32.le_u 'i32.gt_s 'i32.gt_u 'i32.ge_s 'i32.ge_u
-                 'i32.and 'i32.or 'i32.xor 'i32.shl 'i32.shr_s 'i32.shr_u
-                 'i32.rotl 'i32.rotr))
-            (-> stack '(i32 i32) '(i32)))
-           (('i64.const x)
-            (assert-s64 x)
-            (-> stack '() '(i64)))
-           (((or 'i64.clz 'i64.ctz 'i64.popcnt))
-            (-> stack '(i64) '(i64)))
-           (('i64.eqz)
-            (-> stack '(i64) '(i32)))
-           (((or 'i64.eq 'i64.ne 'i64.lt_s 'i64.lt_u 'i64.le_s 'i64.le_u
-                 'i64.gt_s 'i64.gt_u 'i64.ge_s 'i64.ge_u))
-            (-> stack '(i64 i64) '(i32)))
-           (((or 'i64.add 'i64.sub 'i64.mul 'i64.div_s 'i64.div_u
-                 'i64.rem_s 'i64.rem_u
-                 'i64.and 'i64.or 'i64.xor 'i64.shl 'i64.shr_s 'i64.shr_u
-                 'i64.rotl 'i64.rotr))
-            (-> stack '(i64 i64) '(i64)))
-           ;; Memory
-           (('memory.size id)
-            (check-memory id)
-            (-> stack '() '(i32)))
-           (('memory.grow id)
-            (check-memory id)
-            (-> stack '(i32) '(i32)))
-           (((or 'i32.load 'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u)
-             ($ <mem-arg> id _ _))
-            (check-memory id)
-            (-> stack '(i32) '(i32)))
-           (((or 'i64.load 'i64.load8_s 'i64.load8_u 'i64.load16_s 'i64.load16_u
-                 'i64.load32_s 'i64.load32_u)
-             ($ <mem-arg> id _ _))
-            (check-memory id)
-            (-> stack '(i32) '(i64)))
-           (((or 'i32.store 'i32.store8 'i32.store16)
-             ($ <mem-arg> id _ _))
-            (check-memory id)
-            (-> stack '(i32 i32) '()))
-           (((or 'i64.store 'i64.store8 'i64.store16 'i64.store32)
-             ($ <mem-arg> id _ _))
-            (check-memory id)
-            (-> stack '(i32 i64) '()))
-           (instr
-            (validation-error "unimplemented instruction" instr))))
-       (define (validate-branch instrs stack control br-params results)
-         (let ((control* (cons br-params control)))
-           (let loop ((instrs instrs)
-                      (stack stack))
-             (match instrs
-               (()
-                (-> stack results '() #:block-end? #t))
-               ((instr . rest)
-                (loop rest (validate-instr instr stack control*)))))))
-       (let ((results (block-type-results type)))
-         (validate-branch body '() '() results results)))))
+           (($ <func-sig> (($ <param> _ params) ...) results)
+            (push-block ctx #f params results #:is-loop? loop?))))
+       (define (check-memory id)
+         (unless (< -1 id (vector-length memories))
+           (error "invalid memory" id)))
+       (define (validate-instr ctx instr)
+         (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
+           (($ <invalid-ctx> reason)
+            (validation-error reason instr))
+           (ctx
+            (match instr
+              (('if _ (= lookup-block-type bt) consequent alternate)
+               (validate-branch (push-block* ctx bt #f) consequent)
+               (validate-branch (push-block* ctx bt #f) alternate))
+              (('block _ (= lookup-block-type bt) body)
+               (validate-branch (push-block* ctx bt #f) body))
+              (('loop _ (= lookup-block-type bt) body)
+               (validate-branch (push-block* ctx bt #t) body))
+              (((or 'i32.const 'i64.const) . _)
+               (validate-constant instr))
+              (('global.set idx)
+               (match (vector-ref global-types idx)
+                 (($ <global-type> mutable? _)
+                  (unless mutable?
+                    (validation-error "global is immutable" idx)))))
+              (((or 'memory.size 'memory.grow) id)
+               (check-memory id))
+              (((or 'i32.load 'i32.load8_s 'i32.load8_u
+                    'i32.load16_s 'i32.load16_u
+                    'i64.load 'i64.load8_s 'i64.load8_u
+                    'i64.load16_s 'i64.load16_u 'i64.load32_s 'i64.load32_u
+                    'i32.store 'i32.store8 'i32.store16
+                    'i64.store 'i64.store8 'i64.store16 'i64.store32)
+                ($ <mem-arg> id _ _))
+               (check-memory id))
+              (_ #t))
+            ctx)))
+       (define (validate-branch ctx instrs)
+         (let loop ((ctx ctx)
+                    (instrs* instrs))
+           (match instrs*
+             (()
+              (match (fallthrough ctx)
+                (($ <invalid-ctx> reason)
+                 (validation-error reason instrs))
+                (_ #t)))
+             ((instr . rest)
+              (loop (validate-instr ctx instr) rest)))))
+       (validate-branch (initial-ctx wasm func) body))))
   (for-each validate-global (wasm-globals wasm))
   (for-each validate-func (wasm-funcs wasm))
   (%make-wasm-module wasm))

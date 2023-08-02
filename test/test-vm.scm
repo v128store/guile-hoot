@@ -345,6 +345,42 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
+(test-vm "i32.wrap_i64"
+         3
+         `(module
+           (func (export "main") (result i32)
+                 (i32.wrap_i64 (i64.const ,(+ (ash 1 32) 3))))))
+
+(test-vm "i32.trunc_f32_s"
+         -1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f32_s (f32.const -1.2)))))
+
+(test-vm "i32.trunc_f32_u"
+         1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f32_u (f32.const 1.2)))))
+
+(test-vm "i32.trunc_f64_s"
+         -1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f64_s (f64.const -1.2)))))
+
+(test-vm "i32.trunc_f64_u"
+         1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f64_u (f64.const 1.2)))))
+
+(test-vm "i32.reinterpret_f32"
+         1067030938
+         `(module
+           (func (export "main") (result i32)
+                 (i32.reinterpret_f32 (f32.const 1.2)))))
+
 (test-vm "i64.eqz true"
          1
          '(module
@@ -589,6 +625,48 @@
            (func (export "main") (result i64)
                  (i64.popcnt (i64.const ,(s64-overflow #xaaaaAAAAaaaaAAAA))))))
 
+(test-vm "i64.extend_i32_s"
+         -42
+         `(module
+           (func (export "main") (result i64)
+                 (i64.extend_i32_s (i32.const -42)))))
+
+(test-vm "i64.extend_i32_u"
+         42
+         `(module
+           (func (export "main") (result i64)
+                 (i64.extend_i32_u (i32.const 42)))))
+
+(test-vm "i64.trunc_f32_s"
+         -1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f32_s (f32.const -1.2)))))
+
+(test-vm "i64.trunc_f32_u"
+         1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f32_u (f32.const 1.2)))))
+
+(test-vm "i64.trunc_f64_s"
+         -1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f64_s (f64.const -1.2)))))
+
+(test-vm "i64.trunc_f64_u"
+         1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f64_u (f64.const 1.2)))))
+
+(test-vm "i64.reinterpret_f64"
+         4608083138725491507
+         `(module
+           (func (export "main") (result i64)
+                 (i64.reinterpret_f64 (f64.const 1.2)))))
+
 (test-vm "f32.eq true"
          1
          '(module
@@ -745,6 +823,42 @@
            (func (export "main") (result f32)
                  (f32.copysign (f32.const 1.5) (f32.const -2.0)))))
 
+(test-vm "f32.convert_i32_s"
+         -42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i32_s (i32.const -42)))))
+
+(test-vm "f32.convert_i32_u"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i32_u (i32.const 42)))))
+
+(test-vm "f32.convert_i64_s"
+         -42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i64_s (i64.const -42)))))
+
+(test-vm "f32.convert_i64_u"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i64_u (i64.const 42)))))
+
+(test-vm "f32.demote_f64"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.demote_f64 (f64.const 42.0)))))
+
+(test-vm "f32.reinterpret_i32"
+         1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.reinterpret_i32 (i32.const 1069547520)))))
+
 (test-vm "f64.eq true"
          1
          '(module
@@ -900,6 +1014,36 @@
          '(module
            (func (export "main") (result f64)
                  (f64.copysign (f64.const 1.5) (f64.const -2.0)))))
+
+(test-vm "f64.convert_i32_s"
+         -42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i32_s (i32.const -42)))))
+
+(test-vm "f64.convert_i32_u"
+         42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i32_u (i32.const 42)))))
+
+(test-vm "f64.convert_i64_s"
+         -42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i64_s (i64.const -42)))))
+
+(test-vm "f64.convert_i64_u"
+         42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i64_u (i64.const 42)))))
+
+(test-vm "f64.reinterpret_i64"
+         1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.reinterpret_i64 (i64.const 4609434218613702656)))))
 
 (test-vm "i32.store + i32.load"
          42

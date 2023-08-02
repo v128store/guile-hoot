@@ -452,7 +452,7 @@
 
        ((or 'f32.eq 'f32.ne 'f32.lt 'f32.gt 'f32.le 'f32.ge)
         (-> '(f32 f32) '(i32)))
-       ((or'f64.eq 'f64.ne 'f64.lt 'f64.gt 'f64.le 'f64.ge)
+       ((or 'f64.eq 'f64.ne 'f64.lt 'f64.gt 'f64.le 'f64.ge)
         (-> '(f64 f64) '(i32)))
 
        ((or 'i32.clz 'i32.ctz 'i32.popcnt

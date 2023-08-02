@@ -23,6 +23,16 @@
   #:use-module (wasm wat)
   #:export (compute-stdlib))
 
+(define (arith-cond . clauses)
+  (if (null? clauses)
+      '(unreachable)
+      (let* ((clause1 (car clauses))
+             (cond1 (car clause1))
+             (res1 (cdr clause1)))
+        `(if (ref eq) ,cond1
+             (then ,@res1)
+             (else ,(apply arith-cond (cdr clauses)))))))
+
 (define (compute-stdlib import-abi?)
   (define (maybe-import id)
     (if import-abi?
@@ -1012,62 +1022,35 @@
                   (struct.get $bignum $val (local.get $b)))))
 
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (block
-            $L5
-            (block
-             $L4
-             (block
-              $L3
-              (block
-               $L2
-               (block
-                $L1
-                (block
-                 $L0
-                 (ref.test i31 (local.get $a))
-                 (br_if $L0)
-                 (ref.test $bignum (local.get $a))
-                 (br_if $L1)
-                 (unreachable))
-                ;; $a is a fixnum
-                (ref.test i31 (local.get $b))
-                (br_if $L2)
-                (ref.test $bignum (local.get $b))
-                (br_if $L3)
-                (unreachable))
-               ;; $a is a bignum
-               (ref.test i31 (local.get $b))
-               (br_if $L4)
-               (ref.test $bignum (local.get $b))
-               (br_if $L5)
-               (unreachable))
-              ;; $a and $b are fixnums
-              (return (call $fixnum-add*
-                            (ref.cast i31 (local.get $a))
-                            (ref.cast i31 (local.get $b))))
-              (unreachable))
-             ;; $a is a fixnum, $b a bignum
-             (return (call $bignum-add*
-                           (struct.new $bignum
-                                       (i32.const 0)
-                                       (call $bignum-from-i32
-                                             (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
-                                                        (i32.const 1))))
-                           (ref.cast $bignum (local.get $b))))
-             (unreachable))
-            ;; $a is a bignum, $b a fixnum
-            (return (call $bignum-add*
-                          (ref.cast $bignum (local.get $a))
-                          (struct.new $bignum
-                                      (i32.const 0)
-                                      (call $bignum-from-i32
-                                            (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
-                                                       (i32.const 1))))))
-            (unreachable))
-           ;; $a and $b are bignums
-           (return (call $bignum-add*
-                         (ref.cast $bignum (local.get $a))
-                         (ref.cast $bignum (local.get $b)))))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $fixnum-add*
+                                 (ref.cast i31 (local.get $a))
+                                 (ref.cast i31 (local.get $b)))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-add*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                              (i32.const 1))))
+                                 (ref.cast $bignum (local.get $b)))))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-add*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                              (i32.const 1)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-add*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))))))
 
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))

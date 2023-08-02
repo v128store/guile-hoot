@@ -24,10 +24,26 @@
   #:use-module ((srfi srfi-1) #:select (append-map filter-map))
   #:use-module (srfi srfi-9)
   #:use-module (wasm types)
-  #:export (initial-ctx
+  #:export (<ctx>
+            ctx?
+            ctx-func-info
+            ctx-block
+            ctx-stack
+
+            <unreachable-ctx>
+            unreachable-ctx?
+            unreachable-ctx-block
+            unreachable-ctx-stack
+
+            <invalid-ctx>
+            invalid-ctx?
+            invalid-ctx-reason
+
+            initial-ctx
             push-block
             compute-stack-effect
-            apply-stack-effect))
+            apply-stack-effect
+            fallthrough))
 
 (define-record-type <func-info>
   (%make-func-info types funcs globals tables tags locals)
@@ -47,8 +63,11 @@
   (stack ctx-stack))
 
 (define-record-type <unreachable-ctx>
-  (make-unreachable-ctx)
-  unreachable-ctx?)
+  (make-unreachable-ctx func-info block stack)
+  unreachable-ctx?
+  (func-info unreachable-ctx-func-info)
+  (block unreachable-ctx-block)
+  (stack unreachable-ctx-stack))
 
 (define-record-type <invalid-ctx>
   (make-invalid-ctx reason)
@@ -56,20 +75,26 @@
   (reason invalid-ctx-reason))
 
 (define-record-type <block>
-  (make-block id branch-arg-types parent)
+  (make-block id branch-arg-types result-types parent)
   block?
   (id block-id)
   ;; If you jump to this block's label, what types do you pass?  Usually
   ;; the block results, but for loops it's the loop parameters.
   (branch-arg-types block-branch-arg-types)
+  ;; When control falls through the end of a block, what types must be
+  ;; on the stack?
+  (result-types block-result-types)
   (parent block-parent))
 
 (define-record-type <stack-effect>
-  (make-stack-effect params results)
+  (make-stack-effect params results block-end?)
   stack-effect?
   (params stack-effect-params)
   ;; Results can be #f if the effect causes an exit.
-  (results stack-effect-results))
+  (results stack-effect-results)
+  ;; The stack at the end of a block is expected to contain the param
+  ;; types and nothing else below them.
+  (block-end? stack-effect-block-end?))
 
 (define (make-func-info wasm func)
   (define types
@@ -110,11 +135,17 @@
           (wasm-tags wasm))))
   (define locals
     (match func
-      (($ <func> id
-          ($ <type-use> _
-             ($ <func-sig>
-                (($ <param> param-id param-type) ...)
-                (result-type ...)))
+      ;; For use by global initializers, data offsets, etc.
+      (#f #())
+      (($ <func>
+          id
+          ($ <type-use>
+             _
+             ($ <type>
+                _
+                ($ <func-sig>
+                   (($ <param> param-id param-type) ...)
+                   (result-type ...))))
           (($ <local> local-id local-type) ...)
           body)
        (list->vector
@@ -123,27 +154,32 @@
   (%make-func-info types funcs globals tables tags locals))
 
 (define (initial-ctx module func)
-  (define results
-    (func-sig-results (type-use-sig (func-type func))))
-  (make-ctx (make-func-info module func)
-            (make-block #f results #f)
-            '()))
+  (match func
+    (($ <global> _ type _)
+     (make-ctx (make-func-info module #f)
+               (make-block #f '() (list type) #f)
+               '()))
+    (($ <func> _ ($ <type-use> _ ($ <type> _ ($ <func-sig> _ results))))
+     (make-ctx (make-func-info module func)
+               (make-block #f results results #f)
+               '()))))
 
 (define* (push-block ctx id param-types result-types #:key is-loop?)
   (match ctx
-    (($ <ctx> info block values)
+    (($ <ctx> info block _)
      (let ((branch-arg-types (if is-loop? param-types result-types)))
        (make-ctx info
-                 (make-block id branch-arg-types block)
+                 (make-block id branch-arg-types result-types block)
                  param-types)))))
 
 (define (peek ctx)
   (match ctx
-    (($ <ctx> info block stack)
+    ((or ($ <ctx> _ _ stack)
+         ($ <unreachable-ctx> _ _ stack))
      (match stack
        ((top . stack) top)
        (() #f)))
-    ((or ($ <unreachable-ctx>) ($ <invalid-ctx>)) #f)))
+    (($ <invalid-ctx>) #f)))
 
 (define (vector-assq v k)
   (let lp ((i 0))
@@ -160,6 +196,8 @@
 (define (ctx-info-lookup ctx getter def)
   (match ctx
     (($ <ctx> info)
+     (cdr (vector-lookup (getter info) def)))
+    (($ <unreachable-ctx> info)
      (cdr (vector-lookup (getter info) def)))))
 
 (define (lookup-type ctx def)
@@ -204,29 +242,39 @@
      (else (block-branch-arg-types block)))))
 
 (define (compute-stack-effect ctx inst)
-  (define -> make-stack-effect)
+  (define (-> params results)
+    (make-stack-effect params results #f))
   (define (branch-arg-types target)
     (match ctx
-      (($ <ctx> block stack)
+      ((or ($ <ctx> _ block) ($ <unreachable-ctx> _ block))
        (if (integer? target)
            (let lp ((block block) (target target))
              (match block
-               (($ <ctx> id types parent)
+               (($ <block> id types _ parent)
                 (if (zero? target)
                     types
                     (lp parent (1- target))))))
            (let lp ((block block))
              (match block
-               (($ <ctx> id types parent)
+               (($ <block> id types _ parent)
                 (if (eq? target id)
                     types
                     (lp parent)))))))))
   (define (block-stack-effect type)
     (match type
       (#f (-> '() '()))
+      ;; Lookup signature by index in func info.
+      ((? exact-integer? idx)
+       (match ctx
+         ((or ($ <ctx> ($ <func-info> types))
+              ($ <unreachable-ctx> ($ <func-info> types)))
+          (match (vector-ref types idx)
+            ((_ . ($ <func-sig> (($ <param> _ params) ...) results))
+             (-> params results))))))
       (($ <type-use> _
-          ($ <func-sig> (($ <param> id type) ...) results))
-       (-> type results))
+          ($ <type> _
+             ($ <func-sig> (($ <param> _ params) ...) results)))
+       (-> params results))
       ((or (? symbol?) ($ <ref-type>))
        (-> '() (list type)))))
   (define (global-type global)
@@ -281,7 +329,8 @@
           ((callee)
            (match (lookup-func-type-use ctx callee)
              (($ <type-use> _
-                 ($ <func-sig> (($ <param> id type) ...) results))
+                 ($ <type> _
+                    ($ <func-sig> (($ <param> id type) ...) results)))
               (-> type results))))))
        ('call_indirect
         (match args
@@ -294,7 +343,8 @@
           ((callee)
            (match (lookup-func-type-use ctx callee)
              (($ <type-use> _
-                 ($ <func-sig> (($ <param> id type) ...) results))
+                 ($ <type> _
+                    ($ <func-sig> (($ <param> id type) ...) results)))
               (-> type #f))))))
        ('return_call_indirect
         (match args
@@ -510,7 +560,7 @@
            (let ((types (branch-arg-types target)))
              (-> (append types (list rt1))
                  (append types (list (if (eq? op 'br_on_cast) rt1 rt2))))))))
-       
+
        ('struct.get
         (match args
           ((ht field)
@@ -585,7 +635,7 @@
           (($ <ref-type> nullable? _)
            (-> (list (make-ref-type nullable? 'any))
                (list (make-ref-type nullable? 'extern))))))
-       
+
        ((or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8
             'string.new_wtf16)
         (-> '(i32 i32)
@@ -667,7 +717,7 @@
         (-> (list (make-ref-type #t 'stringview_wtf16)
                   'i32 'i32)
             (list (make-ref-type #f 'string))))
-       
+
        ('string.as_iter
         (-> (list (make-ref-type #t 'string))
             (list (make-ref-type #f 'stringview_iter))))
@@ -715,11 +765,41 @@
      (else #f)))
 
   (match ctx
-    (($ <unreachable-ctx>) ctx)
     (($ <invalid-ctx>) ctx)
+    (($ <unreachable-ctx> info block stack)
+     (match effect
+       (($ <stack-effect> params results block-end?)
+        (let lp ((params (reverse params)) (stack stack))
+          (match params
+            ((param . params)
+             (match stack
+               ;; The bottom of the unreachable stack is treated as a
+               ;; polymorphic stack that contains any type, so there
+               ;; is no reason to continue type checking.
+               (()
+                (lp '() '()))
+               ;; Peeking at the unreachable stack may return #f,
+               ;; which can stand in for any type.
+               ((#f . stack)
+                (lp params stack))
+               ;; A proper type is on top of the stack, type checking
+               ;; happens the same as in <ctx>.
+               ((top . stack)
+                (if (is-subtype? top param)
+                    (lp params stack)
+                    (make-invalid-ctx
+                     (format #f "expected ~a, got ~a" param top))))))
+            (()
+             (if (and block-end? (not (null? stack)))
+                 (make-invalid-ctx
+                  (format #f "extra values on stack at block end ~a" stack))
+                 (match results
+                   (#f (make-unreachable-ctx info block '()))
+                   ((result ...)
+                    (make-unreachable-ctx info block (append (reverse result) stack)))))))))))
     (($ <ctx> info block stack)
      (match effect
-       (($ <stack-effect> params results)
+       (($ <stack-effect> params results block-end?)
         (let lp ((params (reverse params)) (stack stack))
           (match params
             ((param . params)
@@ -734,7 +814,17 @@
                     (make-invalid-ctx
                      (format #f "expected ~a, got ~a" param top))))))
             (()
-             (match results
-               (#f (make-unreachable-ctx))
-               ((result ...)
-                (make-ctx info block (append (reverse result) stack))))))))))))
+             (if (and block-end? (not (null? stack)))
+                 (make-invalid-ctx
+                  (format #f "extra values on stack at block end ~a" stack))
+                 (match results
+                   (#f (make-unreachable-ctx info block '()))
+                   ((result ...)
+                    (make-ctx info block (append (reverse result) stack)))))))))))))
+
+(define (fallthrough ctx)
+  (let ((types
+         (match ctx
+           (($ <unreachable-ctx> _ ($ <block> _ _ types)) types)
+           (($ <ctx> _ ($ <block> _ _ types)) types))))
+    (apply-stack-effect ctx (make-stack-effect types #f #t))))

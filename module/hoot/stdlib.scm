@@ -302,6 +302,10 @@
            (param (ref extern))
            (param (ref extern))
            (result (ref extern)))
+     (func $bignum-sub (import "rt" "bignum_sub")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
 
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
@@ -1013,11 +1017,24 @@
                  (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
                  (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
 
+     (func $fixnum-sub* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
+           (call $fixnum-sub
+                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
+                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+
      (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
            (struct.new
             $bignum
             (i32.const 0)
             (call $bignum-add
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
+     (func $bignum-sub* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-sub
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
@@ -1053,7 +1070,36 @@
                                  (ref.cast $bignum (local.get $b)))))))))
 
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $fixnum-sub*
+                                 (ref.cast i31 (local.get $a))
+                                 (ref.cast i31 (local.get $b)))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-sub*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                              (i32.const 1))))
+                                 (ref.cast $bignum (local.get $b)))))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-sub*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                              (i32.const 1)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-sub*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))))))
+
      (func $add/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
            (unreachable))
      (func $sub/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))

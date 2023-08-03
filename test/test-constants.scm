@@ -169,6 +169,27 @@
 (test-call "1073741824" (lambda (a b c) (* c (+ a b))) 536870911 1 2)
 (test-call "288230376151711744" (lambda (a b) (* (+ a b) (+ a b))) 536870911 1)
 
+;; Flonum addition
+(test-call "84" (lambda (a) (+ (exact->inexact a) (exact->inexact a))) 42)
+(test-call "84" (lambda (a) (+ (exact->inexact a) a)) 42)
+(test-call "536870954" (lambda (a b c) (+ (exact->inexact a) (+ b c))) 42 536870911 1)
+(test-call "84" (lambda (a) (+ a (exact->inexact a))) 42)
+(test-call "536870954" (lambda (a b c) (+ (+ a b) (exact->inexact c))) 536870911 1 42)
+
+;; Flonum subtraction
+(test-call "0" (lambda (a) (- (exact->inexact a) (exact->inexact a))) 42)
+(test-call "0" (lambda (a) (- (exact->inexact a) a)) 42)
+(test-call "-536870870" (lambda (a b c) (- (exact->inexact a) (+ b c))) 42 536870911 1)
+(test-call "0" (lambda (a) (- a (exact->inexact a))) 42)
+(test-call "536870870" (lambda (a b c) (- (+ a b) (exact->inexact c))) 536870911 1 42)
+
+;; Flonum multiplication
+(test-call "1764" (lambda (a) (* (exact->inexact a) (exact->inexact a))) 42)
+(test-call "1764" (lambda (a) (* (exact->inexact a) a)) 42)
+(test-call "22548578304" (lambda (a b c) (* (exact->inexact a) (+ b c))) 42 536870911 1)
+(test-call "1764" (lambda (a) (* a (exact->inexact a))) 42)
+(test-call "22548578304" (lambda (a b c) (* (+ a b) (exact->inexact c))) 536870911 1 42)
+
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)

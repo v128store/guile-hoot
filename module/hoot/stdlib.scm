@@ -327,6 +327,10 @@
            (param i32)
            (result (ref extern)))
 
+     (func $bignum-to-f64 (import "rt" "bignum_to_f64")
+           (param (ref extern))
+           (result f64))
+
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
      (func $weak-map-get (import "rt" "weak_map_get")
@@ -977,11 +981,26 @@
            (param $ch i32)
            (unreachable))
 
+     (func $fixnum->i32 (param $a (ref i31)) (result i32)
+           (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1)))
+
+     (func $fixnum->i64 (param $a (ref i31)) (result i64)
+           (i64.extend_i32_s (call $fixnum->i32 (local.get $a))))
+
+     (func $fixnum->f64 (param $a (ref i31)) (result f64)
+           (f64.convert_i32_s (call $fixnum->i32 (local.get $a))))
+
+     (func $flonum->f64 (param $a (ref $flonum)) (result f64)
+           (struct.get $flonum $val (local.get $a)))
+
      (func $i32->bignum (param $a i32) (result (ref eq))
            (struct.new $bignum
                        (i32.const 0)
                        (call $bignum-from-i64
                              (i64.extend_i32_s (local.get $a)))))
+
+     (func $bignum->f64 (param $a (ref $bignum)) (result f64)
+           (call $bignum-to-f64 (struct.get $bignum $val (local.get $a))))
 
      ;; The $A and $B parameters are 30-bit fixnums, with a zero LSB bit
      ;; as the fixnum tag. We examine the top three bits of the result:
@@ -1086,7 +1105,14 @@
                                              (call $bignum-from-i32
                                                    (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
                                                               (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return
+                    (struct.new $flonum
+                                (i32.const 0)
+                                (f64.add
+                                 (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                                 (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((ref.test i31 (local.get $b))
@@ -1100,7 +1126,34 @@
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-add*
                                  (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return
+                    (struct.new $flonum
+                                (i32.const 0)
+                                (f64.add
+                                 (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                                 (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.add
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.add
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $b)))))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.add
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))))
 
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
@@ -1117,7 +1170,13 @@
                                              (call $bignum-from-i32
                                                    (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
                                                               (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.sub
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((ref.test i31 (local.get $b))
@@ -1131,7 +1190,33 @@
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-sub*
                                  (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.sub
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.sub
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.sub
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $b)))))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.sub
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))))
 
      (func $add/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
            (unreachable))
@@ -1153,7 +1238,13 @@
                                              (call $bignum-from-i32
                                                    (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
                                                               (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((ref.test i31 (local.get $b))
@@ -1167,7 +1258,33 @@
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-mul*
                                  (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $b)))))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))))
 
      (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
@@ -1193,7 +1310,22 @@
            (unreachable))
 
      (func $inexact (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $x))
+               (return
+                (struct.new $flonum
+                            (i32.const 0)
+                            (call $fixnum->f64
+                                  (ref.cast i31 (local.get $x))))))
+             `((ref.test $bignum (local.get $x))
+               (return
+                (struct.new $flonum
+                            (i32.const 0)
+                            (call $bignum->f64
+                                  (ref.cast $bignum (local.get $x))))))
+             `((ref.test $flonum (local.get $x))
+               (return (local.get $x)))))
+
      (func $abs (param $x (ref eq)) (result (ref eq))
            (unreachable))
      (func $sqrt (param $x (ref eq)) (result (ref eq))

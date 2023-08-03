@@ -86,7 +86,9 @@
          (our-result (run-wasm-in-vm wasm func args imports)))
     (when d8?
       (let ((d8-result (run-wasm-in-d8 wasm func args)))
-        (unless (equal? our-result d8-result)
+        (unless (if (and (number? our-result) (number? d8-result))
+                    (= our-result d8-result)
+                    (equal? our-result d8-result))
           (error "our result differs from d8" our-result d8-result))))
     our-result))
 
@@ -343,6 +345,42 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
+(test-vm "i32.wrap_i64"
+         3
+         `(module
+           (func (export "main") (result i32)
+                 (i32.wrap_i64 (i64.const ,(+ (ash 1 32) 3))))))
+
+(test-vm "i32.trunc_f32_s"
+         -1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f32_s (f32.const -1.2)))))
+
+(test-vm "i32.trunc_f32_u"
+         1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f32_u (f32.const 1.2)))))
+
+(test-vm "i32.trunc_f64_s"
+         -1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f64_s (f64.const -1.2)))))
+
+(test-vm "i32.trunc_f64_u"
+         1
+         `(module
+           (func (export "main") (result i32)
+                 (i32.trunc_f64_u (f64.const 1.2)))))
+
+(test-vm "i32.reinterpret_f32"
+         1067030938
+         `(module
+           (func (export "main") (result i32)
+                 (i32.reinterpret_f32 (f32.const 1.2)))))
+
 (test-vm "i64.eqz true"
          1
          '(module
@@ -587,6 +625,426 @@
            (func (export "main") (result i64)
                  (i64.popcnt (i64.const ,(s64-overflow #xaaaaAAAAaaaaAAAA))))))
 
+(test-vm "i64.extend_i32_s"
+         -42
+         `(module
+           (func (export "main") (result i64)
+                 (i64.extend_i32_s (i32.const -42)))))
+
+(test-vm "i64.extend_i32_u"
+         42
+         `(module
+           (func (export "main") (result i64)
+                 (i64.extend_i32_u (i32.const 42)))))
+
+(test-vm "i64.trunc_f32_s"
+         -1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f32_s (f32.const -1.2)))))
+
+(test-vm "i64.trunc_f32_u"
+         1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f32_u (f32.const 1.2)))))
+
+(test-vm "i64.trunc_f64_s"
+         -1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f64_s (f64.const -1.2)))))
+
+(test-vm "i64.trunc_f64_u"
+         1
+         `(module
+           (func (export "main") (result i64)
+                 (i64.trunc_f64_u (f64.const 1.2)))))
+
+(test-vm "i64.reinterpret_f64"
+         4608083138725491507
+         `(module
+           (func (export "main") (result i64)
+                 (i64.reinterpret_f64 (f64.const 1.2)))))
+
+(test-vm "f32.eq true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.eq (f32.const 42.0) (f32.const 42.0)))))
+
+(test-vm "f32.eq false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.eq (f32.const 42.0) (f32.const 7.0)))))
+
+(test-vm "f32.ne true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.ne (f32.const 42.0) (f32.const 7.0)))))
+
+(test-vm "f32.ne false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.ne (f32.const 42.0) (f32.const 42.0)))))
+
+(test-vm "f32.lt true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.lt (f32.const -42.0) (f32.const 42.0)))))
+
+(test-vm "f32.lt false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.lt (f32.const 42.0) (f32.const -42.0)))))
+
+(test-vm "f32.le true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.le (f32.const 42.0) (f32.const 42.0)))))
+
+(test-vm "f32.le false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.le (f32.const 42.0) (f32.const -42.0)))))
+
+(test-vm "f32.gt true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.gt (f32.const 42.0) (f32.const -42.0)))))
+
+(test-vm "f32.gt false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.gt (f32.const -42.0) (f32.const 42.0)))))
+
+(test-vm "f32.ge true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f32.ge (f32.const 42.0) (f32.const 42.0)))))
+
+(test-vm "f32.ge false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f32.ge (f32.const -42.0) (f32.const 42.0)))))
+
+(test-vm "f32.add"
+         3.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.add (f32.const 1.5) (f32.const 2.0)))))
+
+(test-vm "f32.sub"
+         2.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.sub (f32.const 3.0) (f32.const 0.5)))))
+
+(test-vm "f32.mul"
+         4.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.mul (f32.const 1.5) (f32.const 3.0)))))
+
+(test-vm "f32.div"
+         0.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.div (f32.const 1.0) (f32.const 2.0)))))
+
+(test-vm "f32.abs"
+         1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.abs (f32.const -1.5)))))
+
+(test-vm "f32.neg"
+         -1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.neg (f32.const 1.5)))))
+
+(test-vm "f32.ceil"
+         2.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.ceil (f32.const 1.5)))))
+
+(test-vm "f32.floor"
+         1.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.floor (f32.const 1.5)))))
+
+(test-vm "f32.trunc"
+         1.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.trunc (f32.const 1.5)))))
+
+(test-vm "f32.nearest"
+         1.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.nearest (f32.const 1.4)))))
+
+(test-vm "f32.sqrt"
+         2.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.sqrt (f32.const 4.0)))))
+
+(test-vm "f32.min"
+         0.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.min (f32.const 0.5) (f32.const 1.5)))))
+
+(test-vm "f32.max"
+         1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.max (f32.const 0.5) (f32.const 1.5)))))
+
+(test-vm "f32.copysign"
+         -1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.copysign (f32.const 1.5) (f32.const -2.0)))))
+
+(test-vm "f32.convert_i32_s"
+         -42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i32_s (i32.const -42)))))
+
+(test-vm "f32.convert_i32_u"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i32_u (i32.const 42)))))
+
+(test-vm "f32.convert_i64_s"
+         -42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i64_s (i64.const -42)))))
+
+(test-vm "f32.convert_i64_u"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.convert_i64_u (i64.const 42)))))
+
+(test-vm "f32.demote_f64"
+         42.0
+         '(module
+           (func (export "main") (result f32)
+                 (f32.demote_f64 (f64.const 42.0)))))
+
+(test-vm "f32.reinterpret_i32"
+         1.5
+         '(module
+           (func (export "main") (result f32)
+                 (f32.reinterpret_i32 (i32.const 1069547520)))))
+
+(test-vm "f64.eq true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.eq (f64.const 42.0) (f64.const 42.0)))))
+
+(test-vm "f64.eq false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.eq (f64.const 42.0) (f64.const 7.0)))))
+
+(test-vm "f64.ne true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.ne (f64.const 42.0) (f64.const 7.0)))))
+
+(test-vm "f64.ne false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.ne (f64.const 42.0) (f64.const 42.0)))))
+
+(test-vm "f64.lt true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.lt (f64.const -42.0) (f64.const 42.0)))))
+
+(test-vm "f64.lt false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.lt (f64.const 42.0) (f64.const -42.0)))))
+
+(test-vm "f64.le true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.le (f64.const 42.0) (f64.const 42.0)))))
+
+(test-vm "f64.le false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.le (f64.const 42.0) (f64.const -42.0)))))
+
+(test-vm "f64.gt true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.gt (f64.const 42.0) (f64.const -42.0)))))
+
+(test-vm "f64.gt false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.gt (f64.const -42.0) (f64.const 42.0)))))
+
+(test-vm "f64.ge true"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (f64.ge (f64.const 42.0) (f64.const 42.0)))))
+
+(test-vm "f64.ge false"
+         0
+         '(module
+           (func (export "main") (result i32)
+                 (f64.ge (f64.const -42.0) (f64.const 42.0)))))
+
+(test-vm "f64.add"
+         3.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.add (f64.const 1.5) (f64.const 2.0)))))
+
+(test-vm "f64.sub"
+         2.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.sub (f64.const 3.0) (f64.const 0.5)))))
+
+(test-vm "f64.mul"
+         4.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.mul (f64.const 1.5) (f64.const 3.0)))))
+
+(test-vm "f64.div"
+         0.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.div (f64.const 1.0) (f64.const 2.0)))))
+
+(test-vm "f64.abs"
+         1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.abs (f64.const -1.5)))))
+
+(test-vm "f64.neg"
+         -1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.neg (f64.const 1.5)))))
+
+(test-vm "f64.ceil"
+         2.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.ceil (f64.const 1.5)))))
+
+(test-vm "f64.floor"
+         1.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.floor (f64.const 1.5)))))
+
+(test-vm "f64.trunc"
+         1.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.trunc (f64.const 1.5)))))
+
+(test-vm "f64.nearest"
+         1.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.nearest (f64.const 1.4)))))
+
+(test-vm "f64.sqrt"
+         2.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.sqrt (f64.const 4.0)))))
+
+(test-vm "f64.min"
+         0.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.min (f64.const 0.5) (f64.const 1.5)))))
+
+(test-vm "f64.max"
+         1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.max (f64.const 0.5) (f64.const 1.5)))))
+
+(test-vm "f64.copysign"
+         -1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.copysign (f64.const 1.5) (f64.const -2.0)))))
+
+(test-vm "f64.convert_i32_s"
+         -42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i32_s (i32.const -42)))))
+
+(test-vm "f64.convert_i32_u"
+         42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i32_u (i32.const 42)))))
+
+(test-vm "f64.convert_i64_s"
+         -42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i64_s (i64.const -42)))))
+
+(test-vm "f64.convert_i64_u"
+         42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.convert_i64_u (i64.const 42)))))
+
+(test-vm "f64.reinterpret_i64"
+         1.5
+         '(module
+           (func (export "main") (result f64)
+                 (f64.reinterpret_i64 (i64.const 4609434218613702656)))))
+
 (test-vm "i32.store + i32.load"
          42
          '(module
@@ -762,6 +1220,23 @@
            (func (export "main") (result i64)
                  (i64.store8 (i32.const 0) (i64.const -257))
                  (i64.load8_u (i32.const 0)))))
+
+(test-vm "f32.store + f32.load"
+         1.5
+         '(module
+           (memory 1)
+           (func (export "main") (result f32)
+                 (f32.store (i32.const 0) (f32.const 1.5))
+                 (f32.load (i32.const 0)))))
+
+(test-vm "f64.store + f64.load"
+         1.5
+         '(module
+           (memory 1)
+           (func (export "main") (result f64)
+                 (f64.store (i32.const 0) (f64.const 1.5))
+                 (f64.load (i32.const 0)))))
+
 
 (test-vm "memory.size"
          1

@@ -317,6 +317,7 @@ class SchemeModule {
 
         bignum_add(a, b) { return a + b },
         bignum_sub(a, b) { return a - b },
+        bignum_mul(a, b) { return a * b },
 
         make_weak_map() { return new WeakMap; },
         weak_map_get(map, k) { return map.get(k); },

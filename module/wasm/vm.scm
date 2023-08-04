@@ -47,6 +47,14 @@
             wasm-memory-limits
             wasm-memory-grow!
 
+            make-wasm-table
+            wasm-table?
+            wasm-table-size
+            wasm-table-ref
+            wasm-table-set!
+            wasm-table-fill!
+            wasm-table-copy!
+
             wasm-position?
             wasm-position-instructions
             wasm-position-index
@@ -119,6 +127,7 @@
     ('i64 (s64? x))
     ('f32 (f32? x))
     ('f64 (f64? x))
+    (($ <ref-type> _ 'extern) #t)
     (_ #f)))
 
 
@@ -168,6 +177,14 @@
                            (_ #f))
                          (wasm-imports wasm))
              (wasm-memories wasm))))
+  (define tables
+    (list->vector
+     (append (filter-map (match-lambda
+                           (($ <import> _ _ 'table _ type) type)
+                           (_ #f))
+                         (wasm-imports wasm))
+             (map table-type (wasm-tables wasm)))))
+  (define elems (list->vector (wasm-elems wasm)))
   (define (validation-error msg . irritants)
     (raise-exception
      (make-exception
@@ -187,29 +204,58 @@
   (define (assert-f64 x)
     (unless (f64? x)
       (validation-error "f64 constant out of range" x)))
-  (define (validate-constant instr)
-    (match instr
-      (('i32.const x) (assert-s32 x))
-      (('i64.const x) (assert-s64 x))
-      (('f32.const x) (assert-f32 x))
-      (('f64.const x) (assert-f64 x))))
-  (define (validate-global global)
+  (define (check-vector vec id msg)
+    (unless (< -1 id (vector-length vec))
+      (validation-error msg id)))
+  (define (check-func id)
+    (check-vector func-sigs id "invalid function"))
+  (define (check-memory id)
+    (check-vector memories id "invalid memory"))
+  (define (check-table id)
+    (check-vector tables id "invalid table"))
+  (define (check-elem id)
+    (check-vector elems id "invalid element"))
+  (define (validate-const type instrs)
     (define (validate-instr ctx instr)
-      (match instr
-        ;; TODO: Support all constant instructions.
-        (((or 'i32.const 'i64.const 'f32.const 'f64.const) . _)
-         (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
-           (($ <invalid-ctx> reason)
-            (validation-error reason instr))
-           (ctx ctx)))))
+      (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
+        (($ <invalid-ctx> reason)
+         (validation-error reason instr))
+        (ctx
+         (match instr
+           (('i32.const x) (assert-s32 x))
+           (('i64.const x) (assert-s64 x))
+           (('f32.const x) (assert-f32 x))
+           (('f64.const x) (assert-f64 x))
+           (('ref.func f) (check-func f))
+           (('ref.null _) #t)
+           (_ (validation-error "invalid constant instruction" instr)))
+         ctx)))
+    ;; We need to make a phony func object that represents the
+    ;; expected result type of the constant instructions.
+    (let* ((sig (make-func-sig '() (list type)))
+           (func (make-func #f (make-type-use #f (make-type #f sig)) '() '())))
+      (let loop ((ctx (initial-ctx wasm func))
+                 (instrs instrs))
+        (match instrs
+          (() #t)
+          ((instr . rest)
+           (validate-instr ctx instr))))))
+  (define (validate-global global)
     (match global
-      (($ <global> _ _ instrs)
-       (let loop ((instrs instrs)
-                  (ctx '()))
-         (match instrs
-           (() #t)
-           ((instr . rest)
-            (loop rest (validate-instr (initial-ctx wasm global) instr))))))))
+      (($ <global> _ type instrs)
+       (validate-const type instrs))))
+  (define (validate-data data)
+    (match data
+      (($ <data> _ mod_ _ offset _)
+       (validate-const 'i32 offset))))
+  (define (validate-elem elem)
+    (match elem
+      (($ <elem> _ mode _ type offset inits)
+       (when (eq? mode 'active)
+         (validate-const 'i32 offset))
+       (for-each (lambda (init)
+                   (validate-const type init))
+                 inits))))
   (define (validate-func func)
     (match func
       (($ <func> _ ($ <type-use> _ ($ <type> _ type)) _ body)
@@ -222,9 +268,6 @@
          (match bt
            (($ <func-sig> (($ <param> _ params) ...) results)
             (push-block ctx #f params results #:is-loop? loop?))))
-       (define (check-memory id)
-         (unless (< -1 id (vector-length memories))
-           (error "invalid memory" id)))
        (define (validate-instr ctx instr)
          (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
            (($ <invalid-ctx> reason)
@@ -238,8 +281,10 @@
                (validate-branch (push-block* ctx bt #f) body))
               (('loop _ (= lookup-block-type bt) body)
                (validate-branch (push-block* ctx bt #t) body))
-              (((or 'i32.const 'i64.const 'f32.const 'f64.const) . _)
-               (validate-constant instr))
+              (('i32.const x) (assert-s32 x))
+              (('i64.const x) (assert-s64 x))
+              (('f32.const x) (assert-f32 x))
+              (('f64.const x) (assert-f64 x))
               (('global.set idx)
                (match (vector-ref global-types idx)
                  (($ <global-type> mutable? _)
@@ -255,6 +300,17 @@
                     'i64.store 'i64.store8 'i64.store16 'i64.store32)
                 ($ <mem-arg> id _ _))
                (check-memory id))
+              (((or 'table.set 'table.get 'table.size
+                    'table.grow 'table.fill) table)
+               (check-table table))
+              (('table.copy dst src)
+               (check-table dst)
+               (check-table src))
+              (('table.init table elem)
+               (check-table table)
+               (check-elem elem))
+              (('elem.drop table) (check-elem table))
+              (('ref.func f) (check-func f))
               (_ #t))
             ctx)))
        (define (validate-branch ctx instrs)
@@ -271,6 +327,8 @@
        (validate-branch (initial-ctx wasm func) body))))
   (for-each validate-global (wasm-globals wasm))
   (for-each validate-func (wasm-funcs wasm))
+  (for-each validate-data (wasm-datas wasm))
+  (for-each validate-elem (wasm-elems wasm))
   (%make-wasm-module wasm))
 
 (define (make-wasm-module bin)
@@ -373,10 +431,10 @@ bytevector, an input port, or a <wasm> record produced by
 (define %page-size (* 64 1024))
 (define %max-pages (/ (ash 1 32) %page-size))
 
-(define (clamp-to-limits x limits)
+(define (clamp-to-limits x limits default-max)
   (match limits
     (($ <limits> min max)
-     (let ((max* (or max %max-pages)))
+     (let ((max* (or max default-max)))
        (cond
         ((< x min) min)
         ((> x max*) max*)
@@ -393,7 +451,7 @@ bytevector, an input port, or a <wasm> record produced by
   (make-bytevector (* n %page-size) 0))
 
 (define* (make-wasm-memory size #:optional (limits (make-limits 1 #f)))
-  (let ((size* (clamp-to-limits size limits)))
+  (let ((size* (clamp-to-limits size limits %max-pages)))
     (%make-wasm-memory (make-bytevector/pages size*) size* limits)))
 
 (define (wasm-memory-grow! memory n)
@@ -401,8 +459,8 @@ bytevector, an input port, or a <wasm> record produced by
     (($ <wasm-memory> old-bytes old-size limits)
      (if (= n 0)
          old-size
-         (let ((new-size (clamp-to-limits
-                          (+ (wasm-memory-size memory) n) limits)))
+         (let ((new-size (clamp-to-limits (+ (wasm-memory-size memory) n)
+                                          limits %max-pages)))
            (if (= new-size old-size)
                -1
                (let ((new-bytes (make-bytevector/pages new-size)))
@@ -412,13 +470,68 @@ bytevector, an input port, or a <wasm> record produced by
                  (set-wasm-memory-size! memory new-size)
                  old-size)))))))
 
+(define-record-type <wasm-table>
+  (%make-wasm-table elements limits)
+  wasm-table?
+  (elements wasm-table-elements set-wasm-table-elements!)
+  (limits wasm-table-limits))
+
+(define %max-table-size (- (ash 1 32) 1))
+
+(define* (make-wasm-table size #:optional (limits (make-limits 1 #f)))
+  (let ((size* (clamp-to-limits size limits %max-table-size)))
+    (%make-wasm-table (make-vector size*) limits)))
+
+(define (wasm-table-size table)
+  (vector-length (wasm-table-elements table)))
+
+(define (wasm-table-ref table i)
+  (vector-ref (wasm-table-elements table) i))
+
+(define (wasm-table-set! table i x)
+  (vector-set! (wasm-table-elements table) i x))
+
+(define (wasm-table-fill! table start fill length)
+  (vector-fill! (wasm-table-elements table) fill start (+ start length)))
+
+(define (wasm-table-copy! table at src start length)
+  (vector-copy! (wasm-table-elements table) at (wasm-table-elements src)
+                start (+ start length)))
+
+(define (wasm-table-init! table at elems start length)
+  (vector-copy! (wasm-table-elements table) at elems start (+ start length)))
+
+(define (wasm-table-grow! table n init)
+  (match table
+    (($ <wasm-table> elems limits)
+     (let ((old-size (vector-length elems)))
+       (if (= n 0)
+           old-size
+           (let ((new-size (clamp-to-limits (+ old-size n) limits %max-table-size)))
+             (if (= new-size old-size)
+                 -1
+                 (let ((new-elems (make-vector new-size)))
+                   (vector-copy! new-elems 0 elems)
+                   (do ((i old-size (+ i 1)))
+                       ((= i new-size))
+                     (vector-set! new-elems i init))
+                   (set-wasm-table-elements! table new-elems)
+                   old-size))))))))
+
+(define-record-type <wasm-null>
+  (make-wasm-null type)
+  wasm-null?
+  (type wasm-null-type))
+
 (define-record-type <wasm-instance>
-  (%make-wasm-instance module globals funcs memories exports)
+  (%make-wasm-instance module globals funcs memories tables elems exports)
   wasm-instance?
   (module wasm-instance-module)
   (globals wasm-instance-globals)
   (funcs wasm-instance-funcs)
   (memories wasm-instance-memories)
+  (tables wasm-instance-tables)
+  (elems wasm-instance-elems)
   (exports wasm-instance-exports))
 
 (set-record-type-printer! <wasm-instance>
@@ -438,7 +551,6 @@ bytevector, an input port, or a <wasm> record produced by
      (format #f "WASM instantiation error: ~a" msg))
     (make-exception-with-irritants irritants))))
 
-;; TODO: Support tables.
 (define* (make-wasm-instance module #:key (imports '()))
   (define (lookup-import mod name)
     (assoc-ref (or (assoc-ref imports mod) '()) name))
@@ -455,12 +567,15 @@ bytevector, an input port, or a <wasm> record produced by
      (let* ((n-global-imports (count-imports 'global))
             (n-func-imports (count-imports 'func))
             (n-memory-imports (count-imports 'memory))
+            (n-table-imports (count-imports 'table))
             (global-vec (make-vector (+ n-global-imports (length globals))))
             (func-vec (make-vector (+ n-func-imports (length funcs))))
             (memory-vec (make-vector (+ n-memory-imports (length memories))))
+            (table-vec (make-vector (+ n-table-imports (length tables))))
+            (elem-vec (make-vector (length elems)))
             (export-table (make-hash-table))
-            (instance (%make-wasm-instance module global-vec func-vec
-                                           memory-vec export-table)))
+            (instance (%make-wasm-instance module global-vec func-vec memory-vec
+                                           table-vec elem-vec export-table)))
        (define (type-check vals types)
          (unless (every is-a? vals types)
            (error (format #f "type mismatch; expected ~a" types)
@@ -517,30 +632,41 @@ bytevector, an input port, or a <wasm> record produced by
                    (lambda () 'return))
                   (apply values (stack-pop-n! stack n-results))))
               (make-wasm-func wasm-proc sig)))))
+       (define (exec-init root init)
+         (let ((stack (make-wasm-stack)))
+           (execute* init (list root) instance stack '() #())
+           (stack-pop! stack)))
        ;; Process imports.
        (let loop ((wasm-imports wasm-imports)
                   (global-idx 0)
                   (func-idx 0)
-                  (memory-idx 0))
+                  (memory-idx 0)
+                  (table-idx 0))
          (match wasm-imports
            (() #t)
            ((($ <import> mod name 'func _ ($ <type-use> _ ($ <type> _ sig))) . rest)
             (match (lookup-import mod name)
               ((? procedure? proc)
                (vector-set! func-vec func-idx (make-wasm-func proc sig))
-               (loop rest global-idx (+ func-idx 1) memory-idx))
+               (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
               (x (instance-error "invalid function import" x))))
            ((($ <import> mod name 'global _ type) . rest)
             (match (lookup-import mod name)
               ((? wasm-global? global)
                (vector-set! global-vec global-idx global)
-               (loop rest (+ global-idx 1) func-idx memory-idx))
+               (loop rest (+ global-idx 1) func-idx memory-idx table-idx))
               (x (instance-error "invalid global import" x))))
            ((($ <import> mod name 'memory _ type) . rest)
             (match (lookup-import mod name)
               ((? wasm-memory? memory)
                (vector-set! memory-vec memory-idx memory)
-               (loop rest global-idx func-idx (+ memory-idx 1)))
+               (loop rest global-idx func-idx (+ memory-idx 1) table-idx))
+              (x (instance-error "invalid memory import" x))))
+           ((($ <import> mod name 'table _ type) . rest)
+            (match (lookup-import mod name)
+              ((? wasm-table? table)
+               (vector-set! table-vec table-idx table)
+               (loop rest global-idx func-idx memory-id (+ table-idx 1)))
               (x (instance-error "invalid memory import" x))))))
        ;; Initialize globals.
        (let loop ((globals globals)
@@ -548,13 +674,9 @@ bytevector, an input port, or a <wasm> record produced by
          (match globals
            (() #t)
            (((and ($ <global> _ ($ <global-type> mutable? type) init) global) . rest)
-            ;; Invoke the VM to process the constant expressions that
-            ;; produce the initial value.
-            (let ((stack (make-wasm-stack)))
-              (execute* init (list global) instance stack '() #())
-              (let ((global (make-wasm-global (stack-pop! stack) mutable?)))
-                (vector-set! global-vec idx global))
-              (loop rest (+ idx 1))))))
+            (let ((global (make-wasm-global (exec-init global init) mutable?)))
+              (vector-set! global-vec idx global))
+            (loop rest (+ idx 1)))))
        ;; Initialize functions.
        (let loop ((funcs funcs)
                   (idx n-func-imports))
@@ -576,13 +698,37 @@ bytevector, an input port, or a <wasm> record produced by
                    ((and ($ <data> _ mode mem-id instrs init) data)
                     ;; Invoke the VM to process the constant
                     ;; expressions that produce the offset value.
-                    (let ((stack (make-wasm-stack))
+                    (let ((offset (exec-init data instrs))
                           (memory (vector-ref memory-vec mem-id)))
-                      (execute* instrs (list data) instance stack '() #())
-                      (let ((offset (stack-pop! stack)))
-                        (bytevector-copy! init 0 (wasm-memory-bytes memory)
-                                          offset (bytevector-length init))))))
+                      (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                        offset (bytevector-length init)))))
                  datas)
+       ;; Initialize tables.
+       (let loop ((tables tables)
+                  (idx n-table-imports))
+         (match tables
+           (() #t)
+           ((($ <table> _ ($ <table-type> (and ($ <limits> min) limits)) init) . rest)
+            (vector-set! table-vec idx (make-wasm-table min limits))
+            (loop rest (+ idx 1)))))
+       ;; Initialize elements and copy active elements into tables.
+       (let loop ((elems elems)
+                  (idx 0))
+         (match elems
+           (() #t)
+           (((and elem ($ <elem> _ mode table-idx type offset inits)) . rest)
+            (let ((table (and table-idx (vector-ref table-vec table-idx)))
+                  (offset (and (eq? mode 'active) (exec-init elem offset)))
+                  (init-vec (list->vector
+                             (map (lambda (instrs)
+                                    (exec-init elem instrs))
+                                  inits))))
+              (vector-set! elem-vec idx init-vec)
+              (when table
+                (do ((i 0 (+ i 1)))
+                    ((= i (vector-length init-vec)))
+                  (wasm-table-set! table (+ offset i) (vector-ref init-vec i))))
+              (loop rest (+ idx 1))))))
        ;; Call start function, if present.
        (when start ((wasm-func-proc (vector-ref func-vec start))))
        ;; Populate export table.
@@ -604,6 +750,9 @@ bytevector, an input port, or a <wasm> record produced by
 
 (define (wasm-instance-global-ref instance idx)
   (vector-ref (wasm-instance-globals instance) idx))
+
+(define (wasm-instance-drop-elem! instance idx)
+  (vector-set! (wasm-instance-elems instance) idx #f))
 
 ;; Blocks are delimited by a prompt so that 'br', 'return' and friends
 ;; can abort to that prompt.
@@ -635,6 +784,15 @@ bytevector, an input port, or a <wasm> record produced by
   (define (pop) (or (stack-pop! stack) (runtime-error "empty stack")))
   (define (pop-n n) (stack-pop-n! stack n))
   (define (peek) (or (stack-peek stack) (runtime-error "empty stack")))
+  ;; Macro for let-binding values popped off the stack.
+  (define-syntax lets
+    (lambda (x)
+      (syntax-case x ()
+        ((_ (var ...) body ...)
+         ;; Popping the stack gets the last arg, so reverse binding
+         ;; order.
+         (with-syntax (((var ...) (reverse #'(var ...))))
+           #'(let* ((var (pop)) ...) body ...))))))
   ;; Control helpers.
   (define (block body branch)
     (call-with-block
@@ -650,9 +808,11 @@ bytevector, an input port, or a <wasm> record produced by
   (define-syntax-rule (u64-unop proc)
     (unop (lambda (a) (proc (s64->u64 a)))))
   (define-syntax-rule (binop proc)
-    (let ((b (pop)) (a (pop))) (push (proc a b))))
+    (lets (a b) (push (proc a b))))
   (define-syntax-rule (compare pred)
     (binop (lambda (a b) (if (pred a b) 1 0))))
+  (define-syntax-rule (compare1 pred)
+    (unop (lambda (a) (if (pred a) 1 0))))
   (define-syntax-rule (s32-binop proc)
     (binop (lambda (a b) (s32-overflow (proc a b)))))
   (define-syntax-rule (s64-binop proc)
@@ -667,7 +827,6 @@ bytevector, an input port, or a <wasm> record produced by
     (compare (lambda (a b) (pred (s64->u64 a) (s64->u64 b)))))
   ;; Math/bitwise op helpers.
   (define (!= a b) (not (= a b)))
-  (define (eqz a) (if (= a 0) 1 0))
   (define shl ash)
   (define (shr n k) (ash n (- k)))
   (define (rotl n m k) (logior (shl n m) (shr n (- k m))))
@@ -772,6 +931,20 @@ bytevector, an input port, or a <wasm> record produced by
       (set bv i c (endianness little))))
   (define (store-f32 id offset) (storef id offset bytevector-ieee-single-set!))
   (define (store-f64 id offset) (storef id offset bytevector-ieee-double-set!))
+  ;; Reference helpers:
+  (define (table-ref idx)
+    (vector-ref (wasm-instance-tables instance) idx))
+  (define (elem-ref idx)
+    (vector-ref (wasm-instance-elems instance) idx))
+  (define (func-ref idx)
+    (vector-ref (wasm-instance-funcs instance) idx))
+  (define (call func)
+    (match func
+      (($ <wasm-func> proc ($ <func-sig> params))
+       ;; Pop n args, apply proc, and push m return values.
+       (call-with-values (lambda () (apply proc (pop-n (length params))))
+         (lambda vals (push-all vals))))
+      (x (runtime-error "not a function" x))))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
   (match instr
@@ -790,12 +963,8 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Branching to a 'loop' label re-enters the loop.
        (block body iterate))
      (iterate))
-    (('call idx)
-     (match (vector-ref (wasm-instance-funcs instance) idx)
-       (($ <wasm-func> proc ($ <func-sig> params))
-        ;; Pop n args, apply proc, and push m return values.
-        (call-with-values (lambda () (apply proc (pop-n (length params))))
-          (lambda vals (push-all vals))))))
+    (('call idx) (call (vector-ref (wasm-instance-funcs instance) idx)))
+    (('call_indirect idx _) (call (wasm-table-ref (table-ref idx) (pop))))
     (('return)
      ;; The current function's tag is at the bottom.
      (match blocks
@@ -825,7 +994,7 @@ bytevector, an input port, or a <wasm> record produced by
      (wasm-global-set! (wasm-instance-global-ref instance idx) (pop)))
     ;; Numeric:
     (('i32.const x) (push x))
-    (('i32.eqz) (unop eqz))
+    (('i32.eqz) (compare1 zero?))
     (('i32.eq) (compare =))
     (('i32.ne) (compare !=))
     (('i32.lt_s) (compare <))
@@ -861,7 +1030,7 @@ bytevector, an input port, or a <wasm> record produced by
     (('i32.trunc_f64_u) (unop float->u32))
     (('i32.reinterpret_f32) (unop reinterpret/f32->s32))
     (('i64.const x) (push x))
-    (('i64.eqz) (unop eqz))
+    (('i64.eqz) (compare1 zero?))
     (('i64.eq) (compare =))
     (('i64.ne) (compare !=))
     (('i64.lt_s) (compare <))
@@ -976,6 +1145,22 @@ bytevector, an input port, or a <wasm> record produced by
     (('f64.store ($ <mem-arg> id offset _)) (store-f64 id offset))
     (('memory.size id) (push (wasm-memory-size (memory-ref id))))
     (('memory.grow id) (push (wasm-memory-grow! (memory-ref id) (pop))))
+    ;; Reference types:
+    (('table.get idx) (push (wasm-table-ref (table-ref idx) (pop))))
+    (('table.set idx)
+     (lets (i val) (push (wasm-table-set! (table-ref idx) i val))))
+    (('table.size idx) (push (wasm-table-size (table-ref idx))))
+    (('table.grow idx) (push (wasm-table-grow! (table-ref idx) (pop) (pop))))
+    (('table.init dst src)
+     (lets (d s n) (wasm-table-init! (table-ref dst) d (elem-ref src) s n)))
+    (('table.fill idx)
+     (lets (i val n) (wasm-table-fill! (table-ref idx) i val n)))
+    (('table.copy dst src)
+     (lets (d s n) (wasm-table-copy! (table-ref dst) d (table-ref src) s n)))
+    (('elem.drop idx) (wasm-instance-drop-elem! instance idx))
+    (('ref.null t) (push (make-wasm-null t)))
+    (('ref.is_null) (compare1 wasm-null?))
+    (('ref.func idx) (push (func-ref idx)))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

@@ -381,9 +381,10 @@
            (((? id-or-idx? target) . args)
             (lp args (cons target targets)))
            (_ `(,@args br_table ,@(reverse targets))))))
-      (('call_indirect . inst)
-       (let-values (((type inst) (parse-type-use inst)))
-         `(,@inst 'call_indirect ,@(unfold-type-use type))))
+      (('call_indirect . args)
+       (let*-values (((table args) (parse-id-or-idx args))
+                     ((type args) (parse-type-use args)))
+         `(,@args call_indirect ,table ,@(unfold-type-use type))))
       (((and tag (or 'i32.load
                      'i64.load
                      'f32.load

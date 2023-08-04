@@ -334,7 +334,7 @@
               (-> type results))))))
        ('call_indirect
         (match args
-          ((type)
+          ((table type)
            (match (lookup-func-sig ctx type)
              (($ <func-sig> (($ <param> id type) ...) results)
               (-> (append type '(i32)) results))))))

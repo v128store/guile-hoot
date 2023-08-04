@@ -306,6 +306,10 @@
            (param (ref extern))
            (param (ref extern))
            (result (ref extern)))
+     (func $bignum-mul (import "rt" "bignum_mul")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
 
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
@@ -1022,6 +1026,11 @@
                  (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
                  (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
 
+     (func $fixnum-mul* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
+           (call $fixnum-mul
+                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
+                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+
      (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
            (struct.new
             $bignum
@@ -1035,6 +1044,14 @@
             $bignum
             (i32.const 0)
             (call $bignum-sub
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
+     (func $bignum-mul* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-mul
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
@@ -1104,8 +1121,38 @@
            (unreachable))
      (func $sub/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
            (unreachable))
+
      (func $mul (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $fixnum-mul*
+                                 (ref.cast i31 (local.get $a))
+                                 (ref.cast i31 (local.get $b)))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-mul*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                              (i32.const 1))))
+                                 (ref.cast $bignum (local.get $b)))))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-mul*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                              (i32.const 1)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-mul*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))))))
+
      (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
      (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))

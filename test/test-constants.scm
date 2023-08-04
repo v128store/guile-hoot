@@ -165,6 +165,10 @@
 (test-call "536870870" (lambda (a b c) (- (+ a b) c)) 536870911 1 42)
 (test-call "-536870870" (lambda (a b c) (- c (+ a b))) 536870911 1 42)
 
+(test-call "1073741824" (lambda (a b c) (* (+ a b) c)) 536870911 1 2)
+(test-call "1073741824" (lambda (a b c) (* c (+ a b))) 536870911 1 2)
+(test-call "288230376151711744" (lambda (a b) (* (+ a b) (+ a b))) 536870911 1)
+
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)

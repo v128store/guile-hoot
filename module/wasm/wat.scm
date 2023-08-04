@@ -420,7 +420,7 @@
       (((and tag 'ref.null) (? valid-heap-type? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'table.set 'table.get 'table.size 'table.grow
-                     'table.fill
+                     'table.fill 'elem.drop
                      'memory.size 'memory.grow 'memory.fill))
         (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
@@ -552,7 +552,7 @@
               ((id . in)
                (lp/inst in `(,inst ,(parse-heap-type id))))))
            ((or 'table.set 'table.get 'table.size 'table.grow
-                'table.fill
+                'table.fill 'elem.drop
                 'memory.size 'memory.grow 'memory.fill)
             (match in
               (((? id-or-idx? id) . in)

@@ -756,6 +756,10 @@
                (not (ref-type-nullable sub)))
            (heap-type-sub-type? (ref-type-heap-type sub)
                                 (ref-type-heap-type super))))
+     ;; The funcref type works for any function reference.
+     ((and (eq? super 'funcref) (ref-type? sub)
+           (heap-type-sub-type? (ref-type-heap-type sub) 'func))
+      #t)
      (else #f)))
 
   (match ctx

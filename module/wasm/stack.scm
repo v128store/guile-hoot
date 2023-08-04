@@ -135,8 +135,6 @@
           (wasm-tags wasm))))
   (define locals
     (match func
-      ;; For use by global initializers, data offsets, etc.
-      (#f #())
       (($ <func>
           id
           ($ <type-use>
@@ -155,10 +153,6 @@
 
 (define (initial-ctx module func)
   (match func
-    (($ <global> _ type _)
-     (make-ctx (make-func-info module #f)
-               (make-block #f '() (list type) #f)
-               '()))
     (($ <func> _ ($ <type-use> _ ($ <type> _ ($ <func-sig> _ results))))
      (make-ctx (make-func-info module func)
                (make-block #f results results #f)

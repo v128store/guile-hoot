@@ -315,9 +315,11 @@ class SchemeModule {
         // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
         bignum_get_i64(n) { return n; },
 
-        bignum_add(a, b) { return a + b },
-        bignum_sub(a, b) { return a - b },
-        bignum_mul(a, b) { return a * b },
+        bignum_add(a, b) { return BigInt(a) + BigInt(b) },
+        bignum_sub(a, b) { return BigInt(a) - BigInt(b) },
+        bignum_mul(a, b) { return BigInt(a) * BigInt(b) },
+
+        bignum_to_f64(n) { return Number(n); },
 
         make_weak_map() { return new WeakMap; },
         weak_map_get(map, k) { return map.get(k); },

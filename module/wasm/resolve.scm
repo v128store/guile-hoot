@@ -491,7 +491,7 @@
          (($ <elem> id mode table type offset init)
           (make-elem id mode (and table (resolve-table table))
                      (resolve-val-type type)
-                     (resolve-instructions offset '() '())
+                     (and offset (resolve-instructions offset '() '()))
                      (map (lambda (init)
                             (resolve-instructions init '() '()))
                           init)))))

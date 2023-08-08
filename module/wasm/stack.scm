@@ -752,8 +752,8 @@
     (cond
      ((eq? sub super) #t)
      ((and (ref-type? sub) (ref-type? super))
-      (and (or (ref-type-nullable super)
-               (not (ref-type-nullable sub)))
+      (and (or (ref-type-nullable? super)
+               (not (ref-type-nullable? sub)))
            (heap-type-sub-type? (ref-type-heap-type sub)
                                 (ref-type-heap-type super))))
      ;; The funcref type works for any function reference.

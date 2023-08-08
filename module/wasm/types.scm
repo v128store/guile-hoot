@@ -42,7 +42,7 @@
 
             <ref-type>
             make-ref-type ref-type?
-            ref-type-nullable ref-type-heap-type
+            ref-type-nullable? ref-type-heap-type
 
             <limits>
             make-limits limits?

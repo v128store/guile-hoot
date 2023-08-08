@@ -318,6 +318,16 @@ class SchemeModule {
         bignum_add(a, b) { return BigInt(a) + BigInt(b) },
         bignum_sub(a, b) { return BigInt(a) - BigInt(b) },
         bignum_mul(a, b) { return BigInt(a) * BigInt(b) },
+        bignum_quo(a, b) { return BigInt(a) / BigInt(b) },
+        bignum_rem(a, b) { return BigInt(a) % BigInt(b) },
+        bignum_mod(a, b) {
+            let r = BigInt(a) % BigInt(b);
+            if ((b > 0n && r < 0n) || (b < 0n && r > 0n)) {
+                return b + r;
+            } else {
+                return r;
+            }
+        },
 
         bignum_to_f64(n) { return Number(n); },
 

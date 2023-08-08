@@ -190,6 +190,94 @@
 (test-call "1764" (lambda (a) (* a (exact->inexact a))) 42)
 (test-call "22548578304" (lambda (a b c) (* (+ a b) (exact->inexact c))) 536870911 1 42)
 
+;; Integer division
+;; Quotient
+(test-call "12" (lambda (a b) (quotient a b)) 123 10)
+(test-call "-12" (lambda (a b) (quotient a b)) 123 -10)
+(test-call "-12" (lambda (a b) (quotient a b)) -123 10)
+(test-call "12" (lambda (a b) (quotient a b)) -123 -10)
+
+(test-call "53687091" (lambda (a b c) (quotient (+ a b) c)) 536870911 1 10)
+(test-call "-53687091" (lambda (a b c) (quotient (+ a b) c)) 536870911 1 -10)
+(test-call "-53687091" (lambda (a b c) (quotient (+ a b) c)) -536870911 -1 10)
+(test-call "53687091" (lambda (a b c) (quotient (+ a b) c)) -536870911 -1 -10)
+
+(test-call "0" (lambda (a b c) (quotient a (+ b c))) 10 536870911 1)
+(test-call "0" (lambda (a b c) (quotient a (+ b c))) 10 -536870911 -1)
+(test-call "0" (lambda (a b c) (quotient a (+ b c))) -10 536870911 1)
+(test-call "0" (lambda (a b c) (quotient a (+ b c))) -10 -536870911 -1)
+
+(test-call "1"
+           (lambda (a b c d) (quotient (+ a b) (+ c d)))
+           536870911 2 536870911 1)
+(test-call "-1"
+           (lambda (a b c d) (quotient (+ a b) (+ c d)))
+           536870911 2 -536870911 -1)
+(test-call "-1"
+           (lambda (a b c d) (quotient (+ a b) (+ c d)))
+           -536870911 -2 536870911 1)
+(test-call "1"
+           (lambda (a b c d) (quotient (+ a b) (+ c d)))
+           -536870911 -2 -536870911 -1)
+
+;; Remainder
+(test-call "3" (lambda (a b) (remainder a b)) 123 10)
+(test-call "3" (lambda (a b) (remainder a b)) 123 -10)
+(test-call "-3" (lambda (a b) (remainder a b)) -123 10)
+(test-call "-3" (lambda (a b) (remainder a b)) -123 -10)
+
+(test-call "2" (lambda (a b c) (remainder (+ a b) c)) 536870911 1 10)
+(test-call "2" (lambda (a b c) (remainder (+ a b) c)) 536870911 1 -10)
+(test-call "-2" (lambda (a b c) (remainder (+ a b) c)) -536870911 -1 10)
+(test-call "-2" (lambda (a b c) (remainder (+ a b) c)) -536870911 -1 -10)
+
+(test-call "10" (lambda (a b c) (remainder a (+ b c))) 10 536870911 1)
+(test-call "10" (lambda (a b c) (remainder a (+ b c))) 10 -536870911 -1)
+(test-call "-10" (lambda (a b c) (remainder a (+ b c))) -10 536870911 1)
+(test-call "-10" (lambda (a b c) (remainder a (+ b c))) -10 -536870911 -1)
+
+(test-call "1"
+           (lambda (a b c d) (remainder (+ a b) (+ c d)))
+           536870911 2 536870911 1)
+(test-call "1"
+           (lambda (a b c d) (remainder (+ a b) (+ c d)))
+           536870911 2 -536870911 -1)
+(test-call "-1"
+           (lambda (a b c d) (remainder (+ a b) (+ c d)))
+           -536870911 -2 536870911 1)
+(test-call "-1"
+           (lambda (a b c d) (remainder (+ a b) (+ c d)))
+           -536870911 -2 -536870911 -1)
+
+;; Modulo
+(test-call "3" (lambda (a b) (modulo a b)) 123 10)
+(test-call "-7" (lambda (a b) (modulo a b)) 123 -10)
+(test-call "7" (lambda (a b) (modulo a b)) -123 10)
+(test-call "-3" (lambda (a b) (modulo a b)) -123 -10)
+
+(test-call "2" (lambda (a b c) (modulo (+ a b) c)) 536870911 1 10)
+(test-call "-8" (lambda (a b c) (modulo (+ a b) c)) 536870911 1 -10)
+(test-call "8" (lambda (a b c) (modulo (+ a b) c)) -536870911 -1 10)
+(test-call "-2" (lambda (a b c) (modulo (+ a b) c)) -536870911 -1 -10)
+
+(test-call "10" (lambda (a b c) (modulo a (+ b c))) 10 536870911 1)
+(test-call "-536870902" (lambda (a b c) (modulo a (+ b c))) 10 -536870911 -1)
+(test-call "536870902" (lambda (a b c) (modulo a (+ b c))) -10 536870911 1)
+(test-call "-10" (lambda (a b c) (modulo a (+ b c))) -10 -536870911 -1)
+
+(test-call "1"
+           (lambda (a b c d) (modulo (+ a b) (+ c d)))
+           536870911 2 536870911 1)
+(test-call "-536870911"
+           (lambda (a b c d) (modulo (+ a b) (+ c d)))
+           536870911 2 -536870911 -1)
+(test-call "536870911"
+           (lambda (a b c d) (modulo (+ a b) (+ c d)))
+           -536870911 -2 536870911 1)
+(test-call "-1"
+           (lambda (a b c d) (modulo (+ a b) (+ c d)))
+           -536870911 -2 -536870911 -1)
+
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)

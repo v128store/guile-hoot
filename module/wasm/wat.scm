@@ -381,9 +381,10 @@
            (((? id-or-idx? target) . args)
             (lp args (cons target targets)))
            (_ `(,@args br_table ,@(reverse targets))))))
-      (('call_indirect . inst)
-       (let-values (((type inst) (parse-type-use inst)))
-         `(,@inst 'call_indirect ,@(unfold-type-use type))))
+      (('call_indirect . args)
+       (let*-values (((table args) (parse-id-or-idx args))
+                     ((type args) (parse-type-use args)))
+         `(,@args call_indirect ,table ,@(unfold-type-use type))))
       (((and tag (or 'i32.load
                      'i64.load
                      'f32.load
@@ -419,7 +420,7 @@
       (((and tag 'ref.null) (? valid-heap-type? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'table.set 'table.get 'table.size 'table.grow
-                     'table.fill
+                     'table.fill 'elem.drop
                      'memory.size 'memory.grow 'memory.fill))
         (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
@@ -551,7 +552,7 @@
               ((id . in)
                (lp/inst in `(,inst ,(parse-heap-type id))))))
            ((or 'table.set 'table.get 'table.size 'table.grow
-                'table.fill
+                'table.fill 'elem.drop
                 'memory.size 'memory.grow 'memory.fill)
             (match in
               (((? id-or-idx? id) . in)

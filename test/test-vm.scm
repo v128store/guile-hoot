@@ -1470,6 +1470,112 @@
            (func (export "main") (result i32)
                  (global.get $foo))))
 
+(test-vm "table.size"
+         2
+         '(module
+           (table $funcs 2 funcref)
+           (func (export "main") (result i32)
+                 (table.size $funcs))))
+
+(test-vm "table.grow within limits"
+         2
+         '(module
+           (table $funcs 2 3 funcref)
+           (func $main (export "main") (result i32)
+                 (ref.func $main)
+                 (i32.const 1)
+                 (table.grow $funcs))))
+
+(test-vm "table.grow outside limits"
+         -1
+         '(module
+           (table $funcs 1 1 funcref)
+           (func $main (export "main") (result i32)
+                 (ref.func $main)
+                 (i32.const 1)
+                 (table.grow $funcs))))
+
+(test-vm "table.grow no-op"
+         1
+         '(module
+           (table $funcs 1 1 funcref)
+           (func $main (export "main") (result i32)
+                 (ref.func $main)
+                 (i32.const 0)
+                 (table.grow $funcs))))
+
+(test-vm "table.init with passive element segment"
+         1
+         '(module
+           (table $a 1 funcref)
+           (elem $funcs funcref (ref.null func))
+           (func $main (export "main") (result i32)
+                 (table.init $a $funcs
+                             (i32.const 0)
+                             (i32.const 0)
+                             (i32.const 1))
+                 (ref.is_null (table.get $a (i32.const 0))))))
+
+(test-vm "table.fill"
+         1
+         '(module
+           (table $funcs 3 funcref)
+           (elem $funcs (i32.const 0) $main)
+           (func $main (export "main") (result i32)
+                 (i32.const 1)
+                 (ref.func $main)
+                 (i32.const 2)
+                 (table.fill $funcs)
+                 (i32.const 1))))
+
+(test-vm "table.copy"
+         1
+         '(module
+           (table $a 3 funcref)
+           (table $b 3 funcref)
+           (elem $funcs (i32.const 0) $main $main $main)
+           (func $main (export "main") (result i32)
+                 (i32.const 3)
+                 (i32.const 0)
+                 (i32.const 0)
+                 (table.copy $b $a)
+                 (i32.const 1))))
+
+(test-vm "elem.drop"
+         1
+         '(module
+           (table $funcs 1 funcref)
+           (elem $foo (i32.const 0) $main)
+           (func $main (export "main") (result i32)
+                 (elem.drop $foo)
+                 (i32.const 1))))
+
+(test-vm "call_indirect"
+         42
+         '(module
+           (table $funcs 1 funcref)
+           (type $i32->i32 (func (param i32) (result i32)))
+           (func $inc (param $a i32) (result i32)
+                 (i32.add (local.get $a) (i32.const 1)))
+           (elem $funcs (i32.const 0) $inc)
+           (func (export "main") (result i32)
+                 (call_indirect $funcs (type $i32->i32)
+                                (i32.const 41) (i32.const 0)))))
+
+(test-vm "ref.null + ref.is_null"
+         1
+         '(module
+           (func (export "main") (result i32)
+                 (ref.null func)
+                 (ref.is_null))))
+
+(test-vm "external reference passthrough"
+         '(opaque to wasm)
+         '(module
+           (func (export "main") (param $foo externref) (result externref)
+                 (local.get $foo)))
+         #:args '((opaque to wasm))
+         #:d8? #f)
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

@@ -135,8 +135,6 @@
           (wasm-tags wasm))))
   (define locals
     (match func
-      ;; For use by global initializers, data offsets, etc.
-      (#f #())
       (($ <func>
           id
           ($ <type-use>
@@ -155,10 +153,6 @@
 
 (define (initial-ctx module func)
   (match func
-    (($ <global> _ type _)
-     (make-ctx (make-func-info module #f)
-               (make-block #f '() (list type) #f)
-               '()))
     (($ <func> _ ($ <type-use> _ ($ <type> _ ($ <func-sig> _ results))))
      (make-ctx (make-func-info module func)
                (make-block #f results results #f)
@@ -334,7 +328,7 @@
               (-> type results))))))
        ('call_indirect
         (match args
-          ((type)
+          ((table type)
            (match (lookup-func-sig ctx type)
              (($ <func-sig> (($ <param> id type) ...) results)
               (-> (append type '(i32)) results))))))
@@ -758,10 +752,14 @@
     (cond
      ((eq? sub super) #t)
      ((and (ref-type? sub) (ref-type? super))
-      (and (or (ref-type-nullable super)
-               (not (ref-type-nullable sub)))
+      (and (or (ref-type-nullable? super)
+               (not (ref-type-nullable? sub)))
            (heap-type-sub-type? (ref-type-heap-type sub)
                                 (ref-type-heap-type super))))
+     ;; The funcref type works for any function reference.
+     ((and (eq? super 'funcref) (ref-type? sub)
+           (heap-type-sub-type? (ref-type-heap-type sub) 'func))
+      #t)
      (else #f)))
 
   (match ctx

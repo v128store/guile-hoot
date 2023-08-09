@@ -600,6 +600,11 @@
            (-> (list (make-ref-type #t ht1) 'i32
                      (make-ref-type #t ht2) 'i32 'i32)
                '()))))
+       ('array.new
+        (match args
+          ((ht)
+           (-> (list (lookup-array-type ctx ht) 'i32)
+               (list (make-ref-type #f ht))))))
        ('array.new_fixed
         (match args
           ((ht len)

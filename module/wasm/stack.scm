@@ -532,6 +532,12 @@
           ((and top ($ <ref-type> nullable? ht))
            (-> (list top)
                (list (make-ref-type #f ht))))))
+       ('ref.cast
+        (match args
+          ((_ ht)
+           (match (peek ctx)
+             ((and top ($ <ref-type> nullable? ht*))
+              (-> (list top) (list (make-ref-type #f ht))))))))
        ('br_on_null
         (match args
           ((target)

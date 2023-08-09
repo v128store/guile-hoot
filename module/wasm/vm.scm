@@ -737,7 +737,11 @@ bytevector, an input port, or a <wasm> record produced by
                     (let ((proc (make-export-closure name (vector-ref func-vec idx))))
                       (hash-set! export-table name proc)))
                    (($ <export> name 'global idx)
-                    (hash-set! export-table name (vector-ref global-vec idx))))
+                    (hash-set! export-table name (vector-ref global-vec idx)))
+                   (($ <export> name 'memory idx)
+                    (hash-set! export-table name (vector-ref memory-vec idx)))
+                   (($ <export> name 'table idx)
+                    (hash-set! export-table name (vector-ref table-vec idx))))
                  exports)
        instance))))
 

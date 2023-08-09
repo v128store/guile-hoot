@@ -70,6 +70,8 @@
 
             current-instruction-listener
 
+            &wasm-error
+
             &wasm-validation-error
             wasm-validation-error?
             wasm-validation-error-module
@@ -94,11 +96,23 @@
 (define (s32? x)
   (and (exact-integer? x) (< (- (ash -1 31) 1) x (ash 1 31))))
 
+(define (s31? x)
+  (and (exact-integer? x) (< (- (ash -1 30) 1) x (ash 1 30))))
+
 (define (u32? x)
   (and (exact-integer? x) (< -1 x (- (ash 1 32) 1))))
 
+(define (s8->u8 x)
+  (logand x #xff))
+
+(define (s16->u16 x)
+  (logand x #xffff))
+
 (define (s32->u32 x)
   (logand x #xffffFFFF))
+
+(define (s31->u31 x)
+  (logand x #x7fffFFFF))
 
 (define (s32-overflow x)
   (centered-remainder x (ash 1 32)))
@@ -121,14 +135,17 @@
 (define (f64? x)
   (or (inexact? x) (exact-integer? x)))
 
-(define (is-a? x type)
+(define (default-for-type type)
   (match type
-    ('i32 (s32? x))
-    ('i64 (s64? x))
-    ('f32 (f32? x))
-    ('f64 (f64? x))
-    (($ <ref-type> _ 'extern) #t)
+    ((or 'i32 'i64) 0)
+    ((or 'f32 'f64) 0.0)
+    ;; TODO: Add proper defaults for reference types.
     (_ #f)))
+
+(define (resolve-type type)
+  (match type
+    (($ <sub-type> _ _ type) type)
+    (_ type)))
 
 
 ;;;
@@ -152,6 +169,12 @@
 ;; TODO: Trace instruction position within function to give context to
 ;; validation errors.
 (define (make-wasm-module* wasm)
+  (define types
+    (list->vector
+     (append-map (match-lambda
+                   (($ <rec-group> (($ <type> _ types) ...)) types)
+                   (($ <type> _ type) (list type)))
+                 (wasm-types wasm))))
   (define global-types
     (list->vector
      (append (filter-map (match-lambda
@@ -263,7 +286,7 @@
          (match bt
            (#f (make-func-sig '() '()))
            ((? exact-integer? idx) (type-val (list-ref (wasm-types wasm) idx)))
-           ((? symbol? type) (make-func-sig '() (list type)))))
+           (type (make-func-sig '() (list type)))))
        (define (push-block* ctx bt loop?)
          (match bt
            (($ <func-sig> (($ <param> _ params) ...) results)
@@ -311,6 +334,16 @@
                (check-elem elem))
               (('elem.drop table) (check-elem table))
               (('ref.func f) (check-func f))
+              (('struct.set t i)
+               (let* ((type (vector-ref types t))
+                      (field (list-ref (struct-type-fields type) i)))
+                 (unless (field-mutable? field)
+                   (validation-error "struct field is immutable" type field instr))))
+              (('array.set t)
+               (let ((type (vector-ref types t)))
+                 (unless (array-type-mutable? type)
+                   (validation-error "array is immutable" type instr))))
+              ;; TODO: Validate array.get_s, ref.cast, etc.
               (_ #t))
             ctx)))
        (define (validate-branch ctx instrs)
@@ -523,10 +556,70 @@ bytevector, an input port, or a <wasm> record produced by
   wasm-null?
   (type wasm-null-type))
 
+;; TODO: Packed fields.
+(define-record-type <wasm-struct>
+  (%make-wasm-struct type fields)
+  wasm-struct?
+  (type wasm-struct-type)
+  (fields wasm-struct-fields))
+
+(define (make-wasm-struct type fields)
+  (%make-wasm-struct type (list->vector fields)))
+
+(define (wasm-struct-ref struct field)
+  (vector-ref (wasm-struct-fields struct) field))
+
+(define (wasm-struct-type-fields struct)
+  (struct-type-fields (resolve-type (wasm-struct-type struct))))
+
+(define (wasm-struct-ref-unsigned struct field)
+  (let ((x (wasm-struct-ref struct field)))
+    (match (field-type (list-ref (wasm-struct-type-fields struct) field))
+      ('i8 (s8->u8 x))
+      ('i16 (s16->u16 x)))))
+
+(define (wasm-struct-set! struct field value)
+  (vector-set! (wasm-struct-fields struct) field value))
+
+;; TODO: Use bytevectors for packed arrays.
+(define-record-type <wasm-array>
+  (%make-wasm-array type vector)
+  wasm-array?
+  (type wasm-array-type)
+  (vector wasm-array-vector))
+
+(define (make-wasm-array type k fill)
+  (%make-wasm-array type (make-vector k fill)))
+
+(define (wasm-array-length array)
+  (vector-length (wasm-array-vector array)))
+
+(define (wasm-array-element-type array)
+  (resolve-type (wasm-array-type array)))
+
+(define (wasm-array-ref array i)
+  (vector-ref (wasm-array-vector array) i))
+
+(define (wasm-array-ref-unsigned array i)
+  (let ((x (wasm-array-ref array i)))
+    (match (wasm-array-element-type array)
+      ('i8 (s8->u8 x))
+      ('i16 (s16->u16 x)))))
+
+(define (wasm-array-set! array i value)
+  (vector-set! (wasm-array-vector array) i value))
+
+(define (wasm-array-fill! array start fill length)
+  (vector-fill! (wasm-array-vector array) fill start (+ start length)))
+
+(define (wasm-array-copy! dst at src start length)
+  (vector-copy! (wasm-array-vector dst) at (wasm-array-vector src) start length))
+
 (define-record-type <wasm-instance>
-  (%make-wasm-instance module globals funcs memories tables elems exports)
+  (%make-wasm-instance module types globals funcs memories tables elems exports)
   wasm-instance?
   (module wasm-instance-module)
+  (types wasm-instance-types)
   (globals wasm-instance-globals)
   (funcs wasm-instance-funcs)
   (memories wasm-instance-memories)
@@ -568,14 +661,46 @@ bytevector, an input port, or a <wasm> record produced by
             (n-func-imports (count-imports 'func))
             (n-memory-imports (count-imports 'memory))
             (n-table-imports (count-imports 'table))
+            (type-vec (list->vector
+                       (append-map (match-lambda
+                                     (($ <rec-group> (($ <type> _ types) ...))
+                                      types)
+                                     (($ <type> _ type)
+                                      (list type)))
+                                   types)))
             (global-vec (make-vector (+ n-global-imports (length globals))))
             (func-vec (make-vector (+ n-func-imports (length funcs))))
             (memory-vec (make-vector (+ n-memory-imports (length memories))))
             (table-vec (make-vector (+ n-table-imports (length tables))))
             (elem-vec (make-vector (length elems)))
             (export-table (make-hash-table))
-            (instance (%make-wasm-instance module global-vec func-vec memory-vec
-                                           table-vec elem-vec export-table)))
+            (instance (%make-wasm-instance module type-vec global-vec func-vec
+                                           memory-vec table-vec elem-vec
+                                           export-table)))
+       (define (lookup-type ht)
+         (match ht
+           ((? exact-integer?) (vector-ref type-vec ht))
+           (_ ht)))
+       (define (is-a? x type)
+         (match type
+           ('i32 (s32? x))
+           ('i64 (s64? x))
+           ('f32 (f32? x))
+           ('f64 (f64? x))
+           ((or 'any 'extern) #t)
+           ('eq (or (s31? x)
+                    (wasm-struct? x)
+                    (wasm-array? x)))
+           ('i31 (s31? x))
+           ('func (wasm-func? x))
+           ;; TODO: Check ref types for real (requires isorecursive
+           ;; type canonicalization!)
+           ((? struct-type?) (wasm-struct? x))
+           ((? array-type?) (wasm-array? x))
+           (($ <ref-type> _ ht)
+            (is-a? x (lookup-type ht)))
+           (($ <sub-type> _ _ type)
+            (is-a? x type))))
        (define (type-check vals types)
          (unless (every is-a? vals types)
            (error (format #f "type mismatch; expected ~a" types)
@@ -596,9 +721,6 @@ bytevector, an input port, or a <wasm> record produced by
               (apply proc args))
             (set-procedure-property! wrap 'name (string->symbol name))
             wrap)))
-       (define (default-for-type type)
-         (match type
-           ('i32 0)))
        (define (instantiate-func func)
          (match func
            (($ <func> _ ($ <type-use> _ ($ <type> _ sig)) locals body)
@@ -936,12 +1058,20 @@ bytevector, an input port, or a <wasm> record produced by
   (define (store-f32 id offset) (storef id offset bytevector-ieee-single-set!))
   (define (store-f64 id offset) (storef id offset bytevector-ieee-double-set!))
   ;; Reference helpers:
+  (define (type-ref type-or-idx)
+    (match type-or-idx
+      ((? integer? idx)
+       (type-ref (vector-ref (wasm-instance-types instance) idx)))
+      ((? symbol? sym) sym)
+      (($ <sub-type> _ _ type) type)
+      (type type)))
   (define (table-ref idx)
     (vector-ref (wasm-instance-tables instance) idx))
   (define (elem-ref idx)
     (vector-ref (wasm-instance-elems instance) idx))
   (define (func-ref idx)
     (vector-ref (wasm-instance-funcs instance) idx))
+  ;; Control flow helpers:
   (define (call func)
     (match func
       (($ <wasm-func> proc ($ <func-sig> params))
@@ -949,6 +1079,7 @@ bytevector, an input port, or a <wasm> record produced by
        (call-with-values (lambda () (apply proc (pop-n (length params))))
          (lambda vals (push-all vals))))
       (x (runtime-error "not a function" x))))
+  (define (branch l) (abort-to-prompt (list-ref blocks l)))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
   (match instr
@@ -967,18 +1098,22 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Branching to a 'loop' label re-enters the loop.
        (block body iterate))
      (iterate))
-    (('call idx) (call (vector-ref (wasm-instance-funcs instance) idx)))
+    (('call idx) (call (func-ref idx)))
     (('call_indirect idx _) (call (wasm-table-ref (table-ref idx) (pop))))
+    (('call_ref _)
+     (lets (f)
+           (if (wasm-null? f)
+               (runtime-error "null function reference" f)
+               (call f))))
     (('return)
      ;; The current function's tag is at the bottom.
      (match blocks
        ((_ ... tag)
         (abort-to-prompt tag))))
-    (('br l)
-     (abort-to-prompt (list-ref blocks l)))
-    (('br_if l)
-     (unless (= (pop) 0)
-       (abort-to-prompt (list-ref blocks l))))
+    (('br l) (branch l))
+    (('br_if l) (unless (= (pop) 0) (branch l)))
+    (('br_on_null l) (when (wasm-null? (peek)) (pop) (branch l)))
+    (('br_on_non_null l) (if (wasm-null? (peek)) (pop) (branch l)))
     ;; Parametric:
     (('drop) (pop))
     (('select)
@@ -1162,9 +1297,66 @@ bytevector, an input port, or a <wasm> record produced by
     (('table.copy dst src)
      (lets (d s n) (wasm-table-copy! (table-ref dst) d (table-ref src) s n)))
     (('elem.drop idx) (wasm-instance-drop-elem! instance idx))
-    (('ref.null t) (push (make-wasm-null t)))
+    (('ref.null t) (push (make-wasm-null (type-ref t))))
+    (('ref.as_non_null)
+     (let ((x (peek)))
+       (when (wasm-null? x)
+         (runtime-error "null value" x))))
     (('ref.is_null) (compare1 wasm-null?))
+    (('ref.test _ _) (compare1 (negate wasm-null?)))
     (('ref.func idx) (push (func-ref idx)))
+    (('ref.cast null? _)
+     (let ((x (peek)))
+       (when (and (not null?) (wasm-null? x))
+         (runtime-error "invalid cast" x))))
+    (('i31.new)
+     (let ((x (peek)))
+       (unless (s31? x)
+         (runtime-error "invalid i31" x))))
+    (('i31.get_s) #t)
+    (('i31.get_u) (unop s31->u31))
+    (('struct.new t)
+     (let ((type (type-ref t)))
+       (push
+        (make-wasm-struct (type-ref t)
+                          (reverse
+                           (map (lambda (_) (pop))
+                                (struct-type-fields (resolve-type type))))))))
+    (('struct.new_default t)
+     (push
+      (let ((type (type-ref t)))
+        (make-wasm-struct type
+                          (map (lambda (field)
+                                 (default-for-type (field-type field)))
+                               (struct-type-fields (resolve-type type)))))))
+    (((or 'struct.get 'struct.get_s) _ field)
+     (push (wasm-struct-ref (pop) field)))
+    (('struct.get_u _ field)
+     (push (wasm-struct-ref-unsigned (pop) field)))
+    (('struct.set _ field) (lets (s x) (wasm-struct-set! s field x)))
+    (('array.new t)
+     (lets (fill k)
+           (push (make-wasm-array (array-type-type (type-ref t))
+                                  (s32->u32 k) fill))))
+    (('array.new_fixed t k)
+     (lets (fill)
+           (push (make-wasm-array (array-type-type (type-ref t)) k fill))))
+    (('array.new_default idx)
+     (lets (k)
+           (let ((type (type-ref idx)))
+             (push (make-wasm-array type k
+                                    (default-for-type
+                                      (array-type-type
+                                       (resolve-type type))))))))
+    ;; TODO: array.new_data, array.new_elem, array.init_data, array.init_elem
+    (('array.len) (lets (a) (push (wasm-array-length a))))
+    (((or 'array.get 'array.get_s) _)
+     (lets (a i) (push (wasm-array-ref a (s32->u32 i)))))
+    (('array.get_u _)
+     (lets (a i) (push (wasm-array-ref-unsigned a (s32->u32 i)))))
+    (('array.set _) (lets (a i x) (wasm-array-set! a (s32->u32 i) x)))
+    (('array.fill _) (lets (a d x n) (wasm-array-fill! a d x n)))
+    (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

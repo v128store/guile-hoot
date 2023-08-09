@@ -215,14 +215,14 @@
 
 (define (lookup-struct-fields ctx def)
   (match (lookup-type ctx def)
-    (($ <sub-type> _ ($ <struct-type> fields)) fields)
+    (($ <sub-type> _ _ ($ <struct-type> fields)) fields)
     (($ <struct-type> fields) fields)))
 (define (lookup-struct-field-types ctx struct-type)
   (map field-type (lookup-struct-fields ctx struct-type)))
 (define (lookup-struct-field-type ctx struct-type field)
   (match (lookup-struct-fields ctx struct-type)
     ((($ <field> id mutable? type) ...)
-     (vector-lookup (list->vector (map cons id type)) field))))
+     (vector-lookup (list->vector type) field))))
 
 (define (lookup-array-type ctx def)
   (match (lookup-type ctx def)

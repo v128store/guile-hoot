@@ -326,6 +326,18 @@
            (param (ref extern))
            (param i32)
            (result (ref extern)))
+     (func $bignum-quo (import "rt" "bignum_quo")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+     (func $bignum-rem (import "rt" "bignum_rem")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+     (func $bignum-mod (import "rt" "bignum_mod")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
 
      (func $bignum-to-f64 (import "rt" "bignum_to_f64")
            (param (ref extern))
@@ -1090,6 +1102,30 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
+     (func $bignum-quo* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-quo
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
+     (func $bignum-rem* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-rem
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
+     (func $bignum-mod* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+           (struct.new
+            $bignum
+            (i32.const 0)
+            (call $bignum-mod
+                  (struct.get $bignum $val (local.get $a))
+                  (struct.get $bignum $val (local.get $b)))))
+
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
              `((ref.test i31 (local.get $a))
@@ -1288,12 +1324,141 @@
 
      (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))
+
      (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 ;; TODO: implement for b = -1
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-quo*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $a)))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-quo*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $b))))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-quo*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             ;; TODO: integer flonums
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (unreachable))
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))))
+
      (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 ;; TODO: signal overflow error ($b = 0)
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-rem*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $a)))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-rem*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $b))))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-rem*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             ;; TODO: integer flonums
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (unreachable))
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))))
+
      (func $mod (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 ;; TODO: signal overflow error ($b = 0)
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-mod*
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $a)))))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (call $bignum-mod*
+                                 (ref.cast $bignum (local.get $a))
+                                 (struct.new $bignum
+                                             (i32.const 0)
+                                             (call $bignum-from-i32
+                                                   (call $fixnum->i32
+                                                         (ref.cast i31 (local.get $b))))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (call $bignum-mod*
+                                 (ref.cast $bignum (local.get $a))
+                                 (ref.cast $bignum (local.get $b)))))
+                 ;; TODO: integer flonums
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))
+             ;; TODO: integer flonums
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (unreachable))
+                 '((ref.test $flonum (local.get $b))
+                   (unreachable))))))
 
      (func $logand (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            (unreachable))

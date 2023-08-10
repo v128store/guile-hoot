@@ -190,6 +190,19 @@
 (test-call "1764" (lambda (a) (* a (exact->inexact a))) 42)
 (test-call "22548578304" (lambda (a b c) (* (+ a b) (exact->inexact c))) 536870911 1 42)
 
+;; Flonum division
+(test-call "5.25"
+           (lambda (a b) (/ (exact->inexact a) (exact->inexact b)))
+           42 8)
+(test-call "0.5" (lambda (a b) (/ (exact->inexact a) b)) 1 2)
+(test-call "1"
+           (lambda (a b) (/ (exact->inexact (+ a b)) (+ a b)))
+           536870911 1)
+(test-call "0.5" (lambda (a b) (/ a (exact->inexact b))) 1 2)
+(test-call "107374182.4"
+           (lambda (a b c) (/ (+ a b) (exact->inexact c)))
+           536870911 1 5)
+
 ;; Integer division
 ;; Quotient
 (test-call "12" (lambda (a b) (quotient a b)) 123 10)

@@ -450,6 +450,8 @@
                      'array.get 'array.set 'array.get_u 'array.get_s))
         (? id-or-idx? ti) . args)
        `(,@args ,tag ,ti))
+      (((and tag 'array.new_fixed) (? id-or-idx? ti) (? s32? k) . args)
+       `(,@args ,tag ,ti ,k))
       (((and tag 'return_call) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       ((tag . args)
@@ -594,6 +596,10 @@
             (match in
               (((? id-or-idx? ti) . in)
                (lp/inst in `(,inst ,ti)))))
+           ('array.new_fixed
+            (match in
+              (((? id-or-idx? ti) (? s32? k) . in)
+               (lp/inst in `(,inst ,ti ,k)))))
            ('return_call
             (match in
               (((? id-or-idx? id) . in)

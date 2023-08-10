@@ -434,7 +434,7 @@
        `(,@args ,tag ,a ,b))
       (((and tag (or 'memory.copy 'table.copy)) . args)
        `(,@args ,tag 0 0))
-      (((and tag (or 'struct.new)) (? id-or-idx? id) . args)
+      (((and tag (or 'struct.new 'struct.new_default)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'struct.set 'struct.get 'struct.get_s 'struct.get_u))
         (? id-or-idx? ti)
@@ -573,7 +573,7 @@
                (lp/inst in `(,inst ,tid ,eid)))
               (((? id-or-idx? eid) . in)
                (lp/inst in `(,inst 0 ,eid)))))
-           ('struct.new
+           ((or 'struct.new 'struct.new_default)
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))

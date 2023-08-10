@@ -589,12 +589,12 @@
        ('array.get
         (match args
           ((ht)
-           (-> (list (make-ref-type #t ht))
+           (-> (list (make-ref-type #t ht) 'i32)
                (list (lookup-array-type ctx ht))))))
        ((or 'array.get_s 'array.get_u)
         (match args
           ((ht)
-           (-> (list (make-ref-type #t ht)) '(i32)))))
+           (-> (list (make-ref-type #t ht) 'i32) '(i32)))))
        ('array.set
         (match args
           ((ht)

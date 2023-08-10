@@ -591,7 +591,7 @@
           ((ht)
            (-> (list (make-ref-type #t ht))
                (list (lookup-array-type ctx ht))))))
-       ((or 'array.get_s 'array.get_u 'array.len)
+       ((or 'array.get_s 'array.get_u)
         (match args
           ((ht)
            (-> (list (make-ref-type #t ht)) '(i32)))))
@@ -606,6 +606,8 @@
            (-> (list (make-ref-type #t ht1) 'i32
                      (make-ref-type #t ht2) 'i32 'i32)
                '()))))
+       ('array.len
+        (-> (list (make-ref-type #t 'array)) '(i32)))
        ('array.new
         (match args
           ((ht)

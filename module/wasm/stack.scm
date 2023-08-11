@@ -549,9 +549,11 @@
        ('br_on_non_null
         (match args
           ((target)
-           (let ((types (branch-arg-types target)))
-             (-> (append types (list (peek ctx)))
-                 types)))))
+           (let ((top (peek ctx)))
+             (match (branch-arg-types target)
+               ((types* ... _)
+                (-> (append types* (list top))
+                    types*)))))))
        ((or 'br_on_cast 'br_on_cast_fail)
         ;; FIXME: The rest of the Hoot wasm toolchain needs to switch
         ;; to the two-type form of br_on_cast / br_on_cast_fail

@@ -350,8 +350,8 @@
         (match args
           ((type)
            (match (lookup-func-sig ctx type)
-             (($ <func-sig> (($ <param> id type) ...) results)
-              (-> (append type (list (make-ref-type #t type))) results))))))
+             (($ <func-sig> (($ <param> id params) ...) results)
+              (-> (append params (list (make-ref-type #t type))) results))))))
        ('return_call_ref
         (match args
           ((type)

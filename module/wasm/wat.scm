@@ -370,7 +370,9 @@
             (finish test consequent '()))
            ((test ... ('then consequent ...) ('else alternate ...))
             (finish test consequent alternate)))))
-      (((and tag (or 'br 'br_if 'call 'local.get 'local.set 'local.tee
+      (((and tag (or 'br 'br_if 'br_on_null 'br_on_non_null
+                     'br_on_cast 'br_on_cast_fail
+                     'call 'local.get 'local.set 'local.tee
                      'global.get 'global.set))
         idx
         . args)
@@ -505,7 +507,9 @@
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
-           ((or 'br 'br_if 'call 'local.get 'local.set 'local.tee 'global.get
+           ((or 'br 'br_if 'br_on_null 'br_on_non_null
+                'br_on_cast 'br_on_cast_fail
+                'call 'local.get 'local.set 'local.tee 'global.get
                 'global.set)
             (let-values (((idx in) (parse-id-or-idx in)))
               (unless idx (error "missing idx" inst in))

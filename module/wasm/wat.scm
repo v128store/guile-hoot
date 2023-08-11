@@ -452,6 +452,8 @@
        `(,@args ,tag ,ti))
       (((and tag 'array.new_fixed) (? id-or-idx? ti) (? s32? k) . args)
        `(,@args ,tag ,ti ,k))
+      (((and tag 'array.copy) (? id-or-idx? ti1) (? id-or-idx? ti2) . args)
+       `(,@args ,tag ,ti1 ,ti2))
       (((and tag 'return_call) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       ((tag . args)
@@ -600,6 +602,10 @@
             (match in
               (((? id-or-idx? ti) (? s32? k) . in)
                (lp/inst in `(,inst ,ti ,k)))))
+           ('array.copy
+            (match in
+              (((? id-or-idx? ti1) (? id-or-idx? ti2) . in)
+               (lp/inst in `(,inst ,ti1 ,ti2)))))
            ('return_call
             (match in
               (((? id-or-idx? id) . in)

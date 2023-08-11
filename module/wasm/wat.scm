@@ -448,7 +448,7 @@
        `(,@args ,tag ,id))
       (((and tag 'string.const) (? string? str) . args)
        `(,@args ,tag ,str))
-      (((and tag (or 'array.new 'array.new_default
+      (((and tag (or 'array.new 'array.new_default 'array.fill
                      'array.get 'array.set 'array.get_u 'array.get_s))
         (? id-or-idx? ti) . args)
        `(,@args ,tag ,ti))
@@ -597,7 +597,7 @@
             (match in
               (((? string? str) . in)
                (lp/inst in `(,inst ,str)))))
-           ((or 'array.new 'array.new_default
+           ((or 'array.new 'array.new_default 'array.fill
                 'array.get 'array.set 'array.get_u 'array.get_s)
             (match in
               (((? id-or-idx? ti) . in)

@@ -602,6 +602,11 @@
           ((ht)
            (-> (list (make-ref-type #t ht) 'i32 (lookup-array-type ctx ht))
                '()))))
+       ('array.fill
+        (match args
+          ((ht)
+           (-> (list (make-ref-type #t ht) 'i32 (lookup-array-type ctx ht) 'i32)
+               '()))))
        ('array.copy
         (match args
           ((ht1 ht2)

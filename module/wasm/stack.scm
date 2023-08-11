@@ -765,6 +765,7 @@
   (define (is-subtype? sub super)
     (cond
      ((eq? sub super) #t)
+     ((and (eq? sub 'i32) (memq super '(i32 i16 i8))) #t)
      ((and (ref-type? sub) (ref-type? super))
       (and (or (ref-type-nullable? super)
                (not (ref-type-nullable? sub)))

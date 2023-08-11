@@ -1323,7 +1323,52 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))))
 
      (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           ;; TODO: exact division
+           ,(arith-cond
+             `((ref.test i31 (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (unreachable))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.div
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (unreachable))
+                 '((ref.test $bignum (local.get $b))
+                   (unreachable))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.div
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 '((ref.test i31 (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.div
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $fixnum->f64 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.div
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $bignum->f64 (ref.cast $bignum (local.get $b)))))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.div
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))))
 
      (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond

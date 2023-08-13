@@ -147,7 +147,7 @@ program include the whole of Guile's standard library.
 ## GitLab CI
 
 Here's how to build a Docker image for use in GitLab CI.  Guix
-produces the actual image, but Docker is required to upload it to the
+produces the actual image, but skopeo is required to upload it to the
 GitLab container registry.
 
 Get `skopeo`:

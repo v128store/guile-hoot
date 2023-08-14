@@ -313,7 +313,7 @@
              (-> (append types '(i32)) types)))))
        ('br_table
         (match args
-          ((target . _)
+          ((_ target)
            (-> (append (branch-arg-types target) '(i32)) #f))))
        ('return
         (-> (lookup-return-type ctx) #f))

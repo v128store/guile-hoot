@@ -1390,6 +1390,19 @@
                               (br $loop)))))
          #:args '(4))
 
+(test-vm "br_table"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (block $bar (result i32)
+                               (i32.const 21)
+                               (i32.const 0)
+                               (br_table $foo $bar))
+                        (unreachable))
+                 (i32.const 21)
+                 (i32.add))))
+
 (test-vm "inner function call"
          11
          '(module

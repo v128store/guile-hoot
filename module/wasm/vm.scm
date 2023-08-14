@@ -1112,6 +1112,8 @@ bytevector, an input port, or a <wasm> record produced by
         (abort-to-prompt tag))))
     (('br l) (branch l))
     (('br_if l) (unless (= (pop) 0) (branch l)))
+    (('br_table l* l)
+     (lets (n) (branch (if (< n (length l*)) (list-ref l* n) l))))
     (('br_on_null l) (when (wasm-null? (peek)) (pop) (branch l)))
     (('br_on_non_null l) (if (wasm-null? (peek)) (pop) (branch l)))
     ;; Parametric:

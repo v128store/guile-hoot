@@ -666,8 +666,8 @@ bytevector, an input port, or a <wasm> record produced by
             (match (lookup-import mod name)
               ((? wasm-table? table)
                (vector-set! table-vec table-idx table)
-               (loop rest global-idx func-idx memory-id (+ table-idx 1)))
-              (x (instance-error "invalid memory import" mod name x))))))
+               (loop rest global-idx func-idx memory-idx (+ table-idx 1)))
+              (x (instance-error "invalid table import" mod name x))))))
        ;; Initialize globals.
        (let loop ((globals globals)
                   (idx n-global-imports))

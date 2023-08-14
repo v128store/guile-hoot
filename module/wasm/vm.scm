@@ -1098,9 +1098,11 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Branching to a 'loop' label re-enters the loop.
        (block body iterate))
      (iterate))
-    (('call idx) (call (func-ref idx)))
-    (('call_indirect idx _) (call (wasm-table-ref (table-ref idx) (pop))))
-    (('call_ref _)
+    ;; TODO: Actually have return_call and friends make tail calls!
+    (((or 'call 'return_call) idx) (call (func-ref idx)))
+    (((or 'call_indirect 'return_call_indirect) idx _)
+     (call (wasm-table-ref (table-ref idx) (pop))))
+    (((or 'call_ref 'return_call_ref) _)
      (lets (f)
            (if (wasm-null? f)
                (runtime-error "null function reference" f)

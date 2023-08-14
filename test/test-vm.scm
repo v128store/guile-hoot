@@ -1336,6 +1336,16 @@
                  (br 0)
                  (unreachable))))
 
+(test-vm "return_call"
+         42
+         '(module
+           (func $main (export "main") (param $a i32) (result i32)
+                 (if (result i32)
+                     (i32.eq (local.get $a) (i32.const 42))
+                     (then (i32.const 42))
+                     (else (return_call $main (i32.add (local.get $a) (i32.const 1)))))))
+         #:args '(0))
+
 (test-vm "return with extra values on stack"
          42
          '(module

@@ -1289,7 +1289,7 @@ bytevector, an input port, or a <wasm> record produced by
     ;; Reference types:
     (('table.get idx) (push (wasm-table-ref (table-ref idx) (pop))))
     (('table.set idx)
-     (lets (i val) (push (wasm-table-set! (table-ref idx) i val))))
+     (lets (i val) (wasm-table-set! (table-ref idx) i val)))
     (('table.size idx) (push (wasm-table-size (table-ref idx))))
     (('table.grow idx) (push (wasm-table-grow! (table-ref idx) (pop) (pop))))
     (('table.init dst src)

@@ -560,6 +560,7 @@
       ('array.get_s                        (emit-gc-idx #x14))
       ('array.get_u                        (emit-gc-idx #x15))
       ('array.set                          (emit-gc-idx #x16))
+      ('array.fill                         (emit-gc-idx #x0f))
       ('array.copy                         (emit-gc-idx-idx #x18))
       ('array.len                          (emit-gc #x19))
       ('array.new_fixed                    (emit-gc-idx-len #x1a))

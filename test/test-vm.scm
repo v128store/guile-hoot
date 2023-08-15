@@ -66,7 +66,7 @@
          (result (string-trim-both (get-string-all port))))
     (if (zero? (close-pipe port))
         (call-with-input-string result read)
-        (error result))))
+        (throw 'd8-error result))))
 
 (define (run-wasm-in-d8 wasm func args)
   (call-with-wasm-file
@@ -94,10 +94,42 @@
 
 (define* (test-vm name expected wat #:key
                   (func "main") (args '()) (imports '()) (d8? #t))
+  (test-equal name
+    expected
+    (eval-wat wat func args imports d8?)))
+
+(define (eval-wat/error wat func args imports d8?)
   (let ((wasm (wat->wasm wat)))
-    (test-equal name
-      expected
-      (eval-wat wat func args imports d8?))))
+    (define (handle-error e)
+      (if d8?
+          (with-exception-handler (lambda (e) #t)
+            (lambda ()
+              (let ((result (run-wasm-in-d8 wasm func args)))
+                (error "d8 did not throw an error" result))
+              #f)
+            #:unwind? #t
+            #:unwind-for-type 'd8-error)
+          #t))
+    (with-exception-handler handle-error
+      (lambda ()
+        (run-wasm-in-vm wasm func args imports)
+        #f)
+      #:unwind? #t
+      #:unwind-for-type &wasm-error)))
+
+(define* (test-vm/error name wat #:key
+                        (func "main") (args '()) (imports '()) (d8? #t))
+  (test-assert name
+    (eval-wat/error wat func args imports d8?)))
+
+;; For temporarily testing something that doesn't work in our VM yet.
+(define (eval-d8 wat func args)
+  (run-wasm-in-d8 (wat->wasm wat) func args))
+
+(define* (test-d8 name expected wat #:key (func "main") (args '()))
+  (test-equal name
+    expected
+    (eval-d8 wat func args)))
 
 (test-begin "test-vm")
 
@@ -1313,31 +1345,19 @@
                         (i32.const 42)
                         (return)))))
 
-(test-assert "fallthrough with too many values on stack"
-  (with-exception-handler (lambda (e) #t)
-    (lambda ()
-      (let ((wat '(module
-                   (func (export "main") (result i32)
-                         (i32.const 1)
-                         (i32.const 2)))))
-        (eval-wat wat "main" '() '() #f)
-        #f))
-    #:unwind? #t
-    #:unwind-for-type &wasm-validation-error))
+(test-vm/error "fallthrough with too many values on stack"
+               '(module
+                 (func (export "main") (result i32)
+                       (i32.const 1)
+                       (i32.const 2))))
 
-(test-assert "fallthrough with too many values on invalid stack"
-  (with-exception-handler (lambda (e) #t)
-    (lambda ()
-      (let ((wat '(module
-                   (func (export "main") (result i32)
-                         (i32.const 1)
-                         (return) ; stack is invalid after this
-                         (i32.const 2)
-                         (i32.const 3)))))
-        (eval-wat wat "main" '() '() #f)
-        #f))
-    #:unwind? #t
-    #:unwind-for-type &wasm-validation-error))
+(test-vm/error "fallthrough with too many values on invalid stack"
+  '(module
+    (func (export "main") (result i32)
+          (i32.const 1)
+          (return) ; stack is invalid after this
+          (i32.const 2)
+          (i32.const 3))))
 
 (test-vm "branching in a loop"
          24
@@ -1369,6 +1389,19 @@
                               (i32.mul)
                               (br $loop)))))
          #:args '(4))
+
+(test-vm "br_table"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (block $bar (result i32)
+                               (i32.const 21)
+                               (i32.const 0)
+                               (br_table $foo $bar))
+                        (unreachable))
+                 (i32.const 21)
+                 (i32.add))))
 
 (test-vm "inner function call"
          11
@@ -1562,12 +1595,108 @@
                  (call_indirect $funcs (type $i32->i32)
                                 (i32.const 41) (i32.const 0)))))
 
+(test-vm "call_ref"
+         42
+         '(module
+           (type $i32->i32 (func (param i32) (result i32)))
+           (func $sum-41 (param $x i32) (result i32)
+                 (i32.add (local.get $x) (i32.const 41)))
+           (func (export "main") (result i32)
+                 (call_ref $i32->i32 (i32.const 1) (ref.func $sum-41)))))
+
 (test-vm "ref.null + ref.is_null"
          1
          '(module
            (func (export "main") (result i32)
                  (ref.null func)
                  (ref.is_null))))
+
+(test-vm "ref.test true"
+         1
+         '(module
+           (type $foo (struct (field $bar (ref eq))))
+           (func (export "main") (result i32)
+                 (ref.test $foo (struct.new $foo (i31.new (i32.const 42)))))))
+
+(test-vm "ref.test false"
+         0
+         '(module
+           (type $foo (struct (field $bar (ref eq))))
+           (func (export "main") (result i32)
+                 (ref.test $foo (ref.null $foo)))))
+
+(test-vm "ref.as_non_null"
+         42
+         '(module
+           (type $foo (struct (field $bar i32)))
+           (func (export "main") (result i32)
+                 (struct.get $foo $bar
+                             (ref.as_non_null
+                              (struct.new $foo (i32.const 42)))))))
+
+(test-vm "ref.cast identity non-null"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (i31.new (i32.const 42))
+                 (ref.cast i31)
+                 (i31.get_s))))
+
+(test-vm "ref.cast identity null"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (ref.null i31)
+                 (ref.cast null i31)
+                 (drop)
+                 (i32.const 42))))
+
+(test-vm/error "ref.cast null"
+               '(module
+                 (func (export "main") (result i32)
+                       (ref.null i31)
+                       (ref.cast i31)
+                       (i31.get_s))))
+
+(test-vm "br_on_null true"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (i32.const 42)
+                        (ref.null i31)
+                        (br_on_null $foo)
+                        (unreachable)))))
+
+(test-vm "br_on_null false"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (i32.const 42)
+                        (i31.new (i32.const 42))
+                        (br_on_null $foo)
+                        (drop)))))
+
+(test-vm "br_on_non_null true"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result (ref i31))
+                        (i31.new (i32.const 42))
+                        (br_on_non_null $foo)
+                        (unreachable))
+                 (i31.get_s))))
+
+(test-vm "br_on_non_null false"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result (ref i31))
+                        (ref.null i31)
+                        (br_on_non_null $foo)
+                        (i31.new (i32.const 42)))
+                 (i31.get_s))))
 
 (test-vm "external reference passthrough"
          '(opaque to wasm)
@@ -1576,6 +1705,158 @@
                  (local.get $foo)))
          #:args '((opaque to wasm))
          #:d8? #f)
+
+(test-vm "i31.get_s"
+         -42
+         '(module
+           (func (export "main") (result i32)
+                 (i31.get_s (i31.new (i32.const -42))))))
+
+(test-vm "i31.get_u"
+         2147483606
+         '(module
+           (func (export "main") (result i32)
+                 (i31.get_u (i31.new (i32.const -42))))))
+
+(test-vm "struct.get"
+         5.0
+         '(module
+           (type $vec2 (struct (field $x f32) (field $y f32)))
+           (func (export "main") (result f32) (local $v (ref $vec2))
+                 (local.set $v (struct.new $vec2 (f32.const 3.0) (f32.const 4.0)))
+                 ;; Calculate vector magnitude, for fun.
+                 (f32.sqrt
+                  (f32.add (f32.mul (struct.get $vec2 $x (local.get $v))
+                                    (struct.get $vec2 $x (local.get $v)))
+                           (f32.mul (struct.get $vec2 $y (local.get $v))
+                                    (struct.get $vec2 $y (local.get $v))))))))
+
+(test-vm "struct.get_s"
+         -42
+         '(module
+           (type $foo (struct (field $bar i8)))
+           (func (export "main") (result i32)
+                 (struct.get_s $foo $bar (struct.new $foo (i32.const -42))))))
+
+(test-vm "struct.get_u"
+         214
+         '(module
+           (type $foo (struct (field $bar i8)))
+           (func (export "main") (result i32)
+                 (struct.get_u $foo $bar (struct.new $foo (i32.const -42))))))
+
+(test-vm "struct.set"
+         42
+         '(module
+           (type $foo (struct (field $bar (mut i32))))
+           (func (export "main") (result i32) (local $a (ref $foo))
+                 (local.set $a (struct.new $foo (i32.const 0)))
+                 (struct.set $foo $bar (local.get $a) (i32.const 42))
+                 (struct.get $foo $bar (local.get $a)))))
+
+(test-vm "struct subtyping"
+         42
+         '(module
+           (type $heap-object
+                 (struct
+                  (field $hash (mut i32))))
+           (type $pair
+                 (sub $heap-object
+                      (struct
+                       (field $hash (mut i32))
+                       (field $car (mut (ref eq)))
+                       (field $cdr (mut (ref eq))))))
+           (func (export "main") (result i32) (local $a (ref $pair))
+                 (local.set $a (struct.new $pair (i32.const 1)
+                                           (i31.new (i32.const 21))
+                                           (i31.new (i32.const 21))))
+                 (i32.add (i31.get_s (ref.cast i31 (struct.get $pair $car (local.get $a))))
+                          (i31.get_s (ref.cast i31 (struct.get $pair $cdr (local.get $a))))))))
+
+(test-vm "struct.new_default"
+         0
+         '(module
+           (type $foo (struct (field $bar i32)))
+           (func (export "main") (result i32)
+                 (struct.get $foo $bar (struct.new_default $foo)))))
+
+(test-vm "array.len"
+         3
+         '(module
+           (type $foo (array i32))
+           (func (export "main") (result i32)
+                 (array.len (array.new $foo (i32.const 0) (i32.const 3))))))
+
+(test-vm "array.get"
+         42
+         '(module
+           (type $foo (array i32))
+           (func (export "main") (result i32)
+                 (array.get $foo (array.new $foo (i32.const 42) (i32.const 1)) (i32.const 0)))))
+
+(test-vm "array.get_s"
+         -42
+         '(module
+           (type $foo (array i8))
+           (func (export "main") (result i32)
+                 (array.get_s $foo (array.new_fixed $foo 1 (i32.const -42)) (i32.const 0)))))
+
+(test-vm "array.get_u"
+         214
+         '(module
+           (type $foo (array i8))
+           (func (export "main") (result i32)
+                 (array.get_u $foo (array.new_fixed $foo 1 (i32.const -42)) (i32.const 0)))))
+
+(test-vm "array.set"
+         42
+         '(module
+           (type $foo (array (mut i32)))
+           (func (export "main") (result i32) (local $a (ref $foo))
+                 (local.set $a (array.new $foo (i32.const 0) (i32.const 1)))
+                 (array.set $foo (local.get $a) (i32.const 0) (i32.const 42))
+                 (array.get $foo (local.get $a) (i32.const 0)))))
+
+(test-vm "array.new_fixed"
+         42
+         '(module
+           (type $foo (array i32))
+           (func (export "main") (result i32)
+                 (array.get $foo (array.new_fixed $foo 1 (i32.const 42)) (i32.const 0)))))
+
+(test-vm "array.new_default"
+         0
+         '(module
+           (type $foo (array i32))
+           (func (export "main") (result i32)
+                 (array.get $foo (array.new_default $foo (i32.const 1)) (i32.const 0)))))
+
+(test-vm "array.fill"
+         42
+         '(module
+           (type $foo (array (mut i32)))
+           (func (export "main") (result i32) (local $a (ref $foo))
+                 (local.set $a (array.new_default $foo (i32.const 1)))
+                 (array.fill $foo
+                             (local.get $a)
+                             (i32.const 0)
+                             (i32.const 42)
+                             (i32.const 1))
+                 (array.get $foo (local.get $a) (i32.const 0)))))
+
+(test-vm "array.copy"
+         42
+         '(module
+           (type $foo (array (mut i32)))
+           (func (export "main") (result i32) (local $a (ref $foo))
+                 (local.set $a (array.new_default $foo (i32.const 1)))
+                 (array.copy $foo $foo
+                             (local.get $a)
+                             (i32.const 0)
+                             (array.new_fixed $foo 1 (i32.const 42))
+                             (i32.const 0)
+                             (i32.const 1))
+                 (array.get $foo (local.get $a) (i32.const 0)))))
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

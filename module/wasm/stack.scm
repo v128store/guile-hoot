@@ -215,14 +215,14 @@
 
 (define (lookup-struct-fields ctx def)
   (match (lookup-type ctx def)
-    (($ <sub-type> _ ($ <struct-type> fields)) fields)
+    (($ <sub-type> _ _ ($ <struct-type> fields)) fields)
     (($ <struct-type> fields) fields)))
 (define (lookup-struct-field-types ctx struct-type)
   (map field-type (lookup-struct-fields ctx struct-type)))
 (define (lookup-struct-field-type ctx struct-type field)
   (match (lookup-struct-fields ctx struct-type)
     ((($ <field> id mutable? type) ...)
-     (vector-lookup (list->vector (map cons id type)) field))))
+     (vector-lookup (list->vector type) field))))
 
 (define (lookup-array-type ctx def)
   (match (lookup-type ctx def)
@@ -313,7 +313,7 @@
              (-> (append types '(i32)) types)))))
        ('br_table
         (match args
-          ((target . _)
+          ((_ target)
            (-> (append (branch-arg-types target) '(i32)) #f))))
        ('return
         (-> (lookup-return-type ctx) #f))
@@ -350,14 +350,14 @@
         (match args
           ((type)
            (match (lookup-func-sig ctx type)
-             (($ <func-sig> (($ <param> id type) ...) results)
-              (-> (append type (list (make-ref-type #t type))) results))))))
+             (($ <func-sig> (($ <param> id params) ...) results)
+              (-> (append params (list (make-ref-type #t type))) results))))))
        ('return_call_ref
         (match args
           ((type)
            (match (lookup-func-sig ctx type)
-             (($ <func-sig> (($ <param> id type) ...) results)
-              (-> (append type (list (make-ref-type #t type))) #f))))))
+             (($ <func-sig> (($ <param> id params) ...) results)
+              (-> (append params (list (make-ref-type #t type))) #f))))))
 
        ('drop (-> (list (peek ctx)) '()))
        ('select (match args
@@ -532,6 +532,12 @@
           ((and top ($ <ref-type> nullable? ht))
            (-> (list top)
                (list (make-ref-type #f ht))))))
+       ('ref.cast
+        (match args
+          ((_ ht)
+           (match (peek ctx)
+             ((and top ($ <ref-type> nullable? ht*))
+              (-> (list top) (list (make-ref-type #f ht))))))))
        ('br_on_null
         (match args
           ((target)
@@ -543,9 +549,11 @@
        ('br_on_non_null
         (match args
           ((target)
-           (let ((types (branch-arg-types target)))
-             (-> (append types (list (peek ctx)))
-                 types)))))
+           (let ((top (peek ctx)))
+             (match (branch-arg-types target)
+               ((types* ... _)
+                (-> (append types* (list top))
+                    types*)))))))
        ((or 'br_on_cast 'br_on_cast_fail)
         ;; FIXME: The rest of the Hoot wasm toolchain needs to switch
         ;; to the two-type form of br_on_cast / br_on_cast_fail
@@ -583,16 +591,21 @@
        ('array.get
         (match args
           ((ht)
-           (-> (list (make-ref-type #t ht))
+           (-> (list (make-ref-type #t ht) 'i32)
                (list (lookup-array-type ctx ht))))))
-       ((or 'array.get_s 'array.get_u 'array.len)
+       ((or 'array.get_s 'array.get_u)
         (match args
           ((ht)
-           (-> (list (make-ref-type #t ht)) '(i32)))))
+           (-> (list (make-ref-type #t ht) 'i32) '(i32)))))
        ('array.set
         (match args
           ((ht)
            (-> (list (make-ref-type #t ht) 'i32 (lookup-array-type ctx ht))
+               '()))))
+       ('array.fill
+        (match args
+          ((ht)
+           (-> (list (make-ref-type #t ht) 'i32 (lookup-array-type ctx ht) 'i32)
                '()))))
        ('array.copy
         (match args
@@ -600,6 +613,13 @@
            (-> (list (make-ref-type #t ht1) 'i32
                      (make-ref-type #t ht2) 'i32 'i32)
                '()))))
+       ('array.len
+        (-> (list (make-ref-type #t 'array)) '(i32)))
+       ('array.new
+        (match args
+          ((ht)
+           (-> (list (lookup-array-type ctx ht) 'i32)
+               (list (make-ref-type #f ht))))))
        ('array.new_fixed
         (match args
           ((ht len)
@@ -737,10 +757,11 @@
 (define (apply-stack-effect ctx effect)
   (define (heap-type-sub-type? sub super)
     (or (eq? sub super)
-        (let lp ((sub (lookup-type ctx sub)))
+        (let lp ((sub (if (symbol? sub) sub (lookup-type ctx sub))))
           (match sub
-            (($ <sub-type> supers type)
-             (or (memq super supers)
+            ('i31 (memq super '(i31 eq)))
+            (($ <sub-type> _ supers type)
+             (or (and supers (memq super supers))
                  (lp type)))
             (($ <array-type>)
              (memq super '(array eq any)))
@@ -751,6 +772,7 @@
   (define (is-subtype? sub super)
     (cond
      ((eq? sub super) #t)
+     ((and (eq? sub 'i32) (memq super '(i32 i16 i8))) #t)
      ((and (ref-type? sub) (ref-type? super))
       (and (or (ref-type-nullable? super)
                (not (ref-type-nullable? sub)))

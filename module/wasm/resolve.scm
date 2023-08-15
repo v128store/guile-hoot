@@ -374,6 +374,8 @@
           `(array.new_fixed ,(resolve-type type) ,(resolve-data data)))
          (('array.new_elem type elem)
           `(array.new_fixed ,(resolve-type type) ,(resolve-elem elem)))
+         (('array.fill type)
+          `(array.fill ,(resolve-type type)))
          (('array.copy dst src)
           `(array.copy ,(resolve-type dst) ,(resolve-type src)))
          (((and inst (or 'ref.test 'ref.cast)) nullable? ht)

@@ -494,6 +494,7 @@
                      (k `(struct.set ,type ,field))))
              (#x07 (k `(struct.new ,(parse-idx))))
              (#x08 (k `(struct.new_default ,(parse-idx))))
+             (#x0f (k `(array.fill ,(parse-idx))))
              (#x13 (k `(array.get ,(parse-idx))))
              (#x14 (k `(array.get_s ,(parse-idx))))
              (#x15 (k `(array.get_u ,(parse-idx))))

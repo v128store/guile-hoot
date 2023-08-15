@@ -370,7 +370,9 @@
             (finish test consequent '()))
            ((test ... ('then consequent ...) ('else alternate ...))
             (finish test consequent alternate)))))
-      (((and tag (or 'br 'br_if 'call 'local.get 'local.set 'local.tee
+      (((and tag (or 'br 'br_if 'br_on_null 'br_on_non_null
+                     'br_on_cast 'br_on_cast_fail
+                     'call 'local.get 'local.set 'local.tee
                      'global.get 'global.set))
         idx
         . args)
@@ -434,7 +436,7 @@
        `(,@args ,tag ,a ,b))
       (((and tag (or 'memory.copy 'table.copy)) . args)
        `(,@args ,tag 0 0))
-      (((and tag (or 'struct.new)) (? id-or-idx? id) . args)
+      (((and tag (or 'struct.new 'struct.new_default)) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       (((and tag (or 'struct.set 'struct.get 'struct.get_s 'struct.get_u))
         (? id-or-idx? ti)
@@ -446,10 +448,14 @@
        `(,@args ,tag ,id))
       (((and tag 'string.const) (? string? str) . args)
        `(,@args ,tag ,str))
-      (((and tag (or 'array.new 'array.new_default
+      (((and tag (or 'array.new 'array.new_default 'array.fill
                      'array.get 'array.set 'array.get_u 'array.get_s))
         (? id-or-idx? ti) . args)
        `(,@args ,tag ,ti))
+      (((and tag 'array.new_fixed) (? id-or-idx? ti) (? s32? k) . args)
+       `(,@args ,tag ,ti ,k))
+      (((and tag 'array.copy) (? id-or-idx? ti1) (? id-or-idx? ti2) . args)
+       `(,@args ,tag ,ti1 ,ti2))
       (((and tag 'return_call) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))
       ((tag . args)
@@ -501,7 +507,9 @@
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
-           ((or 'br 'br_if 'call 'local.get 'local.set 'local.tee 'global.get
+           ((or 'br 'br_if 'br_on_null 'br_on_non_null
+                'br_on_cast 'br_on_cast_fail
+                'call 'local.get 'local.set 'local.tee 'global.get
                 'global.set)
             (let-values (((idx in) (parse-id-or-idx in)))
               (unless idx (error "missing idx" inst in))
@@ -571,7 +579,7 @@
                (lp/inst in `(,inst ,tid ,eid)))
               (((? id-or-idx? eid) . in)
                (lp/inst in `(,inst 0 ,eid)))))
-           ('struct.new
+           ((or 'struct.new 'struct.new_default)
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
@@ -589,11 +597,19 @@
             (match in
               (((? string? str) . in)
                (lp/inst in `(,inst ,str)))))
-           ((or 'array.new 'array.new_default
+           ((or 'array.new 'array.new_default 'array.fill
                 'array.get 'array.set 'array.get_u 'array.get_s)
             (match in
               (((? id-or-idx? ti) . in)
                (lp/inst in `(,inst ,ti)))))
+           ('array.new_fixed
+            (match in
+              (((? id-or-idx? ti) (? s32? k) . in)
+               (lp/inst in `(,inst ,ti ,k)))))
+           ('array.copy
+            (match in
+              (((? id-or-idx? ti1) (? id-or-idx? ti2) . in)
+               (lp/inst in `(,inst ,ti1 ,ti2)))))
            ('return_call
             (match in
               (((? id-or-idx? id) . in)

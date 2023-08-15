@@ -208,6 +208,7 @@
                          (wasm-imports wasm))
              (map table-type (wasm-tables wasm)))))
   (define elems (list->vector (wasm-elems wasm)))
+  (define strings (list->vector (wasm-strings wasm)))
   (define (validation-error msg . irritants)
     (raise-exception
      (make-exception
@@ -238,6 +239,8 @@
     (check-vector tables id "invalid table"))
   (define (check-elem id)
     (check-vector elems id "invalid element"))
+  (define (check-string id)
+    (check-vector strings id "invalid string"))
   (define (validate-const type instrs)
     (define (validate-instr ctx instr)
       (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
@@ -249,6 +252,7 @@
            (('i64.const x) (assert-s64 x))
            (('f32.const x) (assert-f32 x))
            (('f64.const x) (assert-f64 x))
+           (('string.const idx) (check-string idx))
            (('ref.func f) (check-func f))
            (('ref.null _) #t)
            (_ (validation-error "invalid constant instruction" instr)))
@@ -308,6 +312,7 @@
               (('i64.const x) (assert-s64 x))
               (('f32.const x) (assert-f32 x))
               (('f64.const x) (assert-f64 x))
+              (('string.const idx) (check-string idx))
               (('global.set idx)
                (match (vector-ref global-types idx)
                  (($ <global-type> mutable? _)
@@ -616,7 +621,8 @@ bytevector, an input port, or a <wasm> record produced by
   (vector-copy! (wasm-array-vector dst) at (wasm-array-vector src) start length))
 
 (define-record-type <wasm-instance>
-  (%make-wasm-instance module types globals funcs memories tables elems exports)
+  (%make-wasm-instance module types globals funcs memories tables elems
+                       strings exports)
   wasm-instance?
   (module wasm-instance-module)
   (types wasm-instance-types)
@@ -625,6 +631,7 @@ bytevector, an input port, or a <wasm> record produced by
   (memories wasm-instance-memories)
   (tables wasm-instance-tables)
   (elems wasm-instance-elems)
+  (strings wasm-instance-strings)
   (exports wasm-instance-exports))
 
 (set-record-type-printer! <wasm-instance>
@@ -673,10 +680,11 @@ bytevector, an input port, or a <wasm> record produced by
             (memory-vec (make-vector (+ n-memory-imports (length memories))))
             (table-vec (make-vector (+ n-table-imports (length tables))))
             (elem-vec (make-vector (length elems)))
+            (string-vec (list->vector strings))
             (export-table (make-hash-table))
             (instance (%make-wasm-instance module type-vec global-vec func-vec
                                            memory-vec table-vec elem-vec
-                                           export-table)))
+                                           string-vec export-table)))
        (define (lookup-type ht)
          (match ht
            ((? exact-integer?) (vector-ref type-vec ht))
@@ -1071,6 +1079,8 @@ bytevector, an input port, or a <wasm> record produced by
     (vector-ref (wasm-instance-elems instance) idx))
   (define (func-ref idx)
     (vector-ref (wasm-instance-funcs instance) idx))
+  (define (string-ref idx)
+    (vector-ref (wasm-instance-strings instance) idx))
   ;; Control flow helpers:
   (define (call func)
     (match func
@@ -1361,6 +1371,8 @@ bytevector, an input port, or a <wasm> record produced by
     (('array.set _) (lets (a i x) (wasm-array-set! a (s32->u32 i) x)))
     (('array.fill _) (lets (a d x n) (wasm-array-fill! a d x n)))
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
+    ;; Strings:
+    (('string.const idx) (push (string-ref idx)))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

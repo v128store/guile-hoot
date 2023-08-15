@@ -798,6 +798,14 @@ bytevector, an input port, or a <wasm> record produced by
                (vector-set! table-vec table-idx table)
                (loop rest global-idx func-idx memory-idx (+ table-idx 1)))
               (x (instance-error "invalid table import" mod name x))))))
+       ;; Initialize functions.
+       (let loop ((funcs funcs)
+                  (idx n-func-imports))
+         (match funcs
+           (() #t)
+           ((func . rest)
+            (vector-set! func-vec idx (instantiate-func func))
+            (loop rest (+ idx 1)))))
        ;; Initialize globals.
        (let loop ((globals globals)
                   (idx n-global-imports))
@@ -806,14 +814,6 @@ bytevector, an input port, or a <wasm> record produced by
            (((and ($ <global> _ ($ <global-type> mutable? type) init) global) . rest)
             (let ((global (make-wasm-global (exec-init global init) mutable?)))
               (vector-set! global-vec idx global))
-            (loop rest (+ idx 1)))))
-       ;; Initialize functions.
-       (let loop ((funcs funcs)
-                  (idx n-func-imports))
-         (match funcs
-           (() #t)
-           ((func . rest)
-            (vector-set! func-vec idx (instantiate-func func))
             (loop rest (+ idx 1)))))
        ;; Initialize memories.
        (let loop ((memories memories)

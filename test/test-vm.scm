@@ -57,7 +57,7 @@
      (lambda () (f wasm-file-name))
      (lambda () (delete-file wasm-file-name)))))
 
-(define (run-d8 . args)
+(define (run-d8 read args)
   (let* ((args (cons* "--experimental-wasm-gc"
                       "--experimental-wasm-stringref"
                       "--experimental-wasm-return-call"
@@ -68,24 +68,25 @@
         (call-with-input-string result read)
         (throw 'd8-error result))))
 
-(define (run-wasm-in-d8 wasm func args)
+(define (run-wasm-in-d8 wasm func read args)
   (call-with-wasm-file
    wasm
    (lambda (wasm-file-name)
-     (apply run-d8 (scope-file "test/load-wasm-and-print-primitive.js")
-            "--" wasm-file-name func
-            (map (lambda (arg) (format #f "~a" arg)) args)))))
+     (run-d8 read
+             (cons* (scope-file "test/load-wasm-and-print-primitive.js")
+                    "--" wasm-file-name func
+                    (map (lambda (arg) (format #f "~a" arg)) args))))))
 
 (define (run-wasm-in-vm wasm func args imports)
   (let* ((module (make-wasm-module wasm))
          (instance (make-wasm-instance module #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
-(define (eval-wat wat func args imports d8?)
+(define (eval-wat wat func args imports d8? d8-read)
   (let* ((wasm (wat->wasm wat))
          (our-result (run-wasm-in-vm wasm func args imports)))
     (when d8?
-      (let ((d8-result (run-wasm-in-d8 wasm func args)))
+      (let ((d8-result (run-wasm-in-d8 wasm func d8-read args)))
         (unless (if (and (number? our-result) (number? d8-result))
                     (= our-result d8-result)
                     (equal? our-result d8-result))
@@ -93,18 +94,19 @@
     our-result))
 
 (define* (test-vm name expected wat #:key
-                  (func "main") (args '()) (imports '()) (d8? #t))
+                  (func "main") (args '()) (imports '())
+                  (d8? #t) (d8-read read))
   (test-equal name
     expected
-    (eval-wat wat func args imports d8?)))
+    (eval-wat wat func args imports d8? d8-read)))
 
-(define (eval-wat/error wat func args imports d8?)
+(define (eval-wat/error wat func args imports d8? d8-read)
   (let ((wasm (wat->wasm wat)))
     (define (handle-error e)
       (if d8?
           (with-exception-handler (lambda (e) #t)
             (lambda ()
-              (let ((result (run-wasm-in-d8 wasm func args)))
+              (let ((result (run-wasm-in-d8 wasm func d8-read args)))
                 (error "d8 did not throw an error" result))
               #f)
             #:unwind? #t
@@ -118,18 +120,19 @@
       #:unwind-for-type &wasm-error)))
 
 (define* (test-vm/error name wat #:key
-                        (func "main") (args '()) (imports '()) (d8? #t))
+                        (func "main") (args '()) (imports '())
+                        (d8? #t) (d8-read read))
   (test-assert name
-    (eval-wat/error wat func args imports d8?)))
+    (eval-wat/error wat func args imports d8? d8-read)))
 
 ;; For temporarily testing something that doesn't work in our VM yet.
-(define (eval-d8 wat func args)
-  (run-wasm-in-d8 (wat->wasm wat) func args))
+(define (eval-d8 wat func read args)
+  (run-wasm-in-d8 (wat->wasm wat) func read args))
 
-(define* (test-d8 name expected wat #:key (func "main") (args '()))
+(define* (test-d8 name expected wat #:key (func "main") (args '()) (read read))
   (test-equal name
     expected
-    (eval-d8 wat func args)))
+    (eval-d8 wat func read args)))
 
 (test-begin "test-vm")
 
@@ -1336,6 +1339,16 @@
                  (br 0)
                  (unreachable))))
 
+(test-vm "return_call"
+         42
+         '(module
+           (func $main (export "main") (param $a i32) (result i32)
+                 (if (result i32)
+                     (i32.eq (local.get $a) (i32.const 42))
+                     (then (i32.const 42))
+                     (else (return_call $main (i32.add (local.get $a) (i32.const 1)))))))
+         #:args '(0))
+
 (test-vm "return with extra values on stack"
          42
          '(module
@@ -1857,6 +1870,13 @@
                              (i32.const 0)
                              (i32.const 1))
                  (array.get $foo (local.get $a) (i32.const 0)))))
+
+(test-vm "string.const"
+         "Hello, world!"
+         '(module
+           (func (export "main") (result (ref string))
+                 (string.const "Hello, world!")))
+         #:d8-read get-line)
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

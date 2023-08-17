@@ -273,7 +273,7 @@
        (validate-const type instrs))))
   (define (validate-data data)
     (match data
-      (($ <data> _ mod_ _ offset _)
+      (($ <data> _ _ _ offset _)
        (validate-const 'i32 offset))))
   (define (validate-elem elem)
     (match elem

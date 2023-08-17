@@ -710,12 +710,14 @@
              (if (ref.test $dynwind (local.get $dyn))
                  (then
                   (local.set $dynwind (ref.cast $dynwind (local.get $dyn)))
-                  (if (i32.lt_u (global.get $scm-sp) (table.size $scm-stack))
+                  (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 3)))
+                  (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
+                  (if (i32.lt_u (table.size $scm-stack) (global.get $scm-sp))
                       (then
-                       (call $grow-scm-stack (i32.const 3))))
-                  (if (i32.lt_u (global.get $ret-sp) (table.size $ret-stack))
+                       (call $grow-scm-stack (global.get $scm-sp))))
+                  (if (i32.lt_u (table.size $ret-stack) (global.get $ret-sp))
                       (then
-                       (call $grow-ret-stack (i32.const 1))))
+                       (call $grow-ret-stack (global.get $ret-sp))))
                   (table.set $scm-stack
                              (i32.sub (global.get $scm-sp) (i32.const 3))
                              (local.get $tag))

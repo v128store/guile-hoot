@@ -20,8 +20,8 @@
              (gnu packages python)
              (gnu packages version-control))
 
-(define guile-tailify
-  (let ((commit "7bafd85f439f81746fed816a7661b1cf5c3bfa9b")
+(define guile-next-next
+  (let ((commit "aa82f8227c34b711ea1d073585c89733ff30178b")
         (revision "1"))
     (package
      (inherit guile-next)
@@ -34,7 +34,7 @@
              (commit commit)))
        (file-name (git-file-name "guile" version))
        (sha256
-        (base32 "0x92gd5m79krcx245pcrqwss5jx1fpji587pzlq4nkz8xlnhc8w8")))))))
+        (base32 "11bn9pjknhw4666j28w8rxhgi0wr343cya8hnc5w0q3vv59b3xgs")))))))
 
 (define gn
   (let ((commit "1de45d1a11cc9f8cb5c75a031386151e1c384847")
@@ -276,7 +276,7 @@
   (native-inputs
    (list autoconf automake pkg-config))
   (inputs
-   (list guile-tailify v8))
+   (list guile-next-next v8))
   (synopsis "WASM compiler for Guile Scheme")
   (description "Guile-hoot is an ahead-of-time WebAssembly compiler for GNU Guile.")
   (home-page "https://spritely.institute")

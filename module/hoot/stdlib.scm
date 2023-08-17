@@ -1054,18 +1054,18 @@
 
      (func $fixnum-add* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
            (call $fixnum-add
-                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
-                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+                 (i31.get_s (local.get $a))
+                 (i31.get_s (local.get $b))))
 
      (func $fixnum-sub* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
            (call $fixnum-sub
-                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
-                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+                 (i31.get_s (local.get $a))
+                 (i31.get_s (local.get $b))))
 
      (func $fixnum-mul* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
            (call $fixnum-mul
-                 (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1))
-                 (i32.shr_s (i31.get_s (local.get $b)) (i32.const 1))))
+                 (i31.get_s (local.get $a))
+                 (i31.get_s (local.get $b))))
 
      (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
            (struct.new

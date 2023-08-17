@@ -3,6 +3,10 @@ moddir=$(prefix)/share/guile/site/$(GUILE_EFFECTIVE_VERSION)
 godir=$(libdir)/guile/$(GUILE_EFFECTIVE_VERSION)/site-ccache
 
 SOURCES = 					\
+  language/cps/hoot.scm				\
+  language/cps/hoot/tailify.scm			\
+  language/cps/hoot/lower-primcalls.scm		\
+  language/cps/hoot/unify-returns.scm		\
   wasm/types.scm				\
   wasm/resolve.scm				\
   wasm/wat.scm					\

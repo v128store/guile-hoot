@@ -570,7 +570,7 @@
                 (lp reprs
                     (cons (visit-scm scm-size) out)
                     raw-size (1+ scm-size) ret-size))
-               ('raw-bytevector
+               ('bv-contents
                 (lp reprs
                     (cons (visit-raw-bytevector scm-size) out)
                     raw-size (1+ scm-size) ret-size))
@@ -2135,7 +2135,7 @@
           ('scm scm-type)
           ('f64 'f64)
           ((or 's64 'u64) 'i64)
-          ('raw-bytevector (make-ref-type #f '$raw-bytevector))
+          ('bv-contents (make-ref-type #f '$raw-bytevector))
           ('code (make-ref-type #f '$kvarargs))))
       (define (add-locals-from-code code)
         (define locals (make-hash-table))
@@ -2173,7 +2173,16 @@
               (lambda (a b)
                 (string<? (match a (($ <local> id) (symbol->string id)))
                           (match b (($ <local> id) (symbol->string id)))))))
-      (define reprs (compute-var-representations cps))
+      (define reprs
+        (compute-var-representations
+         cps
+         #:primcall-raw-representations
+         (lambda (name param)
+           ;; Provide info for hoot-specific primcalls that have raw
+           ;; results; just `restore' for now.
+           (case name
+             ((restore) param) ;; param is list of representations.
+             (else (primcall-raw-representations name param))))))
       (define locals
         (append
          (add-locals-from-code code)
@@ -2187,7 +2196,7 @@
                        (if (var-used? var)
                            (match (intmap-ref reprs var)
                              ((or 'f64 's64 'u64) code)
-                             ((or 'code 'raw-bytevector)
+                             ((or 'code 'bv-contents)
                               (error "unexpected join repr" var))
                              ('scm
                               `((i32.const 57)
@@ -2285,6 +2294,12 @@
         (dump-wasm wasm))
       wasm)))
 
+(define-syntax-rule (with-hoot-target . body)
+  (with-target "wasm32-unknown-hoot"
+    (lambda ()
+      (parameterize ((target-runtime 'hoot))
+        . body))))
+
 (define* (compile exp #:key
                   (import-abi? #f)
                   (export-abi? #t)
@@ -2295,21 +2310,20 @@
                   (dump-cps? #f)
                   (dump-wasm? #f)
                   (opts '()))
-  (with-target "wasm32-unknown-hoot"
-    (lambda ()
-      (define cps
-        (%compile exp #:env env #:from from #:to 'cps
-                  #:optimization-level optimization-level
-                  #:warning-level warning-level))
-      (high-level-cps->wasm cps
-                            #:import-abi? import-abi?
-                            #:export-abi? export-abi?
-                            #:env env
-                            #:optimization-level optimization-level
-                            #:warning-level warning-level
-                            #:dump-cps? dump-cps?
-                            #:dump-wasm? dump-wasm?
-                            #:opts opts))))
+  (with-hoot-target
+   (define cps
+     (%compile exp #:env env #:from from #:to 'cps
+               #:optimization-level optimization-level
+               #:warning-level warning-level))
+   (high-level-cps->wasm cps
+                         #:import-abi? import-abi?
+                         #:export-abi? export-abi?
+                         #:env env
+                         #:optimization-level optimization-level
+                         #:warning-level warning-level
+                         #:dump-cps? dump-cps?
+                         #:dump-wasm? dump-wasm?
+                         #:opts opts)))
 
 (define* (read-and-compile port #:key
                            (import-abi? #f)
@@ -2321,21 +2335,20 @@
                            (dump-cps? #f)
                            (dump-wasm? #f)
                            (opts '()))
-  (with-target "wasm32-unknown-hoot"
-    (lambda ()
-      (define cps
-        (%read-and-compile port #:env env #:from from #:to 'cps
-                           #:optimization-level optimization-level
-                           #:warning-level warning-level))
-      (high-level-cps->wasm cps
-                            #:import-abi? import-abi?
-                            #:export-abi? export-abi?
-                            #:env env
-                            #:optimization-level optimization-level
-                            #:warning-level warning-level
-                            #:dump-cps? dump-cps?
-                            #:dump-wasm? dump-wasm?
-                            #:opts opts))))
+  (with-hoot-target
+   (define cps
+     (%read-and-compile port #:env env #:from from #:to 'cps
+                        #:optimization-level optimization-level
+                        #:warning-level warning-level))
+   (high-level-cps->wasm cps
+                         #:import-abi? import-abi?
+                         #:export-abi? export-abi?
+                         #:env env
+                         #:optimization-level optimization-level
+                         #:warning-level warning-level
+                         #:dump-cps? dump-cps?
+                         #:dump-wasm? dump-wasm?
+                         #:opts opts)))
 
 (define* (compile-file input-file #:key
                        (output-file (error "missing output file"))

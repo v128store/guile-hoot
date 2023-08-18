@@ -44,6 +44,12 @@
                         (build-cont
                           ($kargs names vars
                             ($continue kt src ($values ()))))))
+       (($ $kargs names vars
+           ($ $continue k src ($ $primcall 'call-thunk/no-inline #f (thunk))))
+        (intmap-replace out label
+                        (build-cont
+                          ($kargs names vars
+                            ($continue k src ($call thunk ()))))))
        (_ out)))
    cps
    cps))

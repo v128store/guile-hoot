@@ -421,17 +421,14 @@
            ;; Grow the stack by at least 50% and at least the needed
            ;; space.  Trap if we fail to grow.
            ;; additional_size = (current_size >> 1) | needed_size
-           (memory.size $raw-stack)
-           (i32.const 1)
-           (i32.shr_u)
-           (local.get $sp)
-           (i32.const 16) ;; Wasm pages are 64 kB.
-           (i32.shr_u)
-           (i32.or)
-           (memory.grow $raw-stack)
-           (i32.const -1)
-           (i32.eq)
-           (if (i32.eq) (then (unreachable))))
+           (if (i32.eq
+                (memory.grow
+                 $raw-stack
+                 (i32.or (i32.shr_u (memory.size $raw-stack) (i32.const 1))
+                         ;; Wasm pages are 64 kB.
+                         (i32.shr_u (local.get $sp) (i32.const 16))))
+                (i32.const -1))
+               (then (unreachable))))
 
      (func $grow-scm-stack (param $sp i32)
            ;; Grow as in $grow-raw-stack.

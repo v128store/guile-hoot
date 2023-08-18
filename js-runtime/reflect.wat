@@ -148,8 +148,8 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $size (mut (ref i31)))
-          (field $buckets (ref $vector)))))
+          (field $size (mut i32))
+          (field $buckets (ref $raw-scmvector)))))
     (type $weak-table
       (sub $heap-object
         (struct
@@ -164,7 +164,7 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $val (ref extern)))))
+          (field $val (ref $hash-table)))))
     (type $syntax
       (sub $heap-object
         (struct

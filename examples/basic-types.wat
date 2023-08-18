@@ -122,8 +122,8 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $size (mut (ref i31)))
-          (field $buckets (ref $vector)))))
+          (field $size (mut i32))
+          (field $buckets (ref $raw-scmvector)))))
     (type $weak-table
       (sub $heap-object
         (struct
@@ -625,17 +625,16 @@
     (ref.as_non_null (local.get $ret)))
 
   (func $%make-hash-table (result (ref $hash-table))
-    (struct.new $hash-table (i32.const 0) (i31.new (i32.const 0))
-                (struct.new $vector (i32.const 0)
-                            (array.new $raw-scmvector
-                                       (i31.new (i32.const 13)) (i32.const 47)))))
+    (struct.new $hash-table (i32.const 0) (i32.const 0)
+                (array.new $raw-scmvector
+                           (i31.new (i32.const 13)) (i32.const 47))))
   (func $%hashq-lookup (param $tab (ref $hash-table)) (param $k (ref eq))
         (result (ref null $pair))
     (local $idx i32)
     (local $buckets (ref $raw-scmvector))
     (local $chain (ref eq))
     (local $head (ref $pair))
-    (local.set $buckets (struct.get $vector 1 (struct.get $hash-table 2 (local.get $tab))))
+    (local.set $buckets (struct.get $hash-table $buckets (local.get $tab)))
     (local.set $idx (i32.rem_u (call $%hashq (local.get $k))
                                (array.len (local.get $buckets))))
     (local.set $chain (array.get $raw-scmvector (local.get $buckets) (local.get $idx)))
@@ -656,7 +655,7 @@
   (func $%hashq-insert (param $tab (ref $hash-table)) (param $k (ref eq)) (param $v (ref eq))
     (local $idx i32)
     (local $buckets (ref $raw-scmvector))
-    (local.set $buckets (struct.get $vector 1 (struct.get $hash-table 2 (local.get $tab))))
+    (local.set $buckets (struct.get $hash-table $buckets (local.get $tab)))
     (local.set $idx (i32.rem_u (call $%hashq (local.get $k))
                                (array.len (local.get $buckets))))
     (array.set $raw-scmvector
@@ -664,10 +663,10 @@
                (struct.new $pair (i32.const 0)
                            (struct.new $pair (i32.const 0) (local.get $k) (local.get $v))
                            (array.get $raw-scmvector (local.get $buckets) (local.get $idx))))
-    (struct.set $hash-table 1
+    (struct.set $hash-table $size
                 (local.get $tab)
-                (i31.new (i32.add (i32.const 1)
-                                  (i31.get_s (struct.get $hash-table 1 (local.get $tab)))))))
+                (i32.add (i32.const 1)
+                         (struct.get $hash-table $size (local.get $tab)))))
 
   (global $the-kwtab (mut (ref null $hash-table)) (ref.null $hash-table))
   (func $%init-keywords

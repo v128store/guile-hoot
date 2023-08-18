@@ -47,6 +47,13 @@
     (if import-abi?
         '()
         '((i32.const 0))))
+  (define maybe-init-hash-table
+    (if import-abi?
+        '()
+        '((struct.new $hash-table (i32.const 0)
+                      (i32.const 0)
+                      (array.new $raw-scmvector (i31.new (i32.const 13))
+                                 (i32.const 47))))))
 
   (parse-wat
    `((type $kvarargs
@@ -180,8 +187,8 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $size (mut (ref i31)))
-               (field $buckets (ref $vector)))))
+               (field $size (mut i32))
+               (field $buckets (ref $raw-scmvector)))))
       (type $weak-table
             (sub $heap-object
               (struct
@@ -196,7 +203,7 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $val (ref extern)))))
+               (field $values (ref $hash-table)))))
       (type $syntax
             (sub $heap-object
               (struct
@@ -396,12 +403,39 @@
            (i32.xor (local.get $v)
                     (i32.shr_u (local.get $v) (i32.const 15))))
 
-     ;; Mix hash bits.  Result must be nonzero.
      (func $finish-heap-object-hash (param $hash i32) (result i32)
            (local.set $hash (call $integer-hash (local.get $hash)))
            (if i32 (local.get $hash)
                (then (local.get $hash))
                (else (call $integer-hash (i32.const 42)))))
+
+     (global $hashq-counter (mut i32) (i32.const 0))
+     (func $immediate-hashq (param $v (ref i31)) (result i32)
+           (call $integer-hash (i31.get_u (local.get $v))))
+     (func $heap-object-hashq (param $v (ref $heap-object)) (result i32)
+           (local $tag i32)
+           (local.set $tag (struct.get $heap-object $hash (local.get $v)))
+           (loop $init-if-zero
+             (block
+              $done
+              (br_if $done (local.get $tag))
+              (global.set $hashq-counter
+                          (i32.sub (global.get $hashq-counter) (i32.const 1)))
+              (struct.set $heap-object $hash (local.get $v)
+                          (local.tee $tag (call $integer-hash
+                                                (global.get $hashq-counter))))
+              ;; Check and retry if result is zero.
+              (br $init-if-zero)))
+           (local.get $tag))
+     (func $hashq (param $v (ref eq)) (result i32)
+           (if i32
+               (ref.test i31 (local.get $v))
+               (then
+                (return_call $immediate-hashq
+                             (ref.cast i31 (local.get $v))))
+               (else
+                (return_call $heap-object-hashq
+                             (ref.cast $heap-object (local.get $v))))))
 
      ;; For now, the Java string hash function, except over codepoints
      ;; rather than WTF-16 code units.
@@ -608,6 +642,96 @@
      (global $values-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $values)))
 
+     (func $make-hash-table (result (ref $hash-table))
+           (struct.new $hash-table (i32.const 0) (i32.const 0)
+                       (array.new $raw-scmvector
+                                  (i31.new (i32.const 13)) (i32.const 47))))
+
+     (func $hashq-lookup (param $tab (ref $hash-table)) (param $k (ref eq))
+           (result (ref null $pair))
+           (local $idx i32)
+           (local $buckets (ref $raw-scmvector))
+           (local $chain (ref eq))
+           (local $head (ref $pair))
+           (local $link (ref $pair))
+           (local.set $buckets
+                      (struct.get $hash-table $buckets (local.get $tab)))
+           (local.set $idx
+                      (i32.rem_u (call $hashq (local.get $k))
+                                 (array.len (local.get $buckets))))
+           (local.set $chain
+                      (array.get $raw-scmvector
+                                 (local.get $buckets) (local.get $idx)))
+           (loop $lp
+             (if (i32.eqz (ref.test $pair (local.get $chain)))
+                 (then (return (ref.null $pair)))
+                 (else
+                  (local.set $link (ref.cast $pair (local.get $chain)))
+                  (local.set $head
+                             (ref.cast $pair
+                                       (struct.get $pair $car
+                                                   (local.get $link))))
+                  (if (ref.eq (struct.get $pair $car (local.get $head))
+                              (local.get $k))
+                      (then
+                       (return (local.get $head)))
+                      (else
+                       (local.set $chain
+                                  (struct.get $pair $cdr (local.get $link)))
+                       (br $lp))))))
+           (unreachable))
+
+     (func $hashq-insert (param $tab (ref $hash-table)) (param $k (ref eq))
+           (param $v (ref eq))
+           (local $idx i32)
+           (local $buckets (ref $raw-scmvector))
+           (local.set $buckets (struct.get $hash-table $buckets (local.get $tab)))
+           (local.set $idx (i32.rem_u (call $hashq (local.get $k))
+                                      (array.len (local.get $buckets))))
+           (array.set
+            $raw-scmvector
+            (local.get $buckets) (local.get $idx)
+            (struct.new
+             $pair (i32.const 0)
+             (struct.new $pair (i32.const 0) (local.get $k) (local.get $v))
+             (array.get $raw-scmvector (local.get $buckets) (local.get $idx))))
+           (struct.set $hash-table $size
+                       (local.get $tab)
+                       (i32.add (struct.get $hash-table $size (local.get $tab))
+                                (i32.const 1))))
+
+     (func $hashq-ref (param $tab (ref $hash-table)) (param $k (ref eq))
+           (param $default (ref eq))
+           (result (ref eq))
+           (local $handle (ref null $pair))
+           (local.set $handle
+                      (call $hashq-lookup (local.get $tab) (local.get $k)))
+           (if (ref eq)
+               (ref.is_null (local.get $handle))
+               (then (local.get $default))
+               (else (struct.get $pair $cdr (local.get $handle)))))
+     (func $hashq-update (param $tab (ref $hash-table)) (param $k (ref eq))
+           (param $v (ref eq)) (param $default (ref eq))
+           (result (ref eq))
+           (local $handle (ref null $pair))
+           (local.set $handle
+                      (call $hashq-lookup (local.get $tab) (local.get $k)))
+           (if (ref eq)
+               (ref.is_null (local.get $handle))
+               (then
+                (call $hashq-insert (local.get $tab) (local.get $k)
+                      (local.get $v))
+                (local.get $default))
+               (else
+                (struct.get $pair $cdr (local.get $handle))
+                (struct.set $pair $cdr (local.get $handle)
+                            (local.get $v)))))
+     (func $hashq-set! (param $tab (ref $hash-table)) (param $k (ref eq))
+           (param $v (ref eq))
+           (call $hashq-update (local.get $tab) (local.get $k)
+                 (local.get $v) (i31.new (i32.const 0)))
+           (drop))
+
      (func $push-dyn (param $dyn (ref $dyn))
            (local $dyn-sp i32)
            (global.set $dyn-sp
@@ -618,7 +742,46 @@
                (then (call $grow-dyn-stack)))
            (table.set $dyn-stack (local.get $dyn-sp) (local.get $dyn)))
 
-     (func $find-prompt (param $tag (ref eq))
+     (func $wind-dynstate (param $fluid (ref $dynstate))
+           (unreachable))
+
+     (func $wind-dynfluid (param $dynfluid (ref $dynfluid))
+           (local $fluid (ref $fluid))
+           (local.set $fluid
+                      (struct.get $dynfluid $fluid (local.get $dynfluid)))
+           (struct.set
+            $dynfluid $val
+            (local.get $dynfluid)
+            (call $hashq-update (global.get $current-fluids)
+                  (local.get $fluid)
+                  (struct.get $dynfluid $val (local.get $dynfluid))
+                  (struct.get $fluid $init (local.get $fluid)))))
+
+     (func $push-fluid (param $fluid (ref $fluid)) (param $val (ref eq))
+           (local $dynfluid (ref $dynfluid))
+           (local.set $dynfluid
+                      (struct.new $dynfluid
+                                  (local.get $fluid) (local.get $val)))
+           (call $push-dyn (local.get $dynfluid))
+           (call $wind-dynfluid (local.get $dynfluid)))
+
+     (func $pop-fluid
+           (local $sp i32)
+           (global.set $dyn-sp
+                       (local.tee $sp (i32.sub (global.get $dyn-sp)
+                                               (i32.const 1))))
+           (call $wind-dynfluid
+                 (ref.cast $dynfluid (table.get $dyn-stack (local.get $sp)))))
+
+     (func $fluid-ref (param $fluid (ref $fluid)) (result (ref eq))
+           (call $hashq-ref (global.get $current-fluids)
+                 (local.get $fluid)
+                 (struct.get $fluid $init (local.get $fluid))))
+
+     (func $fluid-set! (param $fluid (ref $fluid)) (param $val (ref eq))
+           (call $hashq-set! (global.get $current-fluids)
+                 (local.get $fluid)
+                 (local.get $val)))     (func $find-prompt (param $tag (ref eq))
            (result (ref $dynprompt) i32)
            (local $dyn (ref $dyn))
            (local $prompt (ref $dynprompt))
@@ -741,12 +904,12 @@
               (if (ref.test $dynfluid (local.get $d))
                   (then
                    (local.set $dynfluid (ref.cast $dynfluid (local.get $d)))
-                   (call $rewind-dynfluid (local.get $dynfluid))
+                   (call $wind-dynfluid (local.get $dynfluid))
                    (br $next)))
               (if (ref.test $dynstate (local.get $d))
                   (then
                    (local.set $dynstate (ref.cast $dynstate (local.get $d)))
-                   (call $rewind-dynstate (local.get $dynstate))
+                   (call $wind-dynstate (local.get $dynstate))
                    (br $next))
                   (else (unreachable))))
              (call $push-dyn (local.get $d))
@@ -1035,15 +1198,6 @@
                         (local.get $i)
                         (local.get $args)))
 
-     (func $unwind-dynfluid (param $fluid (ref $dynfluid))
-           (unreachable))
-     (func $unwind-dynstate (param $fluid (ref $dynstate))
-           (unreachable))
-     (func $rewind-dynfluid (param $fluid (ref $dynfluid))
-           (unreachable))
-     (func $rewind-dynstate (param $fluid (ref $dynstate))
-           (unreachable))
-
      (func $unwind-to-prompt
            (param $tag (ref eq)) (param $cont (ref eq)) (param $args (ref eq))
            (local $prompt (ref $dynprompt))
@@ -1127,11 +1281,11 @@
              (br_if $lp (ref.test $dynprompt (local.get $dyn)))
              (if (ref.test $dynfluid (local.get $dyn))
                  (then
-                  (call $unwind-dynfluid (ref.cast $dynfluid (local.get $dyn)))
+                  (call $wind-dynfluid (ref.cast $dynfluid (local.get $dyn)))
                   (br $lp)))
              (if (ref.test $dynstate (local.get $dyn))
                  (then
-                  (call $unwind-dynstate (ref.cast $dynstate (local.get $dyn)))
+                  (call $wind-dynstate (ref.cast $dynstate (local.get $dyn)))
                   (br $lp)))
              (unreachable)))
 
@@ -1966,4 +2120,6 @@
      (global ,@(maybe-import '$ret-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$scm-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$raw-sp) (mut i32) ,@maybe-init-i32-zero)
-     (global ,@(maybe-import '$dyn-sp) (mut i32) ,@maybe-init-i32-zero))))
+     (global ,@(maybe-import '$dyn-sp) (mut i32) ,@maybe-init-i32-zero)
+     (global ,@(maybe-import '$current-fluids) (ref $hash-table)
+             ,@maybe-init-hash-table))))

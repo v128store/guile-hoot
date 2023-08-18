@@ -713,7 +713,7 @@ calls."
     (let ((winds (identify-winds cps kfun body succs))
           (live-in (compute-live-in cps body preds))
           (constants (compute-constants cps preds))
-          (reprs (compute-var-representations cps)))
+          (reprs (compute-var-representations (intmap-select cps body))))
       (tailify-tails cps winds live-in constants reprs tails joins)))))
 
 (define (tailify cps)

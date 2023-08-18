@@ -362,6 +362,13 @@
      (func $die (import "rt" "die")
            (param (ref string) (ref eq)))
 
+     (func $debug-str (import "debug" "debug_str")
+           (param (ref string)))
+     (func $debug-str-i32 (import "debug" "debug_str_i32")
+           (param (ref string) i32))
+     (func $debug-str-scm (import "debug" "debug_str_scm")
+           (param (ref string) (ref eq)))
+
      ;; Thomas Wang's integer hasher, from
      ;; http://www.cris.com/~Ttwang/tech/inthash.htm.
      (func $integer-hash (param $v i32) (result i32)

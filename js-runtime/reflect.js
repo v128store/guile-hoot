@@ -165,6 +165,13 @@ class Scheme {
     }
 
     #init_module(mod) {
+        mod.set_debug_handler({
+            debug_str(x) { console.log(`debug: ${x}`); },
+            debug_str_i32(x, y) { console.log(`debug: ${x}: ${y}`); },
+            debug_str_scm: (x, y) => {
+                console.log(`debug: ${x}: ${this.#to_js(y).repr()}`);
+            },
+        });
         let proc = new Procedure(this, mod.get_export('$load').value)
         return proc.call();
     }
@@ -302,6 +309,7 @@ class SchemeTrapError extends Error {
 
 class SchemeModule {
     #instance;
+    #debug_handler;
     static #rt = {
         bignum_from_i32(n) { return BigInt(n); },
         bignum_from_i64(n) { return n; },
@@ -349,12 +357,24 @@ class SchemeModule {
 
     constructor(instance) {
         this.#instance = instance;
+        this.#debug_handler = {
+            debug_str(x) { console.log(`debug: ${x}`); },
+            debug_str_i32(x, y) { console.log(`debug: ${x}: ${y}`); },
+            debug_str_scm(x, y) { console.log(`debug: ${x}: #<scm>`); },
+        }
     }
     static async fetch_and_instantiate(path, imported_abi) {
-        let imports = { rt: SchemeModule.#rt, abi: imported_abi }
+        let debug = {
+            debug_str(x) { mod.#debug_handler.debug_str(x); },
+            debug_str_i32(x, y) { mod.#debug_handler.debug_str_i32(x, y); },
+            debug_str_scm(x, y) { mod.#debug_handler.debug_str_scm(x, y); },
+        }
+        let imports = { rt: SchemeModule.#rt, debug, abi: imported_abi }
         let { module, instance } = await instantiate_streaming(path, imports);
-        return new SchemeModule(instance);
+        let mod = new SchemeModule(instance);
+        return mod;
     }
+    set_debug_handler(h) { this.#debug_handler = h; }
     all_exports() { return this.#instance.exports; }
     exported_abi() {
         let abi = {}

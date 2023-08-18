@@ -203,7 +203,7 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $values (ref $hash-table)))))
+               (field $fluids (ref $hash-table)))))
       (type $syntax
             (sub $heap-object
               (struct
@@ -281,7 +281,7 @@
       (type $dynstate
             (sub $dyn
               (struct
-               (field $state (mut (ref eq)))))))
+               (field $fluids (mut (ref $hash-table)))))))
 
      (type $raw-retvector (array (mut (ref $kvarargs))))
      (type $raw-dynvector (array (mut (ref $dyn))))
@@ -742,8 +742,30 @@
                (then (call $grow-dyn-stack)))
            (table.set $dyn-stack (local.get $dyn-sp) (local.get $dyn)))
 
-     (func $wind-dynstate (param $fluid (ref $dynstate))
-           (unreachable))
+     (func $wind-dynstate (param $dynstate (ref $dynstate))
+           (local $fluids (ref $hash-table))
+           (local.set $fluids (global.get $current-fluids))
+           (global.set $current-fluids
+                       (struct.get $dynstate $fluids (local.get $dynstate)))
+           (struct.set $dynstate $fluids (local.get $dynstate)
+                       (local.get $fluids)))
+
+     (func $push-dynamic-state (param $state (ref $dynamic-state))
+           (local $dynstate (ref $dynstate))
+           (call $push-dyn
+                 (local.tee $dynstate
+                            (struct.new $dynstate
+                                        (struct.get $dynamic-state $fluids
+                                                    (local.get $state)))))
+           (return_call $wind-dynstate (local.get $dynstate)))
+
+     (func $pop-dynamic-state
+           (local $sp i32)
+           (global.set $dyn-sp
+                       (local.tee $sp (i32.sub (global.get $dyn-sp)
+                                               (i32.const 1))))
+           (return_call $wind-dynstate
+                        (ref.as_non_null (global) (table.get $dy)) (local.get $dynstate)))
 
      (func $wind-dynfluid (param $dynfluid (ref $dynfluid))
            (local $fluid (ref $fluid))
@@ -2121,5 +2143,5 @@
      (global ,@(maybe-import '$scm-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$raw-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$dyn-sp) (mut i32) ,@maybe-init-i32-zero)
-     (global ,@(maybe-import '$current-fluids) (ref $hash-table)
+     (global ,@(maybe-import '$current-fluids) (mut (ref $hash-table))
              ,@maybe-init-hash-table))))

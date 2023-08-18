@@ -164,7 +164,7 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $val (ref $hash-table)))))
+          (field $fluids (ref $hash-table)))))
     (type $syntax
       (sub $heap-object
         (struct
@@ -241,7 +241,7 @@
     (type $dynstate
       (sub $dyn
         (struct
-          (field $state (mut (ref eq)))))))
+          (field $fluids (mut (ref $hash-table)))))))
 
   ;; Storage locations for parameters and stack-allocated continuations.
   ;; Note that $arg0, $arg1, and $arg2 are function parameters.

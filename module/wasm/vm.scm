@@ -457,7 +457,7 @@ bytevector, an input port, or a <wasm> record produced by
 
 (set-record-type-printer! <wasm-func>
                           (lambda (f port)
-                            (format port "#<wasm-func ~a>"
+                            (format port "#<wasm-func ~s>"
                                     (wasm-func-proc f))))
 
 (define-record-type <wasm-global>
@@ -575,7 +575,7 @@ bytevector, an input port, or a <wasm> record produced by
 
 (set-record-type-printer! <wasm-struct>
                           (lambda (struct port)
-                            (format port "#<wasm-struct ~a>"
+                            (format port "#<wasm-struct ~s>"
                                     (wasm-struct-fields struct))))
 
 (define (make-wasm-struct type fields)
@@ -605,7 +605,7 @@ bytevector, an input port, or a <wasm> record produced by
 
 (set-record-type-printer! <wasm-array>
                           (lambda (array port)
-                            (format port "#<wasm-array ~a>"
+                            (format port "#<wasm-array ~s>"
                                     (wasm-array-vector array))))
 
 (define (make-wasm-array type k fill)

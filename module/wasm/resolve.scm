@@ -354,6 +354,15 @@
           `(,inst ,(resolve-table table)))
          (((and inst (or 'memory.size 'memory.grow)) mem)
           `(,inst ,(resolve-memory mem)))
+         (((and inst (or 'i32.load 'i64.load 'f32.load 'f64.load
+                         'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u
+                         'i64.load8_s 'i64.load8_u 'i64.load16_s 'i64.load16_u
+                         'i64.load32_s 'i64.load32_u
+                         'i32.store 'i64.store 'f32.store 'f64.store
+                         'i32.store8 'i32.store16
+                         'i64.store8 'i64.store16 'i64.store32))
+           mem)
+          `(,inst ,(resolve-memarg mem)))
          (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
          (('ref.func f) `(ref.func ,(record-function-used-as-value
                                      (resolve-func f))))
@@ -428,8 +437,8 @@
        (define (resolve-base type)
          (match type
            (($ <func-sig> params results)
-           (make-func-sig (map resolve-param params)
-                          (map resolve-val-type results)))
+            (make-func-sig (map resolve-param params)
+                           (map resolve-val-type results)))
            (($ <array-type> mutable? type)
             (make-array-type mutable? (resolve-storage-type type)))
            (($ <struct-type> fields)

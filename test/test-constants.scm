@@ -574,6 +574,13 @@
                                (lambda (k v) v)))
            abort-to-prompt "hey")
 
+(test-call "69" (lambda (f tag)
+                  (call-with-prompt tag
+                    (lambda () (- (f tag)))
+                    (lambda (k v) (k (- -2 v)))))
+                (lambda (tag) (abort-to-prompt tag 67))
+                "hey")
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

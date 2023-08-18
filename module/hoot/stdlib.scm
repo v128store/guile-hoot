@@ -276,6 +276,19 @@
               (struct
                (field $state (mut (ref eq)))))))
 
+     (type $raw-retvector (array (mut (ref $kvarargs))))
+     (type $raw-dynvector (array (mut (ref $dyn))))
+     (type $cont
+           (sub $proc
+             (struct
+              (field $hash (mut i32))
+              (field $func (ref $kvarargs))
+              (field $prompt (ref $dynprompt))
+              (field $raw-stack (ref $raw-bytevector))
+              (field $scm-stack (ref $raw-scmvector))
+              (field $ret-stack (ref $raw-retvector))
+              (field $dyn-stack (ref $raw-dynvector)))))
+
      (func $bignum-from-i32 (import "rt" "bignum_from_i32")
            (param i32)
            (result (ref extern)))
@@ -605,7 +618,8 @@
                (then (call $grow-dyn-stack)))
            (table.set $dyn-stack (local.get $dyn-sp) (local.get $dyn)))
 
-     (func $find-prompt (param $tag (ref eq)) (result (ref $dynprompt))
+     (func $find-prompt (param $tag (ref eq))
+           (result (ref $dynprompt) i32)
            (local $dyn (ref $dyn))
            (local $prompt (ref $dynprompt))
            (local $sp i32)
@@ -625,7 +639,8 @@
                        (if (ref.eq (struct.get $dynprompt $tag
                                                (local.get $prompt))
                                    (local.get $tag))
-                           (then (return (local.get $prompt)))
+                           (then (return (local.get $prompt)
+                                         (local.get $sp)))
                            (else (br $lp)))))
                   (br $lp))
                  (else
@@ -633,12 +648,338 @@
                         (local.get $tag)))))
            (unreachable))
 
+     (func $rewind
+           (param $raw-sp-adjust i32)
+           (param $scm-sp-adjust i32)
+           (param $ret-sp-adjust i32)
+           (param $dyn (ref $raw-dynvector))
+           (param $i i32)
+           (param $args (ref eq))
+           (local $d (ref $dyn))
+           (local $dynwind (ref $dynwind))
+           (local $dynprompt (ref $dynprompt))
+           (local $dynfluid (ref $dynfluid))
+           (local $dynstate (ref $dynstate))
+           (local $base i32)
+           (loop $lp
+             (if (i32.eq (local.get $i) (array.len (local.get $dyn)))
+                 (then
+                  (return_call $apply (i32.const 3)
+                               (global.get $apply-primitive)
+                               (global.get $values-primitive)
+                               (local.get $args))))
+             (local.set $d (array.get $raw-dynvector
+                                      (local.get $dyn)
+                                      (local.get $i)))
+             (block
+              $next
+              (if (ref.test $dynwind (local.get $d))
+                  (then
+                   (local.set $dynwind (ref.cast $dynwind (local.get $d)))
+                   (local.set $base (global.get $raw-sp))
+                   (global.set $raw-sp (i32.add (local.get $base) (i32.const 16)))
+                   (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 2)))
+                   (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
+                   (if (i32.lt_u (memory.size $raw-stack)
+                                 (i32.shr_u (global.get $scm-sp) (i32.const 16)))
+                       (then
+                        (call $grow-raw-stack (global.get $raw-sp))))
+                   (if (i32.lt_u (table.size $scm-stack) (global.get $scm-sp))
+                       (then
+                        (call $grow-scm-stack (global.get $scm-sp))))
+                   (if (i32.lt_u (table.size $ret-stack) (global.get $ret-sp))
+                       (then
+                        (call $grow-ret-stack (global.get $ret-sp))))
+                   (i32.store $raw-stack offset=0 (local.get $base)
+                              (local.get $raw-sp-adjust))
+                   (i32.store $raw-stack offset=4 (local.get $base)
+                              (local.get $scm-sp-adjust))
+                   (i32.store $raw-stack offset=8 (local.get $base)
+                              (local.get $ret-sp-adjust))
+                   (i32.store $raw-stack offset=12 (local.get $base)
+                              (local.get $i))
+                   (table.set $scm-stack
+                              (i32.sub (global.get $scm-sp) (i32.const 2))
+                              (local.get $dyn))
+                   (table.set $scm-stack
+                              (i32.sub (global.get $scm-sp) (i32.const 1))
+                              (local.get $args))
+                   (table.set $ret-stack
+                              (i32.sub (global.get $ret-sp) (i32.const 1))
+                              (ref.func $keep-rewinding))
+                   (return_call_ref $kvarargs
+                                    (i32.const 1)
+                                    (struct.get $dynwind $wind
+                                                (local.get $dynwind))
+                                    (i31.new (i32.const 0))
+                                    (i31.new (i32.const 0))
+                                    (struct.get
+                                     $proc $func
+                                     (struct.get $dynwind $wind
+                                                 (local.get $dynwind))))))
+              (if (ref.test $dynprompt (local.get $d))
+                  (then
+                   (local.set $dynprompt (ref.cast $dynprompt (local.get $d)))
+                   (local.set
+                    $d
+                    (struct.new
+                     $dynprompt
+                     (i32.add
+                      (struct.get $dynprompt $raw-sp (local.get $dynprompt))
+                      (local.get $raw-sp-adjust))
+                     (i32.add
+                      (struct.get $dynprompt $scm-sp (local.get $dynprompt))
+                      (local.get $scm-sp-adjust))
+                     (i32.add
+                      (struct.get $dynprompt $ret-sp (local.get $dynprompt))
+                      (local.get $ret-sp-adjust))
+                     (struct.get_u $dynprompt $unwind-only?
+                                   (local.get $dynprompt))
+                     (struct.get $dynprompt $tag (local.get $dynprompt))
+                     (struct.get $dynprompt $handler (local.get $dynprompt))))
+                   (br $next)))
+              (if (ref.test $dynfluid (local.get $d))
+                  (then
+                   (local.set $dynfluid (ref.cast $dynfluid (local.get $d)))
+                   (call $rewind-dynfluid (local.get $dynfluid))
+                   (br $next)))
+              (if (ref.test $dynstate (local.get $d))
+                  (then
+                   (local.set $dynstate (ref.cast $dynstate (local.get $d)))
+                   (call $rewind-dynstate (local.get $dynstate))
+                   (br $next))
+                  (else (unreachable))))
+             (call $push-dyn (local.get $d))
+             (local.set $i (i32.add (local.get $i) (i32.const 1)))
+             (br $lp)))
+
+     (func $restore-raw-stack (param $v (ref $raw-bytevector))
+           (local $sp i32)
+           (local $i i32)
+           (local $len i32)
+           (local.set $sp (global.get $raw-sp))
+           (local.set $i (i32.const 0))
+           (local.set $len (array.len (local.get $v)))
+           (global.set $raw-sp (i32.add (local.get $sp) (local.get $len)))
+           (if (i32.gt_u (global.get $raw-sp)
+                         (i32.shl (memory.size $raw-stack) (i32.const 16)))
+               (then (call $grow-raw-stack (global.get $raw-sp))))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (i32.store8 $raw-stack
+                              (i32.add (local.get $sp) (local.get $i))
+                              (array.get_u $raw-bytevector
+                                           (local.get $v)
+                                           (local.get $i)))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp)))))
+
+     (func $restore-scm-stack (param $v (ref $raw-scmvector))
+           (local $sp i32)
+           (local $i i32)
+           (local $len i32)
+           (local.set $sp (global.get $scm-sp))
+           (local.set $len (array.len (local.get $v)))
+           (global.set $scm-sp (i32.add (local.get $sp) (local.get $len)))
+           (if (i32.gt_u (global.get $scm-sp) (table.size $scm-stack))
+               (then (call $grow-scm-stack (global.get $scm-sp))))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (table.set $scm-stack
+                             (i32.add (local.get $sp) (local.get $i))
+                             (array.get $raw-scmvector
+                                        (local.get $v)
+                                        (local.get $i)))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp)))))
+
+     (func $restore-ret-stack (param $v (ref $raw-retvector))
+           (local $sp i32)
+           (local $i i32)
+           (local $len i32)
+           (local.set $sp (global.get $ret-sp))
+           (local.set $len (array.len (local.get $v)))
+           (global.set $ret-sp (i32.add (local.get $sp) (local.get $len)))
+           (if (i32.gt_u (global.get $ret-sp) (table.size $ret-stack))
+               (then (call $grow-ret-stack (global.get $ret-sp))))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (table.set $ret-stack
+                             (i32.add (local.get $sp) (local.get $i))
+                             (array.get $raw-retvector
+                                        (local.get $v)
+                                        (local.get $i)))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp)))))
+
+     (func $compose-continuation (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (local $cont (ref $cont))
+           (local $prompt (ref $dynprompt))
+           (local $raw-sp-adjust i32)
+           (local $scm-sp-adjust i32)
+           (local $ret-sp-adjust i32)
+           (local $args (ref eq))
+           (local.set $cont (ref.cast $cont (local.get $arg0)))
+           (local.set $prompt (struct.get $cont $prompt (local.get $cont)))
+           (local.set $raw-sp-adjust
+                      (i32.sub (global.get $raw-sp)
+                               (struct.get $dynprompt $raw-sp
+                                           (local.get $prompt))))
+           (local.set $scm-sp-adjust
+                      (i32.sub (global.get $scm-sp)
+                               (struct.get $dynprompt $scm-sp
+                                           (local.get $prompt))))
+           (local.set $ret-sp-adjust
+                      (i32.sub (global.get $ret-sp)
+                               (struct.get $dynprompt $ret-sp
+                                           (local.get $prompt))))
+           (local.set $args
+                      (call $collect-rest-args (local.get $nargs)
+                            (local.get $arg0)
+                            (local.get $arg1)
+                            (local.get $arg2)
+                            (i32.const 1)))
+           (call $restore-raw-stack
+                 (struct.get $cont $raw-stack (local.get $cont)))
+           (call $restore-scm-stack
+                 (struct.get $cont $scm-stack (local.get $cont)))
+           (call $restore-ret-stack
+                 (struct.get $cont $ret-stack (local.get $cont)))
+           ;; Dyn stack is restored incrementally via $rewind.
+           (return_call $rewind
+                        (local.get $raw-sp-adjust)
+                        (local.get $scm-sp-adjust)
+                        (local.get $ret-sp-adjust)
+                        (struct.get $cont $dyn-stack (local.get $cont))
+                        (i32.const 0)
+                        (local.get $args)))
+
+     (func $capture-raw-stack (param $base-sp i32)
+           (result (ref $raw-bytevector))
+           (local $v (ref $raw-bytevector))
+           (local $i i32)
+           (local $len i32)
+           (local.set $len (i32.sub (global.get $raw-sp) (local.get $base-sp)))
+           (local.set $v (array.new_default $raw-bytevector
+                                            (local.get $len)))
+           (local.set $i (i32.const 0))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (array.set $raw-bytevector
+                             (local.get $v)
+                             (local.get $i)
+                             (i32.load8_u $raw-stack
+                                          (i32.add (local.get $base-sp)
+                                                   (local.get $i))))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp))))
+           (local.get $v))
+
+     (func $capture-scm-stack (param $base-sp i32)
+           (result (ref $raw-scmvector))
+           (local $v (ref $raw-scmvector))
+           (local $i i32)
+           (local $len i32)
+           (local.set $len (i32.sub (global.get $scm-sp) (local.get $base-sp)))
+           (local.set $v
+                      (array.new $raw-scmvector
+                                 (i31.new (i32.const 1))
+                                 (local.get $len)))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (array.set $raw-scmvector
+                             (local.get $v)
+                             (local.get $i)
+                             (ref.as_non_null
+                              (table.get $scm-stack
+                                         (i32.add (local.get $base-sp)
+                                                  (local.get $i)))))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp))))
+           (local.get $v))
+
+     (func $capture-ret-stack (param $base-sp i32)
+           (result (ref $raw-retvector))
+           (local $v (ref $raw-retvector))
+           (local $i i32)
+           (local $len i32)
+           (local.set $len (i32.sub (global.get $ret-sp) (local.get $base-sp)))
+           (local.set $v
+                      (array.new $raw-retvector
+                                 (ref.func $invalid-continuation)
+                                 (local.get $len)))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (array.set $raw-retvector
+                             (local.get $v)
+                             (local.get $i)
+                             (ref.as_non_null
+                              (table.get $ret-stack
+                                         (i32.add (local.get $base-sp)
+                                                  (local.get $i)))))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp))))
+           (local.get $v))
+
+     (func $capture-dyn-stack (param $base-sp i32)
+           (result (ref $raw-dynvector))
+           (local $v (ref $raw-dynvector))
+           (local $i i32)
+           (local $len i32)
+           (local.set $len (i32.sub (global.get $dyn-sp) (local.get $base-sp)))
+           (local.set $v
+                      (array.new $raw-dynvector
+                                 (struct.new $dyn)
+                                 (local.get $len)))
+           (loop $lp
+             (if (i32.lt_u (local.get $i) (local.get $len))
+                 (then
+                  (array.set $raw-dynvector
+                             (local.get $v)
+                             (local.get $i)
+                             (ref.as_non_null
+                              (table.get $dyn-stack
+                                         (i32.add (local.get $base-sp)
+                                                  (local.get $i)))))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br $lp))))
+           (local.get $v))
+
      (func $capture-continuation (param $prompt (ref $dynprompt))
+           (param $prompt-dyn-sp i32)
            (result (ref eq))
            (if (result (ref eq))
                (struct.get_u $dynprompt $unwind-only? (local.get $prompt))
                (then (i31.new (i32.const 1)))
-               (else (unreachable))))
+               (else
+                (struct.new
+                 $cont
+                 (i32.const 0)
+                 (ref.func $compose-continuation)
+                 (local.get $prompt)
+                 (call $capture-raw-stack
+                       (struct.get $dynprompt $raw-sp (local.get $prompt)))
+                 (call $capture-scm-stack
+                       (struct.get $dynprompt $scm-sp (local.get $prompt)))
+                 (call $capture-ret-stack
+                       ;; Increment to avoid including the prompt unwind
+                       ;; continuation.  We rely on the compiler
+                       ;; generating code for non-unwind-only prompt
+                       ;; bodies that consists of just a closure call.
+                       (i32.add
+                        (struct.get $dynprompt $ret-sp (local.get $prompt))
+                        (i32.const 1)))
+                 (call $capture-dyn-stack
+                       ;; Incremented to avoid including the prompt
+                       ;; itself.
+                       (i32.add (local.get $prompt-dyn-sp) (i32.const 1)))))))
 
      (func $keep-unwinding (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -661,9 +1002,46 @@
            (return_call $unwind-to-prompt
                         (local.get $tag) (local.get $cont) (local.get $args)))
 
+     (func $keep-rewinding (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (local $raw-sp-adjust i32)
+           (local $scm-sp-adjust i32)
+           (local $ret-sp-adjust i32)
+           (local $i i32)
+           (local $dyn (ref $raw-dynvector))
+           (local $args (ref eq))
+           (global.set $raw-sp (i32.sub (global.get $raw-sp) (i32.const 16)))
+           (local.set $raw-sp-adjust
+                      (i32.load $raw-stack offset=0 (global.get $raw-sp)))
+           (local.set $scm-sp-adjust
+                      (i32.load $raw-stack offset=4 (global.get $raw-sp)))
+           (local.set $ret-sp-adjust
+                      (i32.load $raw-stack offset=8 (global.get $raw-sp)))
+           (local.set $i
+                      (i32.load $raw-stack offset=12 (global.get $raw-sp)))
+           (global.set $scm-sp (i32.sub (global.get $scm-sp) (i32.const 2)))
+           (local.set $dyn (ref.cast
+                            $raw-dynvector
+                            (table.get $scm-stack (global.get $scm-sp))))
+           (local.set $args (ref.as_non_null
+                             (table.get $scm-stack
+                                        (i32.add (global.get $scm-sp)
+                                                 (i32.const 1)))))
+           (return_call $rewind
+                        (local.get $raw-sp-adjust)
+                        (local.get $scm-sp-adjust)
+                        (local.get $ret-sp-adjust)
+                        (local.get $dyn)
+                        (local.get $i)
+                        (local.get $args)))
+
      (func $unwind-dynfluid (param $fluid (ref $dynfluid))
            (unreachable))
      (func $unwind-dynstate (param $fluid (ref $dynstate))
+           (unreachable))
+     (func $rewind-dynfluid (param $fluid (ref $dynfluid))
+           (unreachable))
+     (func $rewind-dynstate (param $fluid (ref $dynstate))
            (unreachable))
 
      (func $unwind-to-prompt
@@ -679,7 +1057,9 @@
            ;; again here.  More annoyingly, it could be that the prompt
            ;; becomes not unwind-only!  FIXME to check that if $cont is
            ;; #f, that the prompt is indeed still unwind-only.
-           (local.set $prompt (call $find-prompt (local.get $tag)))
+           (call $find-prompt (local.get $tag))
+           (drop) ;; prompt dyn-sp
+           (local.set $prompt)
            (loop $lp
              (global.set $dyn-sp
                          (i32.sub (global.get $dyn-sp) (i32.const 1)))

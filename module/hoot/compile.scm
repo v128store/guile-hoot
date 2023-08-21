@@ -24,7 +24,7 @@
   #:use-module (ice-9 binary-ports)
   #:use-module (ice-9 format)
   #:use-module (ice-9 match)
-  #:use-module ((srfi srfi-1) #:select (append-map))
+  #:use-module ((srfi srfi-1) #:select (append-map alist-delete))
   #:use-module (srfi srfi-9)
   #:use-module ((system base compile)
                 #:select ((read-and-compile . %read-and-compile)
@@ -2307,10 +2307,29 @@
         (dump-wasm wasm))
       wasm)))
 
+(define eval-syntax-expanders-when (make-parameter '(compile load eval)))
+
+(define (install-extended-scheme->tree-il-compiler!)
+  (let ((scheme (lookup-language 'scheme)))
+    ;; Replace the Scheme expander with one that parameterizes over
+    ;; eval-syntax-expanders-when.
+    (define (compile-tree-il x e opts)
+      (save-module-excursion
+       (lambda ()
+         (set-current-module e)
+         (let* ((x (macroexpand x 'c (eval-syntax-expanders-when)))
+                (cenv (current-module)))
+           (values x cenv cenv)))))
+
+    (set! (language-compilers scheme)
+          (acons 'tree-il compile-tree-il
+                 (alist-delete 'tree-il (language-compilers scheme))))))
+
 (define-syntax-rule (with-hoot-target . body)
   (with-target "wasm32-unknown-hoot"
     (lambda ()
-      (parameterize ((target-runtime 'hoot))
+      (parameterize ((target-runtime 'hoot)
+                     (eval-syntax-expanders-when '(compile)))
         . body))))
 
 (define* (compile exp #:key
@@ -2391,3 +2410,5 @@
           (call-with-output-file output-file
             (lambda (out)
               (put-bytevector out bytes))))))))
+
+(install-extended-scheme->tree-il-compiler!)

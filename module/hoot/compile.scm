@@ -2340,6 +2340,7 @@
 
 (define (default-hoot-environment)
   (let ((m (default-environment 'scheme)))
+    (purify-module! m)
     (module-use! m (resolve-interface '(hoot primitives)))
     m))
 

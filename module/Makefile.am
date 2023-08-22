@@ -19,15 +19,19 @@ SOURCES = 					\
   wasm/symbolify.scm				\
   wasm/vm.scm					\
   hoot/compile.scm				\
+  hoot/primitives.scm				\
   hoot/stdlib.scm				\
-  scripts/assemble-wasm.scm                     \
+  scripts/assemble-wasm.scm			\
   scripts/compile-wasm.scm
+
+NOCOMP_SOURCES = 				\
+  hoot/prelude.scm
 
 SUFFIXES = .scm .go
 GOBJECTS = $(SOURCES:%.scm=%.go)
 CLEANFILES = $(GOBJECTS)
-EXTRA_DIST = $(SOURCES)
-nobase_mod_DATA = $(SOURCES)
+EXTRA_DIST = $(SOURCES) $(NOCOMP_SOURCES)
+nobase_mod_DATA = $(SOURCES) $(NOCOMP_SOURCES)
 nobase_go_DATA = $(GOBJECTS)
 
 # Make sure source files are installed first, so that the mtime of

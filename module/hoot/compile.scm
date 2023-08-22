@@ -2332,19 +2332,32 @@
                      (eval-syntax-expanders-when '(compile)))
         . body))))
 
+(define (wrap-with-prelude exp)
+  `(let ()
+     (include-from-path "hoot/prelude")
+     (let ()
+       ,exp)))
+
+(define (default-hoot-environment)
+  (let ((m (default-environment 'scheme)))
+    (module-use! m (resolve-interface '(hoot primitives)))
+    m))
+
 (define* (compile exp #:key
                   (import-abi? #f)
                   (export-abi? #t)
                   (from (current-language))
-                  (env (default-environment from))
+                  (env (default-hoot-environment))
                   (optimization-level (default-optimization-level))
                   (warning-level (default-warning-level))
                   (dump-cps? #f)
                   (dump-wasm? #f)
                   (opts '()))
+  (unless (eq? from 'scheme)
+    (error "Only the Scheme language front-end is currently supported"))
   (with-hoot-target
    (define cps
-     (%compile exp #:env env #:from from #:to 'cps
+     (%compile (wrap-with-prelude exp) #:env env #:from from #:to 'cps
                #:optimization-level optimization-level
                #:warning-level warning-level))
    (high-level-cps->wasm cps
@@ -2361,33 +2374,36 @@
                            (import-abi? #f)
                            (export-abi? #t)
                            (from (current-language))
-                           (env (default-environment from))
+                           (env (default-hoot-environment))
                            (optimization-level (default-optimization-level))
                            (warning-level (default-warning-level))
                            (dump-cps? #f)
                            (dump-wasm? #f)
                            (opts '()))
-  (with-hoot-target
-   (define cps
-     (%read-and-compile port #:env env #:from from #:to 'cps
-                        #:optimization-level optimization-level
-                        #:warning-level warning-level))
-   (high-level-cps->wasm cps
-                         #:import-abi? import-abi?
-                         #:export-abi? export-abi?
-                         #:env env
-                         #:optimization-level optimization-level
-                         #:warning-level warning-level
-                         #:dump-cps? dump-cps?
-                         #:dump-wasm? dump-wasm?
-                         #:opts opts)))
+  (unless (eq? from 'scheme)
+    (error "Only the Scheme language front-end is currently supported"))
+  (let ((read (language-reader (lookup-language 'scheme))))
+    (compile (let lp ()
+               (let ((expr (read port)))
+                 (if (eof-object? expr)
+                     '()
+                     (cons expr (lp)))))
+             #:import-abi? import-abi?
+             #:export-abi? export-abi?
+             #:from from
+             #:env env
+             #:optimization-level optimization-level
+             #:warning-level warning-level
+             #:dump-cps? dump-cps?
+             #:dump-wasm? dump-wasm?
+             #:opts opts)))
 
 (define* (compile-file input-file #:key
                        (output-file (error "missing output file"))
                        (import-abi? #f)
                        (export-abi? #t)
                        (from (current-language))
-                       (env (default-environment from))
+                       (env (default-hoot-environment))
                        (optimization-level (default-optimization-level))
                        (warning-level (default-warning-level))
                        (dump-cps? #f)

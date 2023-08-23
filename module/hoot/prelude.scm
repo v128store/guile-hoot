@@ -385,6 +385,14 @@
 (define (real-part z) (error "unimplemented"))
 (define (imag-part z) (error "unimplemented"))
 
+;; promises
+(define (make-promise x) (error "unimplemented"))
+(define (promise? x) (error "unimplemented"))
+(define (force x) (error "unimplemented"))
+(define-syntax-rule (delay expr) (make-promise (lambda () expr)))
+;; FIXME: implement properly.
+(define-syntax-rule (delay-force expr) (delay (force expr)))
+
 (define (char->integer x) (%char->integer x))
 (define (integer->char x) (%integer->char x))
 (define (char? x) (%char? x))
@@ -592,4 +600,27 @@
 (define (features) '(hoot))
 
 (define (environment . import-specs) (error "eval unsupported"))
+(define (interaction-environment) (error "eval unsupported"))
 (define (eval exp env) (error "eval unsupported"))
+(define* (load filename #:optional env) (error "load unsupported"))
+
+(define (command-line) (error "unimplemented"))
+(define (get-environment-variable name) (error "unimplemented"))
+(define (get-environment-variables) (error "unimplemented"))
+(define* (emergency-exit #:optional status) (error "unimplemented"))
+(define* (exit #:optional status) (error "unimplemented"))
+
+(define* (read #:optional (port (current-input-port)))
+  (error "read unimplemented"))
+(define* (display datum #:optional (port (current-output-port)))
+  (error "display unimplemented"))
+(define* (write datum #:optional (port (current-output-port)))
+  (error "write unimplemented"))
+(define* (write-shared datum #:optional (port (current-output-port)))
+  (error "write unimplemented"))
+(define* (write-simple datum #:optional (port (current-output-port)))
+  (error "write unimplemented"))
+
+(define (jiffies-per-second) (error "unimplemented"))
+(define (current-jiffy) (error "unimplemented"))
+(define (current-second) (error "unimplemented"))

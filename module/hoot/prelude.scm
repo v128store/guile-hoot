@@ -385,6 +385,28 @@
 (define (char>=? . args) (apply >= (map char->integer args)))
 (define (char>? . args) (apply > (map char->integer args)))
 
+;; (scheme char) procedures; mostly we should punt to ICU via the host
+(define (char-downcase char) (error "unimplemented"))
+(define (char-upcase char) (error "unimplemented"))
+(define (char-foldcase char)
+  (if (or (eqv? char #\460) (eqv? char #\461))
+      char
+      (char-downcase (char-upcase char))))
+(define (digit-value char) (error "unimplemented"))
+(define (char-alphabetic? char) (error "unimplemented"))
+(define (char-ci<? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-ci<=? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-ci=? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-ci>=? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-ci>? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-lower-case? char) (error "unimplemented"))
+(define (char-upper-case? char) (error "unimplemented"))
+(define (char-whitespace? char) (error "unimplemented"))
+(define (char-numeric? char) (error "unimplemented"))
+(define (string-upcase str) (error "unimplemented"))
+(define (string-downcase str) (error "unimplemented"))
+(define (string-foldcase str) (error "unimplemented"))
+
 ;; R7RS ports
 (define (char-ready? . x) (error "unimplemented"))
 (define (write-char x . _) (error "unimplemented"))

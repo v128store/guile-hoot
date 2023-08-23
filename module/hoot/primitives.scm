@@ -41,7 +41,8 @@
                  ;; make-variable variable-ref variable-set!
                  exact->inexact
                  inf? nan?
-                 error))
+                 error
+                 eval-when))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
   ;; on interfaces that use interfaces.  For now, import the-eof-object
@@ -342,5 +343,18 @@
    (bytevector-ieee-double-native-ref . %bytevector-ieee-double-native-ref)
    (bytevector-ieee-double-native-set! . %bytevector-ieee-double-native-set!)
    (the-eof-object . %the-eof-object))
+  #:export (%inline-asm)
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)
+
+(define* (%inline-asm meta code . args)
+  ;; Meta := (M ...)
+  ;; M := (params T ...)
+  ;;    | (results T ...)
+  ;; T := i32 i64 f32 f64 (ref null HT) (ref HT) ...
+  ;; Code := (Inst ...)
+  ;; Inst := parenthesized unfolded wasm instruction
+  (error "target-only primitive"))
+
+;(add-interesting-primitive! '%inline-asm)
+

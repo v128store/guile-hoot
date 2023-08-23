@@ -607,7 +607,7 @@
 (define (vector-length x) (%vector-length x))
 (define (vector-ref x i) (%vector-ref x i))
 (define (vector-set! x i v) (%vector-set! x i v))
-(define* (vector-copy x #:optional (start 0) (end (vector-length v)))
+(define* (vector-copy v #:optional (start 0) (end (vector-length v)))
   (error "unimplemented"))
 (define* (vector-copy! to at from #:optional (start 0) (end (vector-length v)))
   (error "unimplemented"))

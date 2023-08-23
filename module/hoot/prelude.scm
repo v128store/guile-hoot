@@ -453,6 +453,30 @@
 (define (input-port-open? x) (error "unimplemented"))
 (define (output-port-open? x) (error "unimplemented"))
 
+;; (scheme file); perhaps drop?
+(define (open-binary-input-file filename) (error "files unimplemented"))
+(define (open-binary-output-file filename) (error "files unimplemented"))
+(define (call-with-input-file filename proc) (error "files unimplemented"))
+(define (call-with-output-file filename proc) (error "files unimplemented"))
+(define (delete-file filename) (error "files unimplemented"))
+(define (file-exists? filename) (error "files unimplemented"))
+(define (open-input-file filename) (error "files unimplemented"))
+(define (open-output-file filename) (error "files unimplemented"))
+(define (with-input-from-file filename thunk)
+  (let ((p (open-input-file filename)))
+    (parameterize ((current-input-port p))
+      (call-with-values thunk
+        (lambda vals
+          (close-port p)
+          (apply values vals))))))
+(define (with-output-to-file filename thunk)
+  (let ((p (open-output-file filename)))
+    (parameterize ((current-output-port p))
+      (call-with-values thunk
+        (lambda vals
+          (close-port p)
+          (apply values vals))))))
+
 ;; FIXME: these should be parameters
 (define (current-input-port . x) #t)
 (define (current-output-port . x) #t)

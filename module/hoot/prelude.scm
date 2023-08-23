@@ -171,18 +171,6 @@
     (if (zero? n)
         out
         (lp (1- n) (cons init out)))))
-(define (memq v l)
-  (let lp ((l l))
-    (cond
-     ((null? l) #f)
-     ((eq? v (car l)) #t)
-     (else (lp (cdr l))))))
-(define (memv v l)
-  (let lp ((l l))
-    (cond
-     ((null? l) #f)
-     ((eqv? v (car l)) #t)
-     (else (lp (cdr l))))))
 (define (null? x) (%null? x))
 
 (define (reverse l)
@@ -204,6 +192,25 @@
                   (cons (car x) (lp (cdr x)))))))))
 (define (list-copy l)
   (append l '()))
+
+(define-syntax-rule (define-member+assoc member assoc compare optarg ...)
+  (begin
+    (define* (member v l optarg ...)
+      (let lp ((l l))
+        (cond
+         ((null? l) #f)
+         ((compare v (car l)) #t)
+         (else (lp (cdr l))))))
+    (define* (assoc v l optarg ...)
+      (let lp ((l l))
+        (and (not (null? l))
+             (let ((head (car l)))
+               (if (compare v head)
+                   head
+                   (lp (cdr l)))))))))
+(define-member+assoc memq assq eq?)
+(define-member+assoc memv assv eqv?)
+(define-member+assoc member assoc compare #:optional (compare equal?))
 
 (define (make-bytevector len init) (error "unimplemented"))
 (define (bytevector-length bv) (%bytevector-length bv))

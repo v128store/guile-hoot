@@ -392,6 +392,21 @@
 (define (char>=? . args) (apply >= (map char->integer args)))
 (define (char>? . args) (apply > (map char->integer args)))
 
+;; (scheme inexact)
+(define (finite? z)
+  (and (not (infinite? z))
+       (not (nan? z))))
+(define (infinite? z)
+  (if (complex? z)
+      (or (%inf? (real-part z))
+          (%inf? (imag-part z)))
+      (%inf? z)))
+(define (nan? z)
+  (if (complex? z)
+      (or (%nan? (real-part z))
+          (%nan? (imag-part z)))
+      (%nan? z)))
+
 ;; (scheme char) procedures; mostly we should punt to ICU via the host
 (define (char-downcase char) (error "unimplemented"))
 (define (char-upcase char) (error "unimplemented"))
@@ -424,7 +439,7 @@
 (define (close-port x) (error "unimplemented"))
 (define (eof-object)
   (define-syntax eof-object
-    (lambda (stx) #`'#,the-eof-object))
+    (lambda (stx) #`'#,%the-eof-object))
   (eof-object))
 (define (eof-object? x) (%eof-object? x))
 (define (get-output-string x) (error "unimplemented"))

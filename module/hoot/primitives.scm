@@ -23,9 +23,150 @@
 ;;; Code:
 
 (define-module (hoot primitives)
-  #:use-module (scheme base)
-  #:use-module (rnrs bytevectors)
-  #:use-module (ice-9 atomic)
+  #:pure
+  #:use-module ((guile)
+                #:select
+                (include-from-path
+                 define-syntax-rule
+                 syntax-case syntax quasisyntax unsyntax unsyntax-splicing
+                 with-syntax identifier-syntax identifier?
+                 lambda* define*
+
+                 call-with-prompt abort-to-prompt
+                 ash logand logior logxor lognot logtest logbit?
+                 keyword?
+                 bitvector?
+                 cons*
+                 fluid-ref fluid-set! with-fluid* with-dynamic-state
+                 ;; make-variable variable-ref variable-set!
+                 exact->inexact
+                 inf? nan?
+                 error))
+  ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
+  ;; which should re-export all its bindings, but #:select doesn't work
+  ;; on interfaces that use interfaces.  For now, import the-eof-object
+  ;; from (ice-9 ports) instead.
+  #:use-module ((ice-9 ports) #:select (the-eof-object))
+  #:use-module ((ice-9 atomic)
+                #:select
+                (make-atomic-box
+                 atomic-box-ref atomic-box-set!
+                 atomic-box-swap! atomic-box-compare-and-swap!))
+  #:use-module ((rnrs bytevectors)
+                #:select
+                (bytevector?
+                 bytevector-length
+                 bytevector-u8-ref bytevector-u8-set!
+                 bytevector-s8-ref bytevector-s8-set!
+                 bytevector-u16-native-ref bytevector-u16-native-set!
+                 bytevector-s16-native-ref bytevector-s16-native-set!
+                 bytevector-u32-native-ref bytevector-u32-native-set!
+                 bytevector-s32-native-ref bytevector-s32-native-set!
+                 bytevector-u64-native-ref bytevector-u64-native-set!
+                 bytevector-s64-native-ref bytevector-s64-native-set!
+                 bytevector-ieee-single-native-ref
+                 bytevector-ieee-single-native-set!
+                 bytevector-ieee-double-native-ref
+                 bytevector-ieee-double-native-set!))
+  #:use-module ((scheme base)
+                #:select
+                (_
+                 ... => else
+                 lambda
+                 define define-values let let* letrec letrec*
+                 let-values let*-values
+                 or and
+                 begin 
+                 if cond case when unless
+                 do
+                 set!
+                 quote quasiquote unquote unquote-splicing
+                 include include-ci
+                 define-syntax let-syntax letrec-syntax
+                 syntax-rules syntax-error
+                 cond-expand
+                 parameterize
+                 guard define-record-type
+
+                 ;; R7RS control
+                 dynamic-wind
+
+                 ;; R7RS values
+                 values
+                 call-with-values
+                 apply
+
+                 ;; R7RS pairs
+                 pair?
+                 cons
+                 car
+                 cdr
+                 set-car!
+                 set-cdr!
+
+                 ;; R7RS lists
+                 null?
+
+                 ;; R7RS numerics
+                 *
+                 +
+                 -
+                 /
+                 <
+                 <=
+                 =
+                 >
+                 >=
+                 abs
+                 floor
+                 ceiling
+                 number?
+                 complex?
+                 real?
+                 rational?
+                 integer?
+                 exact-integer?
+                 exact?
+                 inexact?
+                 quotient
+                 remainder
+                 modulo
+
+                 ;; R7RS chars
+                 char->integer
+                 integer->char
+                 char?
+
+                 ;; R7RS ports
+                 eof-object?
+
+                 ;; Parameters
+
+                 ;; R7RS equality
+                 eq?
+                 eqv?
+
+                 ;; R7RS strings
+                 string?
+                 string-length
+                 string-ref
+
+                 ;; Symbols
+                 symbol?
+                 symbol->string
+                 string->symbol
+
+                 ;; R7RS vectors
+                 vector?
+                 make-vector
+                 vector
+                 vector-length
+                 vector-ref
+                 vector-set!
+
+                 procedure?))
+  #:use-module ((scheme inexact)
+                #:select (inexact sin cos tan asin acos atan sqrt))
   #:re-export
   ( ;; R7RS syntax
    _
@@ -108,7 +249,7 @@
    (inexact? . %inexact?)
    ;; FIXME: we should actually be using the R7RS variants which are
    ;; slightly different than Guile's.
-   (exact->inexact . %inexact)
+   (inexact . %inexact)
    (quotient . %quotient)
    (remainder . %remainder)
    (modulo . %modulo)
@@ -174,6 +315,8 @@
    (fluid-set! . %fluid-set!)
    (with-fluid* . %with-fluid*)
    (with-dynamic-state . %with-dynamic-state)
+   (inf? . %inf?)
+   (nan? . %nan?)
    (make-atomic-box . %make-atomic-box)
    (atomic-box-ref . %atomic-box-ref)
    (atomic-box-set! . %atomic-box-set!)
@@ -198,7 +341,6 @@
    (bytevector-ieee-single-native-set! . %bytevector-ieee-single-native-set!)
    (bytevector-ieee-double-native-ref . %bytevector-ieee-double-native-ref)
    (bytevector-ieee-double-native-set! . %bytevector-ieee-double-native-set!)
-   the-eof-object
-   )
+   (the-eof-object . %the-eof-object))
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)

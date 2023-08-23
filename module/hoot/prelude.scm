@@ -549,3 +549,6 @@
 
 ;; TODO :)
 (define (features) '(hoot))
+
+(define (environment . import-specs) (error "eval unsupported"))
+(define (eval exp env) (error "eval unsupported"))

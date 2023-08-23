@@ -376,6 +376,13 @@
 (define (square x) (* x x))
 (define (expt x y) (error "unimplemented"))
    
+;; (scheme complex)
+(define (make-polar real imag) (error "unimplemented"))
+(define (magnitude z) (error "unimplemented"))
+(define (angle z) (error "unimplemented"))
+(define (real-part z) (error "unimplemented"))
+(define (imag-part z) (error "unimplemented"))
+
 (define (char->integer x) (%char->integer x))
 (define (integer->char x) (%integer->char x))
 (define (char? x) (%char? x))

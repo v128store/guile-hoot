@@ -368,6 +368,8 @@
       ((_ x y) #'(%atan x y))
       (f (identifier? #'f) #'%generic-atan))))
 (define (sqrt x) (%sqrt x))
+(define* (log x #:optional y) (error "unimplemented"))
+(define (exp x) (error "unimplemented"))
 
 (define (number->string n) (error "unimplemented"))
 (define (string->number n) (error "unimplemented"))

@@ -19,6 +19,7 @@ SOURCES = 					\
   wasm/symbolify.scm				\
   wasm/vm.scm					\
   hoot/compile.scm				\
+  hoot/inline-wasm.scm				\
   hoot/primitives.scm				\
   hoot/stdlib.scm				\
   scripts/assemble-wasm.scm			\

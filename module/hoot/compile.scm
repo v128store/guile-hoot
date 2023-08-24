@@ -33,14 +33,13 @@
                           default-optimization-level))
   #:use-module (system base language)
   #:use-module (system base target)
-  #:use-module ((language tree-il primitives) #:select (add-interesting-primitive!))
   #:use-module (language cps)
   #:use-module (language cps intset)
   #:use-module (language cps intmap)
   #:use-module (language cps dump)
   #:use-module (language cps utils)
   #:use-module (rnrs bytevectors)
-  #:use-module ((hoot primitives) #:select (%inline-asm))
+  #:use-module (hoot inline-wasm)
   #:use-module (hoot stdlib)
   #:use-module (wasm assemble)
   #:use-module (wasm dump)
@@ -50,15 +49,6 @@
   #:export (read-and-compile
             compile-file
             compile))
-
-(begin
-  ;; The useless reference is to prevent a warning that (language
-  ;; tree-il primitives) is unused; we just import the module so that we
-  ;; can add %inline-asm as a primitive, because for reasons I don't
-  ;; understand, you can't call add-interesting-primitive! from within
-  ;; the compilation unit that defines the primitive.
-  %inline-asm
-  (add-interesting-primitive! '%inline-asm))
 
 (define (invert-tree parents)
   (intmap-fold
@@ -699,6 +689,9 @@
           (($ $primcall name param args)
            (match-primcall
             name param args
+
+            (('inline-wasm (func) . args)
+             (error "inline-wasm not yet done :)"))
 
             ;; These are the primcalls inserted by tailification to
             ;; handle stack-allocated return continuations.

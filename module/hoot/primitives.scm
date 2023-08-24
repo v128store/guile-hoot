@@ -343,18 +343,16 @@
    (bytevector-ieee-double-native-ref . %bytevector-ieee-double-native-ref)
    (bytevector-ieee-double-native-set! . %bytevector-ieee-double-native-set!)
    (the-eof-object . %the-eof-object))
-  #:export (%inline-asm)
+  #:export (%inline-wasm)
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)
 
-(define* (%inline-asm meta code . args)
-  ;; Meta := (M ...)
-  ;; M := (params T ...)
-  ;;    | (results T ...)
-  ;; T := i32 i64 f32 f64 (ref null HT) (ref HT) ...
-  ;; Code := (Inst ...)
-  ;; Inst := parenthesized unfolded wasm instruction
+(define (%inline-wasm code . args)
+  "Emit inline WebAssembly code.  @var{code} is a WebAssembly module
+expressed in WebAssembly's s-expression syntax.  The backend expects the
+parsed module to contain a single function.  The arguments
+@var{arg}... should correspond to the parameters of the function.  The
+number of result values is also determined from the function signature."
   (error "target-only primitive"))
 
 ;(add-interesting-primitive! '%inline-asm)
-

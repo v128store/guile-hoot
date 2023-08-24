@@ -70,6 +70,11 @@
       ((_ a . b) #'(%cons a (cons* . b)))
       (f (identifier? #'f) #'%generic-cons*))))
 
+(define* (make-fluid #:optional default-value)
+  (%inline-wasm '((func (param $default (ref eq)) (result (ref eq))
+                       (struct.new $fluid (i32.const 0)
+                                   (local.get $default))))
+               default-value))
 (define (fluid-ref x) (%fluid-ref x))
 (define (fluid-set! x y) (%fluid-set! x y))
 (define (with-fluid* fluid val thunk) (%with-fluid* fluid val thunk))

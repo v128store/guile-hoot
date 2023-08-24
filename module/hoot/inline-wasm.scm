@@ -32,23 +32,29 @@
   #:use-module (language cps with-cps)
   #:use-module (wasm types)
   #:use-module (wasm wat)
-  #:use-module ((hoot primitives) #:select (%inline-wasm)))
+  #:use-module ((hoot primitives) #:select (%inline-wasm))
+  #:export (install-inline-wasm!))
 
-(begin
-  ;; The useless reference is to prevent a warning that (language
-  ;; tree-il primitives) is unused; we just import the module so that we
-  ;; can add %inline-asm as a primitive, because for reasons I don't
-  ;; understand, you can't call add-interesting-primitive! from within
-  ;; the compilation unit that defines the primitive.
-  %inline-wasm
-  (add-interesting-primitive! '%inline-wasm))
+(define install-inline-wasm!
+  (let ((m (current-module)))
+    (lambda ()
+      ;; The useless reference is to prevent a warning that (language
+      ;; tree-il primitives) is unused; we just import the module so that we
+      ;; can add %inline-asm as a primitive, because for reasons I don't
+      ;; understand, you can't call add-interesting-primitive! from within
+      ;; the compilation unit that defines the primitive.
+      %inline-wasm
+      (save-module-excursion
+       (lambda ()
+         (set-current-module m)
+         (add-interesting-primitive! '%inline-wasm))))))
 
 (define (n-valued-continuation cps src nvals k)
   (define (enumerate f n)
-    (let lp ((n n))
-      (if (zero? n)
-          '()
-          (cons (f n) (lp (1+ n))))))
+    (let lp ((i 0))
+      (if (< i n)
+          (cons (f i) (lp (1+ i)))
+          '())))
   (match (intmap-ref cps k)
     (($ $ktail)
      (let ((names (enumerate (lambda (n) 'result) nvals))
@@ -89,7 +95,9 @@
        ;; We expect a single func and no other definitions (types,
        ;; tables, etc).
        (($ <wasm> () ()
-           ((and func ($ <func> id ($ <type-use> #f params results) _ _)))
+           ((and func ($ <func> id ($ <type-use> #f
+                                      ($ <func-sig> params results))
+                         locals body)))
            () () () () #f () () () () ())
         (assert-match params (($ <param> id ($ <ref-type> #f 'eq)) ...)
                       "inline asm requires all params to be (ref eq)")

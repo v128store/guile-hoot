@@ -690,7 +690,13 @@
            (match-primcall
             name param args
 
-            (('inline-wasm (func) . args)
+            (('inline-wasm
+              ($ <func> id
+                 ($ <type-use> #f ($ <func-sig> params results))
+                 locals body)
+              . args)
+             ;; add locals as temporaries.
+             ;; replace references to locals.
              (error "inline-wasm not yet done :)"))
 
             ;; These are the primcalls inserted by tailification to
@@ -2433,3 +2439,4 @@
               (put-bytevector out bytes))))))))
 
 (install-extended-scheme->tree-il-compiler!)
+(install-inline-wasm!)

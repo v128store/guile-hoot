@@ -695,9 +695,42 @@
                  ($ <type-use> #f ($ <func-sig> params results))
                  locals body)
               . args)
-             ;; add locals as temporaries.
-             ;; replace references to locals.
-             (error "inline-wasm not yet done :)"))
+             (define local-name-map
+               (append
+                (map (lambda (param arg)
+                       (match param
+                         (($ <param> id type)
+                          (cons id (var-label arg)))))
+                     params args)
+                (map (lambda (local)
+                       (match local
+                         (($ <local> id type)
+                          (unless (equal? type (type-for-named-temporary id))
+                            (error "unexpected local type for name" id type))
+                          (cons id id))))
+                     locals)))
+             (define (rename-local id)
+               (or (assq-ref local-name-map id)
+                   (error "unexpected local" id)))
+             (define (rename-inst inst)
+               (match inst
+                 (((and inst (or 'block 'loop)) label type body)
+                  `(,inst ,label ,type ,(rename-expr body)))
+                 (('if label type consequent alternate)
+                  `(if ,label ,type
+                       ,(rename-expr consequent) ,(rename-expr alternate)))
+                 (('try label type body catches catch-all)
+                  `(try ,label ,type ,(rename-expr body)
+                        ,(map rename-expr catches)
+                        ,(and catch-all (rename-expr catch-all))))
+                 (('try_delegate label type body handler)
+                  `(try_delegate ,label ,type ,(rename-expr body) ,handler))
+                 (((and inst (or 'local.get 'local.set 'local.tee)) id)
+                  `(,inst ,(rename-local id)))
+                 (inst inst)))
+             (define (rename-expr expr)
+               (map rename-inst expr))
+             (rename-expr body))
 
             ;; These are the primcalls inserted by tailification to
             ;; handle stack-allocated return continuations.
@@ -2160,6 +2193,13 @@
           ((or 's64 'u64) 'i64)
           ('bv-contents (make-ref-type #f '$raw-bytevector))
           ('code (make-ref-type #f '$kvarargs))))
+      (define (type-for-named-temporary name)
+        (match name
+          ((or '$raw-sp '$scm-sp '$ret-sp '$dyn-sp) 'i32)
+          ((or '$i0 '$i1 '$i2) 'i32)
+          ('$str_iter (make-ref-type #f 'stringview_iter))
+          ('$s0 scm-type)
+          (_ #f)))
       (define (add-locals-from-code code)
         (define locals (make-hash-table))
         (define (visit-inst inst)
@@ -2176,12 +2216,7 @@
             (('try_delegate label type body handler)
              (visit-expr body))
             (((or 'local.set 'local.tee) label)
-             (let ((type (match label
-                           ((or '$raw-sp '$scm-sp '$ret-sp '$dyn-sp) 'i32)
-                           ((or '$i0 '$i1 '$i2) 'i32)
-                           ('$str_iter (make-ref-type #f 'stringview_iter))
-                           ('$s0 scm-type)
-                           (_ #f))))
+             (let ((type (type-for-named-temporary label)))
                (when type
                  (hashq-set! locals label type))))
             (_ #f)))

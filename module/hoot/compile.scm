@@ -1819,7 +1819,7 @@
                   (i31.get_s)
                   (i32.const #b110111)
                   (i32.and)
-                  (i32.const #b001001)
+                  (i32.const #b000101)
                   (i32.eq))
                  ((i32.const 0)))))
           (#('false? #f (a))

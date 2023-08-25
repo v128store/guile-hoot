@@ -130,7 +130,7 @@ Otherwise, the possible payloads are:
   - `#b111001`: 57: the undefined value (used internally)
 
 Some common oddball tests:
-  - `null?`: check for null or nil; `(= (logand payload #b110111) #b001001)`
+  - `null?`: check for null or nil; `(= (logand payload #b110111) #b000101)`
   - `false?`: check for false or nil; `(= (logand payload #b111011) #b000001)`
   - `elisp-false?`: check for false or nil or null; `(= (logand payload #b110011) #b000001)`
 

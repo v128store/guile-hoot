@@ -304,7 +304,9 @@ class Scheme {
 
 class SchemeTrapError extends Error {
     constructor(tag, data) { super(); this.tag = tag; this.data = data; }
-    toString() { return `SchemeTrap(${this.tag}, ${this.data})`; }
+    // FIXME: data is raw Scheme object; would need to be reflected to
+    // have a toString.
+    toString() { return `SchemeTrap(${this.tag}, <data>)`; }
 }
 
 class SchemeModule {

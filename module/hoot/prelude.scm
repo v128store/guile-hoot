@@ -146,6 +146,24 @@
 (define (set-car! x y) (%set-car! x y))
 (define (set-cdr! x y) (%set-cdr! x y))
 
+(define* (%debug message #:optional (val '(missing)))
+  (cond
+   ((eq? val '(missing))
+    (%inline-wasm
+     '(func (param $str (ref eq))
+            (call $debug-str
+                  (struct.get $string $str
+                              (ref.cast $string (local.get $str)))))
+     message))
+   (else
+    (%inline-wasm
+     '(func (param $str (ref eq)) (param $val (ref eq))
+            (call $debug-str-scm
+                  (struct.get $string $str
+                              (ref.cast $string (local.get $str)))
+                  (local.get $val)))
+     message val))))
+
 (define (length l)
   (let lp ((len 0) (l l))
     (if (null? l) len (lp (1+ len) (cdr l)))))

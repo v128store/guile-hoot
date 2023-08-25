@@ -217,7 +217,25 @@
 (define-member+assoc memv assv eqv?)
 (define-member+assoc member assoc compare #:optional (compare equal?))
 
-(define* (make-bytevector len #:optional (init 0)) (error "unimplemented"))
+(define* (make-bytevector len #:optional (init 0))
+  (unless (and (exact-integer? len) (= len (logand len (1- (ash 1 29)))))
+    ;; FIXME: Allow bigint len ?
+    (error "expected length to be integer in range [0,2^29-1]" len))
+  (unless (and (exact-integer? init) (<= -128 init 255))
+    (error "expected init to be integer in range [-128, 255]" init))
+  (%inline-wasm
+   '(func (param $len (ref eq)) (param $init (ref eq))
+          (result (ref eq))
+          (struct.new
+           $mutable-bytevector
+           (i32.const 0)
+           (array.new
+            $raw-bytevector
+            (i32.shr_s (i31.get_s (ref.cast i31 (local.get $init)))
+                       (i32.const 1))
+            (i32.shr_s (i31.get_s (ref.cast i31 (local.get $len)))
+                       (i32.const 1)))))
+   len init))
 (define (bytevector-length bv) (%bytevector-length bv))
 (define (bytevector-u8-ref bv i)     (%bytevector-u8-ref bv i))
 (define (bytevector-u8-set! bv i x)  (%bytevector-u8-set! bv i x))

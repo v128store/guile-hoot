@@ -584,6 +584,10 @@
                (fluid-set! fluid 100)
                (list v (fluid-ref fluid)))))
 
+(test-call "#vu8(0 0 0 0 0)"
+           (lambda () (make-bytevector 5)))
+(test-call "#vu8(42 42 42 42 42)"
+           (lambda () (make-bytevector 5 42)))
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

@@ -588,6 +588,9 @@
            (lambda () (make-bytevector 5)))
 (test-call "#vu8(42 42 42 42 42)"
            (lambda () (make-bytevector 5 42)))
+(test-call "#vu8(1 2 3 4)"
+           (lambda () (bytevector 1 2 3 4)))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

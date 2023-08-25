@@ -572,6 +572,18 @@
                 (lambda (tag) (abort-to-prompt tag 67))
                 "hey")
 
+(test-call "(42 (69 100) 42)"
+           (lambda (f)
+             (let* ((fluid (make-fluid 42))
+                    (a (fluid-ref fluid))
+                    (b (with-fluid* fluid 69 (lambda () (f fluid))))
+                    (c (fluid-ref fluid)))
+               (list a b c)))
+           (lambda (fluid)
+             (let ((v (fluid-ref fluid)))
+               (fluid-set! fluid 100)
+               (list v (fluid-ref fluid)))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

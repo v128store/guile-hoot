@@ -1542,6 +1542,15 @@
            (param $ch i32)
            (unreachable))
 
+     ;; cf. compile-test in (hoot compile)
+     (func $fixnum? (param $a (ref eq)) (result i32)
+           (if (result i32)
+               (ref.test i31 (local.get $a))
+               (then (i32.eqz
+                      (i32.and (i31.get_s (ref.cast i31 (local.get $a)))
+                               (i32.const #b1))))
+               (else (i32.const 0))))
+
      (func $fixnum->i32 (param $a (ref i31)) (result i32)
            (i32.shr_s (i31.get_s (local.get $a)) (i32.const 1)))
 
@@ -1677,9 +1686,9 @@
 
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $fixnum-add*
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
@@ -1700,7 +1709,7 @@
                                  (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-add*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -1721,7 +1730,7 @@
                                  (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
                                        (f64.add
@@ -1742,9 +1751,9 @@
 
      (func $sub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $fixnum-sub*
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
@@ -1764,7 +1773,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-sub*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -1784,7 +1793,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
                                        (f64.sub
@@ -1810,9 +1819,9 @@
 
      (func $mul (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $fixnum-mul*
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
@@ -1832,7 +1841,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-mul*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -1852,7 +1861,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
                                        (f64.mul
@@ -1874,9 +1883,9 @@
      (func $div (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ;; TODO: exact division
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (unreachable))
@@ -1888,7 +1897,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (unreachable))
@@ -1900,7 +1909,7 @@
                                         (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
                                        (f64.div
@@ -1921,10 +1930,10 @@
 
      (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; TODO: implement for b = -1
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-quo*
@@ -1939,7 +1948,7 @@
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-quo*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -1957,7 +1966,7 @@
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (unreachable))
@@ -1966,10 +1975,10 @@
 
      (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-rem*
@@ -1984,7 +1993,7 @@
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-rem*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -2002,7 +2011,7 @@
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (unreachable))
@@ -2011,10 +2020,10 @@
 
      (func $mod (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $a))
+             `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-mod*
@@ -2029,7 +2038,7 @@
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (return (call $bignum-mod*
                                  (ref.cast $bignum (local.get $a))
                                  (struct.new $bignum
@@ -2047,7 +2056,7 @@
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
-                 '((ref.test i31 (local.get $b))
+                 '((call $fixnum? (local.get $b))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (unreachable))
@@ -2070,7 +2079,7 @@
 
      (func $inexact (param $x (ref eq)) (result (ref eq))
            ,(arith-cond
-             `((ref.test i31 (local.get $x))
+             `((call $fixnum? (local.get $x))
                (return
                 (struct.new $flonum
                             (i32.const 0)

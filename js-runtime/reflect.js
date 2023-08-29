@@ -169,7 +169,7 @@ class Scheme {
             debug_str(x) { console.log(`debug: ${x}`); },
             debug_str_i32(x, y) { console.log(`debug: ${x}: ${y}`); },
             debug_str_scm: (x, y) => {
-                console.log(`debug: ${x}: ${this.#to_js(y).repr()}`);
+                console.log(`debug: ${x}: ${repr(this.#to_js(y))}`);
             },
         });
         let proc = new Procedure(this, mod.get_export('$load').value)

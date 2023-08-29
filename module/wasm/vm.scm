@@ -105,8 +105,14 @@
 (define (s8->u8 x)
   (logand x #xff))
 
+(define (s8-overflow x)
+  (centered-remainder x (ash 1 8)))
+
 (define (s16->u16 x)
   (logand x #xffff))
+
+(define (s16-overflow x)
+  (centered-remainder x (ash 1 16)))
 
 (define (s32->u32 x)
   (logand x #xffffFFFF))
@@ -603,6 +609,12 @@ bytevector, an input port, or a <wasm> record produced by
       ('i8 (s8->u8 x))
       ('i16 (s16->u16 x)))))
 
+(define (wasm-struct-ref-signed struct field)
+  (let ((x (wasm-struct-ref struct field)))
+    (match (field-type (list-ref (wasm-struct-type-fields struct) field))
+      ('i8 (s8-overflow x))
+      ('i16 (s16-overflow x)))))
+
 (define (wasm-struct-set! struct field value)
   (vector-set! (wasm-struct-fields struct) field value))
 
@@ -625,7 +637,7 @@ bytevector, an input port, or a <wasm> record produced by
   (vector-length (wasm-array-vector array)))
 
 (define (wasm-array-element-type array)
-  (resolve-type (wasm-array-type array)))
+  (array-type-type (resolve-type (wasm-array-type array))))
 
 (define (wasm-array-ref array i)
   (vector-ref (wasm-array-vector array) i))
@@ -635,6 +647,12 @@ bytevector, an input port, or a <wasm> record produced by
     (match (wasm-array-element-type array)
       ('i8 (s8->u8 x))
       ('i16 (s16->u16 x)))))
+
+(define (wasm-array-ref-signed array i)
+  (let ((x (wasm-array-ref array i)))
+    (match (wasm-array-element-type array)
+      ('i8 (s8-overflow x))
+      ('i16 (s16-overflow x)))))
 
 (define (wasm-array-set! array i value)
   (vector-set! (wasm-array-vector array) i value))
@@ -1547,16 +1565,14 @@ bytevector, an input port, or a <wasm> record produced by
                           (map (lambda (field)
                                  (default-for-type (field-type field)))
                                (struct-type-fields (resolve-type type)))))))
-    (((or 'struct.get 'struct.get_s) _ field)
-     (push (wasm-struct-ref (pop) field)))
-    (('struct.get_u _ field)
-     (push (wasm-struct-ref-unsigned (pop) field)))
+    (('struct.get _ field) (push (wasm-struct-ref (pop) field)))
+    (('struct.get_s _ field) (push (wasm-struct-ref-signed (pop) field)))
+    (('struct.get_u _ field) (push (wasm-struct-ref-unsigned (pop) field)))
     (('struct.set _ field) (lets (s x) (wasm-struct-set! s field x)))
     (('array.new t)
      (lets (fill k) (push (make-wasm-array (type-ref t) (s32->u32 k) fill))))
     (('array.new_fixed t k)
-     (let* ((type (array-type-type (type-ref t)))
-            (array (make-wasm-array type k *unspecified*)))
+     (let ((array (make-wasm-array (type-ref t) k *unspecified*)))
        (do ((i (- k 1) (- i 1)))
            ((< i 0))
          (wasm-array-set! array i (pop)))
@@ -1570,10 +1586,9 @@ bytevector, an input port, or a <wasm> record produced by
                                        (resolve-type type))))))))
     ;; TODO: array.new_data, array.new_elem, array.init_data, array.init_elem
     (('array.len) (lets (a) (push (wasm-array-length a))))
-    (((or 'array.get 'array.get_s) _)
-     (lets (a i) (push (wasm-array-ref a (s32->u32 i)))))
-    (('array.get_u _)
-     (lets (a i) (push (wasm-array-ref-unsigned a (s32->u32 i)))))
+    (('array.get _) (lets (a i) (push (wasm-array-ref a (s32->u32 i)))))
+    (('array.get_s _) (lets (a i) (push (wasm-array-ref-signed a (s32->u32 i)))))
+    (('array.get_u _) (lets (a i) (push (wasm-array-ref-unsigned a (s32->u32 i)))))
     (('array.set _) (lets (a i x) (wasm-array-set! a (s32->u32 i) x)))
     (('array.fill _) (lets (a d x n) (wasm-array-fill! a d x n)))
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))

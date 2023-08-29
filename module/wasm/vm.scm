@@ -1465,6 +1465,7 @@ bytevector, an input port, or a <wasm> record produced by
     (('f64.convert_i32_u) (u32-unop exact->inexact))
     (('f64.convert_i64_s) (unop exact->inexact))
     (('f64.convert_i64_u) (u64-unop exact->inexact))
+    (('f64.promote_f32) #t)
     (('f64.reinterpret_i64) (unop reinterpret/s64->f64))
     ;; Linear memory:
     (('i32.load ($ <mem-arg> id offset _)) (load-s32 id offset))

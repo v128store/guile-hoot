@@ -1074,6 +1074,12 @@
            (func (export "main") (result f64)
                  (f64.convert_i64_u (i64.const 42)))))
 
+(test-vm "f64.promote_f32"
+         42.0
+         '(module
+           (func (export "main") (result f64)
+                 (f64.promote_f32 (f32.const 42.0)))))
+
 (test-vm "f64.reinterpret_i64"
          1.5
          '(module

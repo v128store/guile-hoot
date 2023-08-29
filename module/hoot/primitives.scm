@@ -29,6 +29,7 @@
                 (include-from-path
                  define-syntax-rule
                  syntax-case syntax quasisyntax unsyntax unsyntax-splicing
+                 syntax->datum datum->syntax
                  with-syntax identifier-syntax identifier?
                  lambda* define*
 
@@ -85,7 +86,6 @@
                  include include-ci
                  define-syntax let-syntax letrec-syntax
                  syntax-rules syntax-error
-                 cond-expand
                  parameterize
                  guard define-record-type
 
@@ -183,7 +183,6 @@
    include include-ci
    define-syntax let-syntax letrec-syntax
    syntax-rules syntax-error
-   cond-expand
    parameterize
    ;; FIXME: These two need Hoot support.
    ;; guard
@@ -199,6 +198,7 @@
    include-from-path
    define-syntax-rule
    syntax-case syntax quasisyntax unsyntax unsyntax-splicing
+   syntax->datum datum->syntax
    with-syntax identifier-syntax identifier?
    lambda* define*
 

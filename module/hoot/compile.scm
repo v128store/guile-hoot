@@ -2396,8 +2396,52 @@
                      (eval-syntax-expanders-when '(compile)))
         . body))))
 
-(define (wrap-with-prelude exp)
+(define* (hoot-features #:key (import-abi? #f))
+  (let ((features '(r7rs exact-closed ieee-float full-unicode ratios
+                         wasm hoot hoot-1.0)))
+    (cons (if import-abi? 'hoot-aux 'hoot-main) features)))
+
+(define* (wrap-with-prelude exp #:key import-abi?)
+  (define features (hoot-features #:import-abi? import-abi?))
   `(let ()
+     (define (features) ',features)
+     (define-syntax cond-expand
+       (lambda (x)
+         (define (has-req? req)
+           (syntax-case req (and or not library)
+             ((and req ...)
+              (let lp ((reqs #'(req ...)))
+                (or (%eq? reqs '())
+                    (and (has-req? (%car reqs))
+                         (lp (%cdr reqs))))))
+             ((or req ...)
+              (let lp ((reqs #'(req ...)))
+                (if (%eq? reqs '())
+                    #f
+                    (or (has-req? (%car reqs))
+                        (lp (%cdr reqs))))))
+             ((not req)
+              (if (has-req? #'req) #f #t))
+             ((library lib-name)
+              ;; FIXME: No libraries, for the time being.
+              #f)
+             (id
+              (identifier? #'id)
+              (let ((req (syntax->datum #'id)))
+                (let lp ((features ',features))
+                  (if (%eq? features '())
+                      #f
+                      (or (%eq? req (%car features))
+                          (lp (%cdr features)))))))))
+         (syntax-case x (else)
+           ((_)
+            (syntax-violation 'cond-expand "Unfulfilled cond-expand" x))
+           ((_ (else body ...))
+            #'(begin body ...))
+           ((_ (req body ...) more-clauses ...)
+            (if (has-req? #'req)
+                #'(begin body ...)
+                #'(cond-expand more-clauses ...))))))
      (include-from-path "hoot/prelude")
      (let ()
        ,exp)))
@@ -2422,7 +2466,8 @@
     (error "Only the Scheme language front-end is currently supported"))
   (with-hoot-target
    (define cps
-     (%compile (wrap-with-prelude exp) #:env env #:from from #:to 'cps
+     (%compile (wrap-with-prelude exp #:import-abi? import-abi?)
+               #:env env #:from from #:to 'cps
                #:optimization-level optimization-level
                #:warning-level warning-level))
    (high-level-cps->wasm cps

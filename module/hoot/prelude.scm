@@ -702,11 +702,6 @@
       (f (car l))
       (lp (cdr l)))))
 
-;; TODO :)
-(define (features)
-  '(r7rs exact-closed ieee-float full-unicode ratios
-         wasm hoot hoot-1.0))
-
 (define (environment . import-specs) (error "eval unsupported"))
 (define (interaction-environment) (error "eval unsupported"))
 (define (eval exp env) (error "eval unsupported"))

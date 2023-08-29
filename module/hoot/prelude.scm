@@ -35,6 +35,8 @@
   (syntax-rules (_ quote unquote ? and or not)
     ((_ v _ kt kf) kt)
     ((_ v () kt kf) (if (null? v) kt kf))
+    ((_ v #t kt kf) (if (eq? v #t) kt kf))
+    ((_ v #f kt kf) (if (eq? v #f) kt kf))
     ((_ v (and) kt kf) kt)
     ((_ v (and x . y) kt kf)
      (simple-match-pat v x (simple-match-pat v (and . y) kt kf) kf))
@@ -65,18 +67,23 @@
 
 (define (fold f seed l)
   (let lp ((seed seed) (l l))
-    (if (null? l)
-        seed
-        (lp (f (car l) seed)
-            (cdr l)))))
+    (match l
+      (() seed)
+      ((x . l) (lp (f x seed) l)))))
+
+(define (fold-right f seed l)
+  (let lp ((l l))
+    (match l
+      (() seed)
+      ((x . l) (f x (lp l))))))
 
 (define-syntax-rule (define-associative-eta-expansion f %f)
   (begin
     (define (%generic . args)
       (let lp ((seed (%f)) (args args))
-        (if (null? args)
-            seed
-            (lp (%f (car args) seed) (cdr args)))))
+        (match args
+          (() seed)
+          ((x . args) (lp (%f x seed) args)))))
     (define-syntax f
       (lambda (stx)
         (syntax-case stx ()
@@ -110,7 +117,7 @@
   (%inline-wasm '(func (param $default (ref eq)) (result (ref eq))
                        (struct.new $fluid (i32.const 0)
                                    (local.get $default)))
-               default-value))
+                default-value))
 (define (fluid-ref x) (%fluid-ref x))
 (define (fluid-set! x y) (%fluid-set! x y))
 (define (with-fluid* fluid val thunk) (%with-fluid* fluid val thunk))
@@ -222,9 +229,10 @@
         (lp (cdr l) (1- n)))))
 (define (list? l)
   (let lp ((l l))
-    (if (null? l)
-        #t
-        (and (pair? l) (lp (cdr l))))))
+    (match l
+      (() #t)
+      ((_ . l) (lp l))
+      (_ #f))))
 (define (make-list n init)
   (let lp ((n n) (out '()))
     (if (zero? n)
@@ -234,21 +242,17 @@
 
 (define (reverse l)
   (let lp ((out '()) (l l))
-    (if (null? l)
-        out
-        (lp (cons (car l) out) (cdr l)))))
-;; FIXME: Multi-arg append
+    (match l
+      (() out)
+      ((head . tail) (lp (cons head out) tail)))))
 (define (append . args)
-  (if (null? args)
-      '()
-      (let ((x (car args))
-            (args (cdr args)))
-        (if (null? args)
-            x
-            (let lp ((x x))
-              (if (null? x)
-                  (apply append args)
-                  (cons (car x) (lp (cdr x)))))))))
+  (match args
+    (() '())
+    ((l) l)
+    ((l1 l2)
+     (fold-right cons l2 l1))
+    ((l1 . l*)
+     (append l1 (apply append l*)))))
 (define (list-copy l)
   (append l '()))
 
@@ -422,17 +426,13 @@
 (define-associative-eta-expansion lcm %lcm)
 
 (define (max x . y)
-  (if (null? y)
-      x
-      (let ((y (car y))
-            (y* (cdr y)))
-        (apply max (if (> x y) x y) y*))))
+  (match y
+    (() x)
+    ((y . y*) (apply max (if (> x y) x y) y*))))
 (define (min x . y)
-  (if (null? y)
-      x
-      (let ((y (car y))
-            (y* (cdr y)))
-        (apply min (if (< x y) x y) y*))))
+  (match y
+    (() x)
+    ((y . y*) (apply min (if (< x y) x y) y*))))
 
 (define (negative? x) (< x 0))
 (define (positive? x) (> x 0))
@@ -729,9 +729,9 @@
 ;; Temp definitions!
 (define (map f l)
   (let lp ((l l))
-    (if (null? l)
-        '()
-        (cons (f (car l)) (lp (cdr l))))))
+    (match l
+      (() '())
+      ((x . l) (cons (f x) (lp l))))))
 (define (for-each f l)
   (let lp ((l l))
     (unless (null? l)

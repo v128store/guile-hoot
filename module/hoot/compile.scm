@@ -438,15 +438,17 @@
                             (lp args (1+ idx)))
                     '()))
                ((arg . args)
-                (cons (cond
-                       ((< idx 3) (local.get arg))
-                       ((< idx 8)
-                        `(global.set ,(global-arg-label idx)
-                                     ,(local.get arg)))
-                       (else
-                        `(table.set $argv (i32.const ,(- idx 8))
-                                    ,(local.get arg))))
-                      (lp args (1+ idx))))))))
+                (append (cond
+                         ((< idx 3)
+                          `(,(local.get arg)))
+                         ((< idx 8)
+                          `(,(local.get arg)
+                            (global.set ,(global-arg-label idx))))
+                         (else
+                          `((i32.const ,(- idx 8))
+                            ,(local.get arg)
+                            (table.set $argv))))
+                        (lp args (1+ idx))))))))
         (match exp
           (($ $call proc args)
            `(,@(pass-abi-arguments (cons proc args))

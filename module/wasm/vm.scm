@@ -1246,6 +1246,11 @@ bytevector, an input port, or a <wasm> record produced by
        (call-with-values (lambda () (apply proc (pop-n (length params))))
          (lambda vals (push-all vals))))
       (x (runtime-error "not a function" x))))
+  (define (return)
+    ;; The current function's tag is at the bottom.
+    (match blocks
+      ((_ ... tag)
+       (abort-to-prompt tag))))
   (define (branch l) (abort-to-prompt (list-ref blocks l)))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
@@ -1265,20 +1270,30 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Branching to a 'loop' label re-enters the loop.
        (block body iterate))
      (iterate))
-    ;; TODO: Actually have return_call and friends make tail calls!
-    (((or 'call 'return_call) idx) (call (func-ref idx)))
-    (((or 'call_indirect 'return_call_indirect) idx _)
+    (('call idx) (call (func-ref idx)))
+    (('call_indirect idx _)
      (call (wasm-table-ref (table-ref idx) (pop))))
-    (((or 'call_ref 'return_call_ref) _)
+    (('call_ref _)
      (lets (f)
            (if (wasm-null? f)
                (runtime-error "null function reference" f)
                (call f))))
-    (('return)
-     ;; The current function's tag is at the bottom.
-     (match blocks
-       ((_ ... tag)
-        (abort-to-prompt tag))))
+    (('return) (return))
+    ;; TODO: Actually have return_call and friends make tail calls!
+    ;; Currently they use create a stack frame!!
+    (('return_call idx)
+     (call (func-ref idx))
+     (return))
+    (('return_call_indirect idx _)
+     (call (wasm-table-ref (table-ref idx) (pop)))
+     (return))
+    (('return_call_ref _)
+     (lets (f)
+           (if (wasm-null? f)
+               (runtime-error "null function reference" f)
+               (begin
+                 (call f)
+                 (return)))))
     (('br l) (branch l))
     (('br_if l) (unless (= (pop) 0) (branch l)))
     (('br_table l* l)

@@ -645,6 +645,28 @@ bytevector, an input port, or a <wasm> record produced by
 (define (wasm-array-copy! dst at src start length)
   (vector-copy! (wasm-array-vector dst) at (wasm-array-vector src) start length))
 
+(define-record-type <wasm-string-iterator>
+  (make-wasm-string-iterator string index)
+  wasm-string-iterator?
+  (string wasm-string-iterator-string)
+  (index wasm-string-iterator-index set-wasm-string-iterator-index!))
+
+(define (wasm-string-iterator-next! iter)
+  (match iter
+    (($ <wasm-string-iterator> str i)
+     (let ((len (string-length str)))
+       (set-wasm-string-iterator-index! iter (+ i 1))
+       (if (>= i len)
+           -1
+           (char->integer (string-ref str i)))))))
+
+(define (wasm-string-iterator-advance! iter k)
+  (match iter
+    (($ <wasm-string-iterator> str i)
+     (let ((len (string-length str)))
+       (set-wasm-string-iterator-index! iter (+ i k))
+       (max (- (min (+ i k) len) i) 0)))))
+
 ;; A bit of global state for ref type canonicalization across modules.
 (define *canonical-groups* (make-hash-table))
 
@@ -1556,6 +1578,13 @@ bytevector, an input port, or a <wasm> record produced by
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
     ;; Strings:
     (('string.const idx) (push (string-ref idx)))
+    (('string.as_iter)
+     (lets (str)
+           (push (make-wasm-string-iterator str 0))))
+    (('stringview_iter.next)
+     (lets (iter) (push (wasm-string-iterator-next! iter))))
+    (('stringview_iter.advance)
+     (lets (iter k) (push (wasm-string-iterator-advance! iter k))))
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)

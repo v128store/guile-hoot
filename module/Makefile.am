@@ -22,6 +22,7 @@ SOURCES = 					\
   hoot/inline-wasm.scm				\
   hoot/primitives.scm				\
   hoot/stdlib.scm				\
+  hoot/reflect.scm				\
   scripts/assemble-wasm.scm			\
   scripts/compile-wasm.scm
 

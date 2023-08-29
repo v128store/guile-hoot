@@ -123,6 +123,25 @@
 (define (with-fluid* fluid val thunk) (%with-fluid* fluid val thunk))
 (define (with-dynamic-state state thunk) (%with-dynamic-state state thunk))
 
+(define-syntax with-fluids
+  (lambda (stx)
+    (define (emit-with-fluids bindings body)
+      (syntax-case bindings ()
+        (()
+         body)
+        (((f v) . bindings)
+         #`(with-fluid* f v
+             (lambda ()
+               #,(emit-with-fluids #'bindings body))))))
+    (syntax-case stx ()
+      ((_ ((fluid val) ...) exp exp* ...)
+       (with-syntax (((fluid-tmp ...) (generate-temporaries #'(fluid ...)))
+                     ((val-tmp ...) (generate-temporaries #'(val ...))))
+         #`(let ((fluid-tmp fluid) ...)
+             (let ((val-tmp val) ...)
+               #,(emit-with-fluids #'((fluid-tmp val-tmp) ...)
+                                   #'(let () exp exp* ...)))))))))
+
 (define (make-atomic-box x) (%make-atomic-box x))
 (define (atomic-box-ref x) (%atomic-box-ref x))
 (define (atomic-box-set! x y) (%atomic-box-set! x y))
@@ -715,11 +734,93 @@
       ((_ msg . arg) #'(%error msg . arg))
       (f (identifier? #'f) #'%generic-error))))
 
+(cond-expand
+ (hoot-main
+  (define %exception-handler (make-fluid #f))
+  (define (fluid-ref* fluid depth)
+    (%inline-wasm
+     '(func (param $fluid (ref eq)) (param $depth (ref eq))
+            (result (ref eq))
+            (call $fluid-ref*
+                  (ref.cast $fluid (local.get $fluid))
+                  (i32.shr_s (i31.get_s (ref.cast i31 (local.get $depth)))
+                             (i32.const 1))))
+     fluid depth))
+  ;; FIXME: Use #:key instead
+  (define* (with-exception-handler handler thunk
+                                   #:optional keyword (unwind? #f))
+    #;
+    (unless (procedure? handler)
+      (error "not a procedure" handler))
+    (cond
+     (unwind?
+      (let ((tag (make-prompt-tag "exception handler")))
+        (call-with-prompt
+         tag
+         (lambda ()
+           (with-fluids ((%exception-handler (cons #t tag)))
+             (thunk)))
+         (lambda (k exn)
+           (handler exn)))))
+     (else
+      (let ((running? (make-fluid #f)))
+        (with-fluids ((%exception-handler (cons running? handler)))
+          (thunk))))))
+  ;; FIXME: Use #:key instead
+  (define* (raise-exception exn #:optional keyword continuable?)
+    (let lp ((depth 0))
+      ;; FIXME: fluid-ref* takes time proportional to depth, which
+      ;; makes this loop quadratic.
+      (match (fluid-ref* %exception-handler depth)
+        (#f
+         ;; No exception handlers bound; fall back.
+         (%inline-wasm
+          '(func (param $exn (ref eq))
+                 (call $die (string.const "uncaught exception")
+                       (local.get $exn))
+                 (unreachable))
+          exn))
+        ((#t . prompt-tag)
+         (abort-to-prompt prompt-tag exn)
+         (error "unreachable"))
+        ((running? . handler)
+         (if (fluid-ref running?)
+             (begin
+               (lp (1+ depth)))
+             (with-fluids ((running? #t))
+               (cond
+                (continuable?
+                 (handler exn))
+                (else
+                 (handler exn)
+                 ;; FIXME: Raise &non-continuable.
+                 (error "non-continuable")))))))))
+  (%inline-wasm
+   '(func (param $with-exception-handler (ref eq))
+          (param $raise-exception (ref eq))
+          (global.set $with-exception-handler
+                      (ref.cast $proc (local.get $with-exception-handler)))
+          (global.set $raise-exception
+                      (ref.cast $proc (local.get $raise-exception))))
+   with-exception-handler
+   raise-exception))
+ (hoot-aux
+  ;; FIXME: #:key
+  (define* (with-exception-handler handler thunk
+                                   #:optional keyword (unwind? #f))
+    (define with-exception-handler
+      (%inline-wasm
+       '(func (result (ref eq))
+              (global.get $with-exception-handler))))
+    (with-exception-handler handler thunk #:unwind? unwind?))
+  (define* (raise-exception exn #:optional keyword continuable?)
+    (%raise-exception exn #:continuable? continuable?))))
+
+(define (raise exn) (%raise-exception exn))
+(define (raise-continuable exn) (%raise-exception exn #:continuable? #t))
+
 (define (error-object? x) (error "unimplemented"))
-(define (raise exn) (error "unimplemented"))
-(define (raise-continuable x) (error "unimplemented"))
 (define (read-error? x) (error "unimplemented"))
-(define (with-exception-handler x y) (error "unimplemented"))
 (define (error-object-message x) (error "unimplemented"))
 (define (error-object-irritants x) (error "unimplemented"))
 (define (file-error x) (error "unimplemented"))

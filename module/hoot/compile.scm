@@ -113,6 +113,8 @@
           (make-export "$ret-sp" 'global '$ret-sp)
           (make-export "$dyn-sp" 'global '$dyn-sp)
           (make-export "$current-fluids" 'global '$current-fluids)
+          (make-export "$raise-exception" 'global '$raise-exception)
+          (make-export "$with-exception-handler" 'global '$with-exception-handler)
           (make-export "$raw-stack" 'memory '$raw-stack)
           (make-export "$scm-stack" 'table '$scm-stack)
           (make-export "$ret-stack" 'table '$ret-stack)
@@ -686,6 +688,7 @@
              ('values `((global.get $values-primitive)))
              ('apply `((global.get $apply-primitive)))
              ('abort-to-prompt '((global.get $abort-to-prompt-primitive)))
+             ('raise-exception '((global.get $raise-exception)))
              (_ (error "unhandled $prim" name))))
 
           (($ $primcall name param args)
@@ -795,6 +798,21 @@
              (error "unimplemented" exp))
             (('lookup-bound-private (mod name))
              (error "unimplemented" exp))
+
+            (('make-throw-exn #f key args)
+             `(,(local.get key)
+               (ref.cast #f $symbol)
+               ,(local.get args)
+               (call $make-throw-exn)))
+            (('make-throw/value-exn #(key subr message) val)
+             `(,@(compile-constant key)
+               ,@(compile-constant subr)
+               ,@(compile-constant message)
+               ,(local.get val)
+               (call $make-throw/value-exn)))
+            (('raise-exception #f exn)
+             `(,(local.get exn)
+               (return_call $raise-exception)))
 
             ;; Object allocation.  Probably most of these need to be
             ;; replaced with `cons` et al; see log.md.
@@ -1972,30 +1990,8 @@
         ;; FIXME: Instead of dying, we need to implement exception
         ;; handling, as in Guile.
         (match (vector op param args)
-          (#('throw #f (key args))
-           `((string.const "throw")
-             (i32.const 0)
-             ,(local.get key)
-             ,(local.get args)
-             (struct.new $pair)
-             (call $die)
-             (unreachable)))
-          (#('throw/value param (val))
-           `((string.const "throw/value")
-             (i32.const 0)
-             ,(local.get val)
-             ,@(compile-constant param)
-             (struct.new $pair)
-             (call $die)
-             (unreachable)))
-          (#('throw/value+data param (val))
-           `((string.const "throw/value+data")
-             (i32.const 0)
-             ,(local.get val)
-             ,@(compile-constant param)
-             (struct.new $pair)
-             (call $die)
-             (unreachable)))))
+          (#('unreachable #f ())
+           '((unreachable)))))
 
       ;; See "Beyond Relooper: Recursive Translation of Unstructured
       ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP

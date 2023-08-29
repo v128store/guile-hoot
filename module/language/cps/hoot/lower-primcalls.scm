@@ -26,30 +26,60 @@
   #:use-module (ice-9 match)
   #:use-module (language cps)
   #:use-module (language cps intmap)
+  #:use-module (language cps utils)
+  #:use-module (language cps with-cps)
   #:export (lower-primcalls))
 
 (define (lower-primcalls cps)
-  (intmap-fold
-   (lambda (label cont out)
-     (match cont
-       (($ $kargs names vars
-           ($ $branch kf kt src 'vtable-has-unboxed-fields? nfields (vtable)))
-        (intmap-replace out label
-                        (build-cont
-                          ($kargs names vars
-                            ($continue kf src ($values ()))))))
-       (($ $kargs names vars
-           ($ $branch kf kt src 'vtable-field-boxed? idx (vtable)))
-        (intmap-replace out label
-                        (build-cont
-                          ($kargs names vars
-                            ($continue kt src ($values ()))))))
-       (($ $kargs names vars
-           ($ $continue k src ($ $primcall 'call-thunk/no-inline #f (thunk))))
-        (intmap-replace out label
-                        (build-cont
-                          ($kargs names vars
-                            ($continue k src ($call thunk ()))))))
-       (_ out)))
-   cps
-   cps))
+  (with-fresh-name-state cps
+    (intmap-fold
+     (lambda (label cont out)
+       (define (emit-raise-exception out src exn)
+         (with-cps out
+           (letv prim)
+           (letk kstop ($kargs () () ($throw src 'unreachable #f ())))
+           (letk kraise ($kargs ('prim) (prim)
+                          ($continue kstop src
+                            ($call prim (exn)))))
+           (build-term
+             ($continue kraise src ($prim 'raise-exception)))))
+       (match cont
+         (($ $kargs names vars
+             ($ $branch kf kt src 'vtable-has-unboxed-fields? nfields (vtable)))
+          (intmap-replace out label
+                          (build-cont
+                            ($kargs names vars
+                              ($continue kf src ($values ()))))))
+         (($ $kargs names vars
+             ($ $branch kf kt src 'vtable-field-boxed? idx (vtable)))
+          (intmap-replace out label
+                          (build-cont
+                            ($kargs names vars
+                              ($continue kt src ($values ()))))))
+         (($ $kargs names vars
+             ($ $continue k src ($ $primcall 'call-thunk/no-inline #f (thunk))))
+          (intmap-replace out label
+                          (build-cont
+                            ($kargs names vars
+                              ($continue k src ($call thunk ()))))))
+         (($ $kargs names vars
+             ($ $throw src 'throw #f (key args)))
+          (with-cps out
+            (letv exn)
+            (let$ term (emit-raise-exception src exn))
+            (letk kraise ($kargs ('exn) (exn) ,term))
+            (setk label ($kargs names vars
+                          ($continue kraise src
+                            ($primcall 'make-throw-exn #f (key args)))))))
+         (($ $kargs names vars
+             ($ $throw src (or 'throw/value 'throw/value+data) param (val)))
+          (with-cps out
+            (letv exn)
+            (let$ term (emit-raise-exception src exn))
+            (letk kraise ($kargs ('exn) (exn) ,term))
+            (setk label ($kargs names vars
+                          ($continue kraise src
+                            ($primcall 'make-throw/value-exn param (val)))))))
+         (_ out)))
+     cps
+     cps)))

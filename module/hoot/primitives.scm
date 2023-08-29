@@ -29,8 +29,9 @@
                 (include-from-path
                  define-syntax-rule
                  syntax-case syntax quasisyntax unsyntax unsyntax-splicing
-                 syntax->datum datum->syntax
-                 with-syntax identifier-syntax identifier?
+                 syntax->datum datum->syntax identifier?
+                 generate-temporaries free-identifier=? bound-identifier=?
+                 with-syntax identifier-syntax
                  lambda* define*
 
                  call-with-prompt abort-to-prompt
@@ -43,6 +44,7 @@
                  exact->inexact
                  inf? nan?
                  error
+                 raise-exception
                  eval-when))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
@@ -199,7 +201,8 @@
    define-syntax-rule
    syntax-case syntax quasisyntax unsyntax unsyntax-splicing
    syntax->datum datum->syntax
-   with-syntax identifier-syntax identifier?
+   identifier? generate-temporaries free-identifier=? bound-identifier=?
+   with-syntax identifier-syntax
    lambda* define*
 
    ;; R7RS control
@@ -296,6 +299,7 @@
 
    ;; Error handling
    (error . %error)
+   (raise-exception . %raise-exception)
 
    (procedure? . %procedure?)
 

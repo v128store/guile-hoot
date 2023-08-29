@@ -39,6 +39,11 @@
         `(,id (import "abi" ,(symbol->string id)))
         `(,id)))
 
+  (define maybe-init-proc
+    (if import-abi?
+        '()
+        '((struct.new $proc (i32.const 0)
+                      (ref.func $invalid-continuation)))))
   (define maybe-init-i31-zero
     (if import-abi?
         '()
@@ -295,6 +300,45 @@
               (field $scm-stack (ref $raw-scmvector))
               (field $ret-stack (ref $raw-retvector))
               (field $dyn-stack (ref $raw-dynvector)))))
+
+     ;; FIXME: This is a throwaway definition.  Really exceptions need
+     ;; to be based on top of records, but we won't have records
+     ;; implemented for the MVP.
+     (type $simple-exception
+           (sub $vector
+             (struct
+              (field $hash (mut i32))
+              ;; #(key subr message irritants)
+              (field $vals (ref $raw-scmvector)))))
+
+     (func $make-throw-exn (param $key (ref $symbol)) (param $args (ref eq))
+           (result (ref $simple-exception))
+           (struct.new $simple-exception (i32.const 0)
+                       (array.new_fixed $raw-scmvector 4
+                                        (local.get $key)
+                                        (i31.new (i32.const 1))
+                                        (i31.new (i32.const 1))
+                                        (local.get $args))))
+     (func $make-throw/value-exn
+           (param $key (ref $symbol))
+           (param $subr (ref eq))
+           (param $message (ref $string))
+           (param $args (ref eq))
+           (result (ref $simple-exception))
+           (struct.new $simple-exception (i32.const 0)
+                       (array.new_fixed $raw-scmvector 4
+                                        (local.get $key)
+                                        (local.get $subr)
+                                        (local.get $message)
+                                        (local.get $args))))
+
+     (func $raise-exception (param $exn (ref eq))
+           (return_call_ref $kvarargs
+                            (i32.const 2)
+                            (global.get $raise-exception)
+                            (local.get $exn)
+                            (i31.new (i32.const 1))
+                            (struct.get $proc $func (global.get $raise-exception))))
 
      (func $bignum-from-i32 (import "rt" "bignum_from_i32")
            (param i32)
@@ -799,6 +843,32 @@
            (call $hashq-ref (global.get $current-fluids)
                  (local.get $fluid)
                  (struct.get $fluid $init (local.get $fluid))))
+
+     (func $fluid-ref* (param $fluid (ref $fluid)) (param $depth i32)
+           (result (ref eq))
+           (local $sp i32)
+           (local $dyn (ref $dyn))
+           (if (local.get $depth)
+               (then
+                (local.set $sp (global.get $dyn-sp))
+                (loop $lp
+                  (if (local.get $sp)
+                      (then
+                       (local.set $sp (i32.sub (local.get $sp (i32.const 1))))
+                       (local.set $dyn (ref.as_non_null
+                                        (table.get $dyn-stack (local.get $sp))))
+                       (br_if $lp (i32.eqz
+                                   (ref.test $dynfluid (local.get $dyn))))
+                       (local.set $depth
+                                  (i32.sub (local.get $depth) (i32.const 1)))
+                       (br_if $lp (local.get $depth))
+                       (return
+                        (struct.get
+                         $dynfluid $val
+                         (ref.cast $dynfluid (local.get $dyn)))))
+                      (else (return (i31.new (i32.const 1)))))))
+               (else (return_call $fluid-ref (local.get $fluid))))
+           (unreachable))
 
      (func $fluid-set! (param $fluid (ref $fluid)) (param $val (ref eq))
            (call $hashq-set! (global.get $current-fluids)
@@ -2153,4 +2223,8 @@
      (global ,@(maybe-import '$raw-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$dyn-sp) (mut i32) ,@maybe-init-i32-zero)
      (global ,@(maybe-import '$current-fluids) (mut (ref $hash-table))
-             ,@maybe-init-hash-table))))
+             ,@maybe-init-hash-table)
+     (global ,@(maybe-import '$raise-exception) (mut (ref $proc))
+             ,@maybe-init-proc)
+     (global ,@(maybe-import '$with-exception-handler) (mut (ref $proc))
+             ,@maybe-init-proc))))

@@ -591,6 +591,40 @@
 (test-call "#vu8(1 2 3 4)"
            (lambda () (bytevector 1 2 3 4)))
 
+(test-call "79" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) 42)
+                   (lambda () (+ 10 69)))))
+(test-call "52" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) 42)
+                   (lambda () (+ 10 (raise-continuable 69))))))
+(test-call "42" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) 42)
+                   (lambda () (+ 10 (raise-continuable 69)))
+                   #:unwind? #t)))
+(test-call "69" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) exn)
+                   (lambda () (+ 10 (raise-continuable 69)))
+                   #:unwind? #t)))
+(test-call "42" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) 42)
+                   (lambda () (+ 10 (raise 69)))
+                   #:unwind? #t)))
+(test-call "69" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) exn)
+                   (lambda () (+ 10 (raise 69)))
+                   #:unwind? #t)))
+(test-call "42" (lambda ()
+                  (with-exception-handler
+                   (lambda (exn) 42)
+                   (lambda () (error "what"))
+                   #:unwind? #t)))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

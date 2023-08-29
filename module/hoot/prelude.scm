@@ -21,6 +21,42 @@
 ;;;
 ;;; Code:
 
+(define-syntax-rule (simple-match e cs ...)
+  (let ((v e)) (simple-match-1 v cs ...)))
+
+(define-syntax simple-match-1
+  (syntax-rules ()
+    ((_ v) (error "value failed to match" v))
+    ((_ v (pat e0 e ...) cs ...)
+     (let ((fk (lambda () (simple-match-1 v cs ...))))
+       (simple-match-pat v pat (let () e0 e ...) (fk))))))
+
+(define-syntax simple-match-pat
+  (syntax-rules (_ quote unquote ? and or not)
+    ((_ v _ kt kf) kt)
+    ((_ v () kt kf) (if (null? v) kt kf))
+    ((_ v (and) kt kf) kt)
+    ((_ v (and x . y) kt kf)
+     (simple-match-pat v x (simple-match-pat v (and . y) kt kf) kf))
+    ((_ v (or) kt kf) kf)
+    ((_ v (or x . y) kt kf)
+     (let ((tk (lambda () kt)))
+       (simple-match-pat v x (tk) (simple-match-pat v (or . y) (tk) kf))))
+    ((_ v (not pat) kt kf) (simple-match-pat v pat kf kt))
+    ((_ v (quote lit) kt kf)
+     (if (equal? v (quote lit)) kt kf))
+    ((_ v (? proc) kt kf) (simple-match-pat v (? proc _) kt kf))
+    ((_ v (? proc pat) kt kf)
+     (if (proc v) (simple-match-pat v pat kt kf) kf))
+    ((_ v (x . y) kt kf)
+     (if (pair? v)
+         (let ((vx (car v)) (vy (cdr v)))
+           (simple-match-pat vx x (simple-match-pat vy y kt kf) kf))
+         kf))
+    ((_ v var kt kf) (let ((var v)) kt))))
+
+(define-syntax-rule (match e cs ...) (simple-match e cs ...))
+
 ;; Guile extensions.
 (define (1+ x) (%+ x 1))
 (define (1- x) (%- x 1))

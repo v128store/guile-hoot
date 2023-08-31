@@ -1348,12 +1348,16 @@
 (test-vm "return_call"
          42
          '(module
-           (func $main (export "main") (param $a i32) (result i32)
+           (func $count (param $i i32) (param $k i32) (result i32)
                  (if (result i32)
-                     (i32.eq (local.get $a) (i32.const 42))
-                     (then (i32.const 42))
-                     (else (return_call $main (i32.add (local.get $a) (i32.const 1)))))))
-         #:args '(0))
+                     (i32.eq (local.get $i) (local.get $k))
+                     (then (local.get $k))
+                     (else (return_call $count
+                                        (i32.add (local.get $i) (i32.const 1))
+                                        (local.get $k)))))
+           (func $main (export "main") (param $k i32) (result i32)
+                 (call $count (i32.const 0) (local.get $k))))
+         #:args '(42))
 
 (test-vm "return with extra values on stack"
          42

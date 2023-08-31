@@ -906,7 +906,19 @@ bytevector, an input port, or a <wasm> record produced by
                                            memory-vec table-vec elem-vec
                                            string-vec export-table)))
        (define (type-check vals types)
-         (unless (every is-a? vals types)
+         (unless (let loop ((vals vals)
+                            (types types))
+                   (match vals
+                     (()
+                      (match types
+                        (() #t)
+                        (_ #f)))
+                     ((val . rest-vals)
+                      (match types
+                        (() #f)
+                        ((type . rest-types)
+                         (and (is-a? val type)
+                              (loop rest-vals rest-types)))))))
            (error (format #f "type mismatch; expected ~a" types)
                   vals)))
        ;; TODO: Handle functions imported from other WASM modules.

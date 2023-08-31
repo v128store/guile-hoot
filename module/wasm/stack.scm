@@ -759,7 +759,7 @@
     (or (eq? sub super)
         (let lp ((sub (if (symbol? sub) sub (lookup-type ctx sub))))
           (match sub
-            ('i31 (memq super '(i31 eq)))
+            ('i31 (memq super '(i31 eq any)))
             (($ <sub-type> _ supers type)
              (or (and supers (memq super supers))
                  (lp type)))

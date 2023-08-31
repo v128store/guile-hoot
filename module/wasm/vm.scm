@@ -846,6 +846,17 @@ bytevector, an input port, or a <wasm> record produced by
                    x-supers)))
          (x-type (eq? x-type type)))))))
 
+;; Some more global state that keeps a record of all exported WASM
+;; functions so that we can avoid runtime type checking when making
+;; calls directly from one instance to another.
+(define *exported-functions* (make-weak-key-hash-table))
+
+(define (register-exported-function! wrap func)
+  (hashq-set! *exported-functions* wrap func))
+
+(define (lookup-exported-function wrap)
+  (hashq-ref *exported-functions* wrap))
+
 (define-record-type <wasm-instance>
   (%make-wasm-instance module types globals funcs memories tables elems
                        strings exports)
@@ -992,12 +1003,24 @@ bytevector, an input port, or a <wasm> record produced by
                   (table-idx 0))
          (match wasm-imports
            (() #t)
-           ((($ <import> mod name 'func _ ($ <type-use> _ ($ <type> _ sig))) . rest)
-            (match (lookup-import mod name)
-              ((? procedure? proc)
-               (vector-set! func-vec func-idx (make-wasm-func proc sig))
-               (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
-              (x (instance-error "invalid function import" mod name x))))
+           ((($ <import> mod name 'func _ ($ <type-use> idx)) . rest)
+            (let ((sig (vector-ref type-vec idx)))
+              (match (lookup-import mod name)
+                ((? procedure? proc)
+                 ;; If proc is a wrapper around a WASM function from
+                 ;; another instance, then we'll just use the internal
+                 ;; procedure instead and skip unnecessary runtime type
+                 ;; checking.
+                 (match (lookup-exported-function proc)
+                   ((and func ($ <wasm-func> _ other-sig))
+                    (if (eq? sig other-sig)
+                        (vector-set! func-vec func-idx func)
+                        (instance-error "imported function signature mismatch"
+                                        sig other-sig)))
+                   (#f
+                    (vector-set! func-vec func-idx (make-wasm-func proc sig))))
+                 (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
+                (x (instance-error "invalid function import" mod name x)))))
            ((($ <import> mod name 'global _ type) . rest)
             (match (lookup-import mod name)
               ((? wasm-global? global)
@@ -1082,8 +1105,10 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Populate export table.
        (for-each (match-lambda
                    (($ <export> name 'func idx)
-                    (let ((proc (make-export-closure name (vector-ref func-vec idx))))
-                      (hash-set! export-table name proc)))
+                    (let* ((func (vector-ref func-vec idx))
+                           (wrap (make-export-closure name func)))
+                      (register-exported-function! wrap func)
+                      (hash-set! export-table name wrap)))
                    (($ <export> name 'global idx)
                     (hash-set! export-table name (vector-ref global-vec idx)))
                    (($ <export> name 'memory idx)

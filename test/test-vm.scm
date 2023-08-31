@@ -1888,6 +1888,24 @@
                  (string.const "Hello, world!")))
          #:d8-read get-line)
 
+(test-equal "inter-instance function calls"
+  17
+  (let* ((wat-a '(module
+                  (func (export "square") (param $x i32) (result i32)
+                        (i32.mul (local.get $x) (local.get $x)))))
+         (wat-b '(module
+                  (func $square (import "wasm" "square") (param i32) (result i32))
+                  (func (export "main") (param $x i32) (result i32)
+                        (i32.add (call $square (local.get $x)) (i32.const 1)))))
+         (wasm-a (wat->wasm wat-a))
+         (wasm-b (wat->wasm wat-b))
+         (inst-a (make-wasm-instance (make-wasm-module wasm-a)))
+         (square (wasm-instance-export-ref inst-a "square"))
+         (inst-b (make-wasm-instance (make-wasm-module wasm-b)
+                                     #:imports `(("wasm" .
+                                                  (("square" . ,square)))))))
+    ((wasm-instance-export-ref inst-b "main") 4)))
+
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))
                (not (zero? (test-runner-xpass-count (test-runner-get))))))

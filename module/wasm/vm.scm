@@ -1370,8 +1370,6 @@ bytevector, an input port, or a <wasm> record produced by
                (runtime-error "null function reference" f)
                (call f))))
     (('return) (return))
-    ;; TODO: Actually have return_call and friends make tail calls!
-    ;; Currently they use create a stack frame!!
     (('return_call idx)
      (return-call (func-ref idx)))
     (('return_call_indirect idx _)

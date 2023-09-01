@@ -1348,12 +1348,16 @@
 (test-vm "return_call"
          42
          '(module
-           (func $main (export "main") (param $a i32) (result i32)
+           (func $count (param $i i32) (param $k i32) (result i32)
                  (if (result i32)
-                     (i32.eq (local.get $a) (i32.const 42))
-                     (then (i32.const 42))
-                     (else (return_call $main (i32.add (local.get $a) (i32.const 1)))))))
-         #:args '(0))
+                     (i32.eq (local.get $i) (local.get $k))
+                     (then (local.get $k))
+                     (else (return_call $count
+                                        (i32.add (local.get $i) (i32.const 1))
+                                        (local.get $k)))))
+           (func $main (export "main") (param $k i32) (result i32)
+                 (call $count (i32.const 0) (local.get $k))))
+         #:args '(42))
 
 (test-vm "return with extra values on stack"
          42
@@ -1883,6 +1887,24 @@
            (func (export "main") (result (ref string))
                  (string.const "Hello, world!")))
          #:d8-read get-line)
+
+(test-equal "inter-instance function calls"
+  17
+  (let* ((wat-a '(module
+                  (func (export "square") (param $x i32) (result i32)
+                        (i32.mul (local.get $x) (local.get $x)))))
+         (wat-b '(module
+                  (func $square (import "wasm" "square") (param i32) (result i32))
+                  (func (export "main") (param $x i32) (result i32)
+                        (i32.add (call $square (local.get $x)) (i32.const 1)))))
+         (wasm-a (wat->wasm wat-a))
+         (wasm-b (wat->wasm wat-b))
+         (inst-a (make-wasm-instance (make-wasm-module wasm-a)))
+         (square (wasm-instance-export-ref inst-a "square"))
+         (inst-b (make-wasm-instance (make-wasm-module wasm-b)
+                                     #:imports `(("wasm" .
+                                                  (("square" . ,square)))))))
+    ((wasm-instance-export-ref inst-b "main") 4)))
 
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))

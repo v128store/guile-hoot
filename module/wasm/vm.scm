@@ -846,6 +846,17 @@ bytevector, an input port, or a <wasm> record produced by
                    x-supers)))
          (x-type (eq? x-type type)))))))
 
+;; Some more global state that keeps a record of all exported WASM
+;; functions so that we can avoid runtime type checking when making
+;; calls directly from one instance to another.
+(define *exported-functions* (make-weak-key-hash-table))
+
+(define (register-exported-function! wrap func)
+  (hashq-set! *exported-functions* wrap func))
+
+(define (lookup-exported-function wrap)
+  (hashq-ref *exported-functions* wrap))
+
 (define-record-type <wasm-instance>
   (%make-wasm-instance module types globals funcs memories tables elems
                        strings exports)
@@ -906,7 +917,19 @@ bytevector, an input port, or a <wasm> record produced by
                                            memory-vec table-vec elem-vec
                                            string-vec export-table)))
        (define (type-check vals types)
-         (unless (every is-a? vals types)
+         (unless (let loop ((vals vals)
+                            (types types))
+                   (match vals
+                     (()
+                      (match types
+                        (() #t)
+                        (_ #f)))
+                     ((val . rest-vals)
+                      (match types
+                        (() #f)
+                        ((type . rest-types)
+                         (and (is-a? val type)
+                              (loop rest-vals rest-types)))))))
            (error (format #f "type mismatch; expected ~a" types)
                   vals)))
        ;; TODO: Handle functions imported from other WASM modules.
@@ -952,12 +975,21 @@ bytevector, an input port, or a <wasm> record produced by
                       ((type . rest)
                        (vector-set! locals i (default-for-type type))
                        (loop rest (+ i 1)))))
-                  ;; Execute instructions in body.
-                  (call-with-block
-                   (lambda (tag)
-                     (execute* body (list func) instance stack (list tag) locals))
-                   (lambda () 'return))
-                  (apply values (stack-pop-n! stack n-results))))
+                  ;; Execute the function body, handling early
+                  ;; returns.  There are two classes of returns:
+                  ;; return and return-call.  A regular return simply
+                  ;; returns the top n values on the stack.  A
+                  ;; return-call passes along a thunk to be tail
+                  ;; called which will continue the computation.
+                  (let ((tail-cont #f))
+                    (call-with-block
+                     (lambda (tag)
+                       (execute* body (list func) instance stack (list tag) locals))
+                     (lambda (k)
+                       (set! tail-cont k)))
+                    (if tail-cont
+                        (tail-cont)
+                        (apply values (stack-pop-n! stack n-results))))))
               (make-wasm-func wasm-proc sig)))))
        (define (exec-init root init)
          (let ((stack (make-wasm-stack)))
@@ -971,12 +1003,24 @@ bytevector, an input port, or a <wasm> record produced by
                   (table-idx 0))
          (match wasm-imports
            (() #t)
-           ((($ <import> mod name 'func _ ($ <type-use> _ ($ <type> _ sig))) . rest)
-            (match (lookup-import mod name)
-              ((? procedure? proc)
-               (vector-set! func-vec func-idx (make-wasm-func proc sig))
-               (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
-              (x (instance-error "invalid function import" mod name x))))
+           ((($ <import> mod name 'func _ ($ <type-use> idx)) . rest)
+            (let ((sig (vector-ref type-vec idx)))
+              (match (lookup-import mod name)
+                ((? procedure? proc)
+                 ;; If proc is a wrapper around a WASM function from
+                 ;; another instance, then we'll just use the internal
+                 ;; procedure instead and skip unnecessary runtime type
+                 ;; checking.
+                 (match (lookup-exported-function proc)
+                   ((and func ($ <wasm-func> _ other-sig))
+                    (if (eq? sig other-sig)
+                        (vector-set! func-vec func-idx func)
+                        (instance-error "imported function signature mismatch"
+                                        sig other-sig)))
+                   (#f
+                    (vector-set! func-vec func-idx (make-wasm-func proc sig))))
+                 (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
+                (x (instance-error "invalid function import" mod name x)))))
            ((($ <import> mod name 'global _ type) . rest)
             (match (lookup-import mod name)
               ((? wasm-global? global)
@@ -1061,8 +1105,10 @@ bytevector, an input port, or a <wasm> record produced by
        ;; Populate export table.
        (for-each (match-lambda
                    (($ <export> name 'func idx)
-                    (let ((proc (make-export-closure name (vector-ref func-vec idx))))
-                      (hash-set! export-table name proc)))
+                    (let* ((func (vector-ref func-vec idx))
+                           (wrap (make-export-closure name func)))
+                      (register-exported-function! wrap func)
+                      (hash-set! export-table name wrap)))
                    (($ <export> name 'global idx)
                     (hash-set! export-table name (vector-ref global-vec idx)))
                    (($ <export> name 'memory idx)
@@ -1085,15 +1131,18 @@ bytevector, an input port, or a <wasm> record produced by
 (define (wasm-instance-drop-elem! instance idx)
   (vector-set! (wasm-instance-elems instance) idx #f))
 
-;; Blocks are delimited by a prompt so that 'br', 'return' and friends
-;; can abort to that prompt.
+;; Blocks are delimited by a prompt so that 'br', 'return',
+;; 'return_call' and friends can abort to that prompt.
 (define (call-with-block proc handler)
   (let ((tag (make-prompt-tag 'wasm-block)))
     (call-with-prompt tag
       (lambda ()
         (proc tag))
-      (lambda (_k)
-        (handler)))))
+      ;; The 'return_call' family of instructions need to pass along a
+      ;; continuation that can be tail called after aborting to the
+      ;; prompt.
+      (lambda (_k thunk)
+        (handler thunk)))))
 
 ;; Debugging/instrumentation hook, called before each instruction.
 (define current-instruction-listener
@@ -1124,12 +1173,28 @@ bytevector, an input port, or a <wasm> record produced by
          ;; order.
          (with-syntax (((var ...) (reverse #'(var ...))))
            #'(let* ((var (pop)) ...) body ...))))))
-  ;; Control helpers.
+  ;; Control flow helpers.
+  (define (call* func)
+    (match func
+      (($ <wasm-func> proc ($ <func-sig> params))
+       (apply proc (pop-n (length params))))
+      (x (runtime-error "not a function" x))))
+  (define (call func)
+    (call-with-values (lambda () (call* func))
+      (lambda vals (push-all vals))))
+  (define (return* thunk)
+    ;; The current function's tag is at the bottom.
+    (match blocks
+      ((_ ... tag)
+       (abort-to-prompt tag thunk))))
+  (define (return) (return* #f))
+  (define (return-call f) (return* (lambda () (call* f))))
+  (define (branch l) (abort-to-prompt (list-ref blocks l) #f))
   (define (block body branch)
     (call-with-block
      (lambda (block)
        (execute* body path instance stack (cons block blocks) locals))
-     branch))
+     (lambda (_) (branch))))
   (define (end) 'end)
   ;; Convenience macros.
   (define-syntax-rule (unop proc)
@@ -1278,20 +1343,6 @@ bytevector, an input port, or a <wasm> record produced by
     (vector-ref (wasm-instance-funcs instance) idx))
   (define (string-ref idx)
     (vector-ref (wasm-instance-strings instance) idx))
-  ;; Control flow helpers:
-  (define (call func)
-    (match func
-      (($ <wasm-func> proc ($ <func-sig> params))
-       ;; Pop n args, apply proc, and push m return values.
-       (call-with-values (lambda () (apply proc (pop-n (length params))))
-         (lambda vals (push-all vals))))
-      (x (runtime-error "not a function" x))))
-  (define (return)
-    ;; The current function's tag is at the bottom.
-    (match blocks
-      ((_ ... tag)
-       (abort-to-prompt tag))))
-  (define (branch l) (abort-to-prompt (list-ref blocks l)))
   ;; Call instrumentation hook then execute the instruction.
   ((current-instruction-listener) path instr instance stack blocks locals)
   (match instr
@@ -1322,18 +1373,14 @@ bytevector, an input port, or a <wasm> record produced by
     ;; TODO: Actually have return_call and friends make tail calls!
     ;; Currently they use create a stack frame!!
     (('return_call idx)
-     (call (func-ref idx))
-     (return))
+     (return-call (func-ref idx)))
     (('return_call_indirect idx _)
-     (call (wasm-table-ref (table-ref idx) (pop)))
-     (return))
+     (return-call (wasm-table-ref (table-ref idx) (pop))))
     (('return_call_ref _)
      (lets (f)
            (if (wasm-null? f)
                (runtime-error "null function reference" f)
-               (begin
-                 (call f)
-                 (return)))))
+               (return-call f))))
     (('br l) (branch l))
     (('br_if l) (unless (= (pop) 0) (branch l)))
     (('br_table l* l)

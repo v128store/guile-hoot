@@ -1756,6 +1756,10 @@
                (i32.or)
                (i31.new)))
 
+            (('load-const/unlikely x)
+             `((i32.const ,(ash x 1))
+               (i31.new)))
+
             ;; The dynamic state.  Implement using runtime.
             (('push-prompt escape-only? tag handler)
              `((global.get $raw-sp)

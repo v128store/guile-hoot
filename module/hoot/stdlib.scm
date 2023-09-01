@@ -2012,7 +2012,11 @@
                ,(arith-cond
                  ;; TODO: implement for b = -1
                  '((call $fixnum? (local.get $b))
-                   (unreachable))
+                   (i31.get_s (ref.cast i31 (local.get $a))) (i32.const 1) (i32.shr_s)
+                   (i31.get_s (ref.cast i31 (local.get $b))) (i32.const 1) (i32.shr_s)
+                   (i32.div_s)
+                   (i32.const 1) (i32.shl)
+                   (i31.new))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-quo*
                                  (struct.new $bignum

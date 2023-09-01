@@ -21,17 +21,22 @@
 
 (define-module (hoot stdlib)
   #:use-module (wasm wat)
+  #:use-module (ice-9 receive)
   #:export (compute-stdlib))
 
 (define (arith-cond . clauses)
-  (if (null? clauses)
-      '(unreachable)
-      (let* ((clause1 (car clauses))
-             (cond1 (car clause1))
-             (res1 (cdr clause1)))
-        `(if (ref eq) ,cond1
-             (then ,@res1)
-             (else ,(apply arith-cond (cdr clauses)))))))
+  (receive (type clauses)
+      (if (and (pair? clauses) (pair? (car clauses)) (pair? (caar clauses)))
+          (values '(ref eq) clauses)
+          (values (car clauses) (cdr clauses)))
+   (if (null? clauses)
+       '(unreachable)
+       (let* ((clause1 (car clauses))
+              (cond1 (car clause1))
+              (res1 (cdr clause1)))
+         `(if ,type ,cond1
+              (then ,@res1)
+              (else ,(apply arith-cond type (cdr clauses))))))))
 
 (define (compute-stdlib import-abi?)
   (define (maybe-import id)

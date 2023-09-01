@@ -1928,6 +1928,252 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
+     ;; Exact fraction arithmetic
+
+     ;; Fraction addition
+     (func $add-fracnum-fixnum (param $a (ref $fraction)) (param $b (ref i31)) (result (ref eq))
+           (call $add-fracnum-fracnum
+                 (local.get $a)
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $add-fracnum-bignum (param $a (ref $fraction)) (param $b (ref $bignum)) (result (ref eq))
+           (call $add-fracnum-fracnum
+                 (local.get $a)
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $add-fracnum-fracnum (param $a (ref $fraction)) (param $b (ref $fraction)) (result (ref eq))
+           (local $d1 (ref eq))
+           (local $d2 (ref eq))
+           (local $t (ref eq))
+           (local.set $d1 (call $gcd
+                                (struct.get $fraction $denom (local.get $a))
+                                (struct.get $fraction $denom (local.get $b))))
+           (if (result (ref eq))
+               (if (result i32)
+                   (call $fixnum? (local.get $d1))
+                   (then (i32.eq (i31.get_s (ref.cast i31 (local.get $d1)))
+                                 (i32.const #b10)))
+                   (else (f64.eq (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                                 (f64.const 1))))
+               (then
+                (call $normalize-fraction
+                      (struct.new $fraction
+                                  (i32.const 0)
+                                  (call $add
+                                        (call $mul
+                                              (struct.get $fraction $num (local.get $a))
+                                              (struct.get $fraction $denom (local.get $b)))
+                                        (call $mul
+                                              (struct.get $fraction $denom (local.get $a))
+                                              (struct.get $fraction $num (local.get $b))))
+                                  (call $mul
+                                        (struct.get $fraction $denom (local.get $a))
+                                        (struct.get $fraction $denom (local.get $b))))))
+               (else
+                (local.set $t
+                           (call $add
+                                 (call $mul
+                                       (struct.get $fraction $num (local.get $a))
+                                       (call $quo
+                                             (struct.get $fraction $denom (local.get $b))
+                                             (local.get $d1)))
+                                 (call $mul
+                                       (struct.get $fraction $num (local.get $b))
+                                       (call $quo
+                                             (struct.get $fraction $denom (local.get $a))
+                                             (local.get $d1)))))
+                (local.set $d2 (call $gcd (local.get $t) (local.get $d1)))
+                (call $normalize-fraction
+                      (struct.new $fraction
+                                  (i32.const 0)
+                                  (call $quo
+                                        (local.get $t)
+                                        (local.get $d2))
+                                  (call $mul
+                                        (call $quo
+                                              (struct.get $fraction $denom (local.get $a))
+                                              (local.get $d1))
+                                        (call $quo
+                                              (struct.get $fraction $denom (local.get $b))
+                                              (local.get $d2))))))))
+
+     ;; Fraction subtraction
+     (func $sub-fixnum-fracnum (param $a (ref i31)) (param $b (ref $fraction)) (result (ref eq))
+           (call $sub-fracnum-fracnum
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $a) (struct.get $fraction $denom (local.get $b)))
+                             (struct.get $fraction $denom (local.get $b)))
+                 (local.get $b)))
+
+     (func $sub-bignum-fracnum (param $a (ref $bignum)) (param $b (ref $fraction)) (result (ref eq))
+           (call $sub-fracnum-fracnum
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $a) (struct.get $fraction $denom (local.get $b)))
+                             (struct.get $fraction $denom (local.get $b)))
+                 (local.get $b)))
+
+     (func $sub-fracnum-fixnum (param $a (ref $fraction)) (param $b (ref i31)) (result (ref eq))
+           (call $sub-fracnum-fracnum
+                 (local.get $a)
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $sub-fracnum-bignum (param $a (ref $fraction)) (param $b (ref $bignum)) (result (ref eq))
+           (call $sub-fracnum-fracnum
+                 (local.get $a)
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $sub-fracnum-fracnum (param $a (ref $fraction)) (param $b (ref $fraction)) (result (ref eq))
+           (local $d1 (ref eq))
+           (local $d2 (ref eq))
+           (local $t (ref eq))
+           (local.set $d1 (call $gcd
+                                (struct.get $fraction $denom (local.get $a))
+                                (struct.get $fraction $denom (local.get $b))))
+           (if (result (ref eq))
+               ;; FIXME: use generic =
+               (if (result i32)
+                   (ref.test i31 (local.get $d1))
+                   (then (i32.eq (i31.get_s (ref.cast i31 (local.get $d1)))
+                                 (i32.const #b10)))
+                   (else (i32.const 0)))
+               (then
+                (call $normalize-fraction
+                      (struct.new $fraction
+                                  (i32.const 0)
+                                  (call $sub
+                                        (call $mul
+                                              (struct.get $fraction $num (local.get $a))
+                                              (struct.get $fraction $denom (local.get $b)))
+                                        (call $mul
+                                              (struct.get $fraction $denom (local.get $a))
+                                              (struct.get $fraction $num (local.get $b))))
+                                  (call $mul
+                                        (struct.get $fraction $denom (local.get $a))
+                                        (struct.get $fraction $denom (local.get $b))))))
+               (else
+                (local.set $t
+                           (call $sub
+                                 (call $mul
+                                       (struct.get $fraction $num (local.get $a))
+                                       (call $quo
+                                             (struct.get $fraction $denom (local.get $b))
+                                             (local.get $d1)))
+                                 (call $mul
+                                       (struct.get $fraction $num (local.get $b))
+                                       (call $quo
+                                             (struct.get $fraction $denom (local.get $a))
+                                             (local.get $d1)))))
+                (local.set $d2 (call $gcd (local.get $t) (local.get $d1)))
+                (call $normalize-fraction
+                      (struct.new $fraction
+                                  (i32.const 0)
+                                  (call $quo
+                                        (local.get $t)
+                                        (local.get $d2))
+                                  (call $mul
+                                        (call $quo
+                                              (struct.get $fraction $denom (local.get $a))
+                                              (local.get $d1))
+                                        (call $quo
+                                              (struct.get $fraction $denom (local.get $b))
+                                              (local.get $d2))))))))
+
+     ;; Fraction multiplication
+     (func $mul-fracnum-fixnum (param $a (ref $fraction)) (param $b (ref i31)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $num (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $mul-fracnum-bignum (param $a (ref $fraction)) (param $b (ref $bignum)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $num (local.get $a)))
+                             (struct.get $fraction $denom (local.get $a)))))
+
+     (func $mul-fracnum-fracnum (param $a (ref $fraction)) (param $b (ref $fraction)) (result (ref eq))
+           (local $d1 (ref eq))
+           (local $d2 (ref eq))
+           (local.set $d1 (call $gcd
+                                (struct.get $fraction $num (local.get $a))
+                                (struct.get $fraction $denom (local.get $b))))
+           (local.set $d2 (call $gcd
+                                (struct.get $fraction $denom (local.get $a))
+                                (struct.get $fraction $num (local.get $b))))
+           (call $normalize-fraction
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul
+                                   (call $quo
+                                         (struct.get $fraction $num (local.get $a))
+                                         (local.get $d1))
+                                   (call $quo
+                                         (struct.get $fraction $num (local.get $b))
+                                         (local.get $d2)))
+                             (call $mul
+                                   (call $quo
+                                         (struct.get $fraction $denom (local.get $a))
+                                         (local.get $d2))
+                                   (call $quo
+                                         (struct.get $fraction $denom (local.get $b))
+                                         (local.get $d1))))))
+
+     ;; Fraction division
+     (func $div-fixnum-fracnum (param $a (ref i31)) (param $b (ref $fraction)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $a) (struct.get $fraction $denom (local.get $b)))
+                             (struct.get $fraction $num (local.get $b)))))
+
+     (func $div-bignum-fracnum (param $a (ref $bignum)) (param $b (ref $fraction)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $a) (struct.get $fraction $denom (local.get $b)))
+                             (struct.get $fraction $num (local.get $b)))))
+
+     (func $div-fracnum-fixnum (param $a (ref $fraction)) (param $b (ref i31)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $num (local.get $a)))))
+
+     (func $div-fracnum-bignum (param $a (ref $fraction)) (param $b (ref $bignum)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul (local.get $b) (struct.get $fraction $denom (local.get $a)))
+                             (struct.get $fraction $num (local.get $a)))))
+
+     (func $div-fracnum-fracnum (param $a (ref $fraction)) (param $b (ref $fraction)) (result (ref eq))
+           (call $normalize-fraction/gcd
+                 (struct.new $fraction
+                             (i32.const 0)
+                             (call $mul
+                                   (struct.get $fraction $num (local.get $a))
+                                   (struct.get $fraction $denom (local.get $b)))
+                             (call $mul
+                                   (struct.get $fraction $denom (local.get $a))
+                                   (struct.get $fraction $num (local.get $b))))))
+
      (func $add (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
              `((call $fixnum? (local.get $a))

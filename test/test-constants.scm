@@ -203,6 +203,42 @@
            (lambda (a b c) (/ (+ a b) (inexact c)))
            536870911 1 5)
 
+;; Exact fraction arithmetic
+(test-call "1/2" (lambda (a b) (/ a b)) 1 2)
+(test-call "3/536870912" (lambda (a b c) (/ a (+ b c))) 3 536870911 1)
+(test-call "536870912/3" (lambda (a b c) (/ (+ a b) c)) 536870911 1 3)
+(test-call "536870912/536870913"
+           (lambda (a b) (/ (+ a b) (+ a b b)))
+           536870911 1)
+
+(test-call "1/2" (lambda (a b) (* a (/ a b))) 1 2)
+(test-call "1" (lambda (a b) (* b (/ a b))) 1 2)
+(test-call "1/4" (lambda (a b) (* (/ a b) (/ a b))) 2 4)
+(test-call "1" (lambda (a b) (* (/ b a) (/ a b))) 1 2)
+;; FIXME:
+;; (test-call "1"
+;;            (lambda (a b) (* (/ (+ a b) (+ a b)) (/ (+ a b) (+ a b))))
+;;            536870911 1)
+
+(test-call "3/2" (lambda (a b c) (+ a (/ b c))) 1 1 2)
+(test-call "1073741825/2"
+           (lambda (a b c d) (+ (+ a b) (/ c d)))
+           536870911 1 1 2)
+(test-call "7/6" (lambda (a b c d) (+ (/ a b) (/ c d))) 1 2 2 3)
+(test-call "7/6" (lambda (a b c d) (+ (/ a b) (/ c d))) 2 4 4 6)
+
+(test-call "1/2" (lambda (a b c) (- a (/ b c))) 1 1 2)
+(test-call "-1/2" (lambda (a b c) (- (/ a b) c)) 1 2 1)
+(test-call "-1/2" (lambda (a b c) (- (/ a b) (/ c c))) 1 2 1)
+(test-call "1610612735/3"
+           (lambda (a b c d) (- (+ a b) (/ c d)))
+           536870911 1 1 3)
+(test-call "-1610612735/3"
+           (lambda (a b c d) (- (/ a b) (+ c d)))
+           1 3 536870911 1)
+(test-call "-1/6" (lambda (a b c d) (- (/ a b) (/ c d))) 1 2 2 3)
+(test-call "-1/2" (lambda (a b) (/ a b)) 1 -2)
+
 ;; Integer division
 ;; Quotient
 (test-call "12" (lambda (a b) (quotient a b)) 123 10)

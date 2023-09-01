@@ -1638,6 +1638,9 @@
      (func $flonum->f64 (param $a (ref $flonum)) (result f64)
            (struct.get $flonum $val (local.get $a)))
 
+     (func $i32->fixnum (param $a i32) (result (ref i31))
+           (i31.new (i32.shl (local.get $a) (i32.const 1))))
+
      (func $i32->bignum (param $a i32) (result (ref eq))
            (struct.new $bignum
                        (i32.const 0)

@@ -361,7 +361,9 @@
 (define (hoot-call proc . args)
   (match proc
     (($ <hoot-procedure> reflector f)
-     (let ((argv (~ reflector "make_vector" (+ (length args) 1))))
+     (let ((argv (~ reflector "make_vector"
+                    (+ (length args) 1)
+                    (~ reflector "scm_false"))))
        (~ reflector "vector_set" argv 0 f)
        (let loop ((args args) (i 1))
          (match args

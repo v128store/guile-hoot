@@ -222,35 +222,24 @@
                (field $wrap (ref eq))
                (field $module (ref eq))
                (field $source (ref eq)))))
-      (type $port-type
-            (struct
-             (field $name (ref string))
-             ;; in guile these are (port, bv, start, count) -> size_t
-             (field $read (ref null $proc)) ;; could have a more refined type
-             (field $write (ref null $proc))
-             (field $seek (ref null $proc)) ;; (port, offset, whence) -> offset
-             (field $close (ref null $proc)) ;; (port) -> ()
-             (field $get-natural-buffer-sizes (ref null $proc)) ;; port -> (rdsz, wrsz)
-             (field $random-access? (ref null $proc)) ;; port -> bool
-             (field $input-waiting (ref null $proc))  ;; port -> bool
-             (field $truncate (ref null $proc)) ;; (port, length) -> ()
-             ;; Guile also has GOOPS classes here.
-             ))
       (type $port
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $pt (ref $port-type))
-               (field $stream (mut (ref eq)))
-               (field $file_name (mut (ref eq)))
+               (field $read (ref null $proc)) ;; (bv, start, count) -> size_t
+               (field $write (ref null $proc)) ;; (bv, start, count) -> size_t
+               (field $seek (ref null $proc)) ;; (offset, whence) -> offset
+               (field $close (ref null $proc)) ;; () -> ()
+               (field $truncate (ref null $proc)) ;; (length) -> ()
+               (field $repr (ref $string))
+               (field $file-name (mut (ref null $string)))
                (field $position (ref $mutable-pair))
-               (field $read_buf (mut (ref eq)))      ;; A 5-vector
-               (field $write_buf (mut (ref eq)))     ;; A 5-vector
-               (field $write_buf_aux (mut (ref eq))) ;; A 5-vector
-               (field $read_buffering (mut i32))
-               (field $refcount (mut i32))
-               (field $rw_random (mut i8))
-               (field $properties (mut (ref eq))))))
+               (field $read-buf (mut (ref null $mutable-vector)))  ;; A 5-vector
+               (field $write-buf (mut (ref null $mutable-vector))) ;; A 5-vector
+               (field $write-buf-aux (mut (ref null $mutable-vector)))   ;; A 5-vector
+               (field $read-buffering (mut i32))
+               (field $r/w-random-access? (mut i8))
+               (field $private-data (ref eq)))))
       (type $struct
             (sub $heap-object
               (struct

@@ -83,6 +83,9 @@ class Bytevector extends HeapObject {
         out += ')';
         return out;
     }
+  ref(i) {
+    return this.reflector.bytevector_ref(this, i);
+  }
 }
 class MutableBytevector extends Bytevector {
     toString() { return "#<mutable-bytevector>"; }

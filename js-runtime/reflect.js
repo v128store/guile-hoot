@@ -338,6 +338,22 @@ class SchemeModule {
                 return r;
             }
         },
+        bignum_gcd(a, b) {
+            a = BigInt(a);
+            b = BigInt(b);
+            if (a < 0n) { a = -a; }
+            if (b < 0n) { b = -b; }
+            if (a == 0n) { return b; }
+            if (b == 0n) { return a; }
+
+            let r;
+            while (b != 0n) {
+                r = a % b;
+                a = b;
+                b = r;
+            }
+            return a;
+        },
 
         bignum_to_f64(n) { return Number(n); },
 

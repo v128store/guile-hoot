@@ -153,19 +153,15 @@ be rewritten to continue to the tail's ktail."
   (define (compute-saved-vars fresh-names k)
     (compute-saved-vars* fresh-names live-in constants reprs k))
 
-  ;; Return a $callk to the join tail with head K.  To allow for
-  ;; tail-local names for values bound by K, JOIN-VARS is an alist of
-  ;; mappings to add to FRESH-NAMES.
+  ;; Return a $callk to the join tail with head K.  We first pass the
+  ;; arguments for the K in the source program, and then we pass any
+  ;; live-in variables at the head, which are renamed according to
+  ;; FRESH-NAMES.
   (define (compute-join-call join-vars k)
-    (let ((fresh-names (fold (lambda (pair fresh-names)
-                               (match pair
-                                 ((old . new)
-                                  (intmap-add fresh-names old new))))
-                             fresh-names join-vars)))
-      (call-with-values (lambda () (compute-saved-vars fresh-names k))
-        (lambda (reprs vars)
-          (build-exp
-            ($callk (intmap-ref entries k) #f vars))))))
+    (call-with-values (lambda () (compute-saved-vars fresh-names k))
+      (lambda (reprs vars)
+        (build-exp
+          ($callk (intmap-ref entries k) #f ,(append join-vars vars))))))
 
   ;; A branch target can either be in the current tail, or it starts a
   ;; join continuation.  It can't be $ktail, it can't be $kreceive, and
@@ -253,7 +249,7 @@ be rewritten to continue to the tail's ktail."
                      (letk kvals
                            ($kargs names vars'
                              ($continue local-ktail src
-                               ,(compute-join-call (map cons vars vars') k))))
+                               ,(compute-join-call vars' k))))
                      (build-term
                        ($continue kvals src ,exp))))))))))))
       (($ $branch kf kt src op param args)
@@ -415,17 +411,22 @@ REPRS holds the representation of each var."
       (match (intmap-ref cps head)
         (($ $kargs names vars term)
          (call-with-values (lambda () (compute-saved-vars head))
-           (lambda (reprs vars')
-             (define names'
-               (let ((names (map cons vars names)))
-                 (map (lambda (var) (assq-ref names var))
-                      vars')))
-             (define meta `((arg-representations . ,reprs)))
+           (lambda (reprs' vars')
+             ;; Join calling convention: first the original args, then
+             ;; the saved vars.
+             (define join-names
+               (append names (map (lambda (_) #f) vars')))
+             (define join-vars
+               (append vars vars'))
+             (define join-reprs
+               (append (map (lambda (var) (intmap-ref reprs var)) vars)
+                       reprs'))
+             (define meta `((arg-representations . ,join-reprs)))
              (let*-values (((cps body term)
                             (restore-constants cps body term)))
                (with-cps cps
                  (letk ktail ($ktail))
-                 (letk kargs ($kargs names' vars' ,term))
+                 (letk kargs ($kargs join-names join-vars ,term))
                  (letk kfun ($kfun (cont-source head) meta #f ktail kargs))
                  ($ (values
                      (intmap-add entries head kfun)

@@ -40,7 +40,7 @@
                  bitvector?
                  cons*
                  fluid-ref fluid-set! with-fluid* with-dynamic-state
-                 ;; make-variable variable-ref variable-set!
+                 make-variable variable-ref variable-set!
                  exact->inexact
                  inf? nan?
                  error
@@ -346,7 +346,10 @@
    (bytevector-ieee-single-native-set! . %bytevector-ieee-single-native-set!)
    (bytevector-ieee-double-native-ref . %bytevector-ieee-double-native-ref)
    (bytevector-ieee-double-native-set! . %bytevector-ieee-double-native-set!)
-   (the-eof-object . %the-eof-object))
+   (the-eof-object . %the-eof-object)
+   (make-variable . %make-box)
+   (variable-ref . %box-ref)
+   (variable-set! . %box-set!))
   #:export (%inline-wasm)
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)

@@ -545,6 +545,225 @@
 (define (string-downcase str) (error "unimplemented"))
 (define (string-foldcase str) (error "unimplemented"))
 
+(define (make-box init) (%make-box init))
+(define (box-ref box) (%box-ref box))
+(define (box-set! box val) (%box-set! box val))
+
+(define (%make-port-type name read write seek close get-natural-buffer-sizes
+                         random-access? input-waiting truncate)
+  (unless (string? name)
+    (error "expected name to be a string" name))
+  (%inline-wasm
+   '(func (param $read (ref eq))
+          (param $write (ref eq))
+          (param $seek (ref eq))
+          (param $close (ref eq))
+          (param $get-natural-buffer-sizes (ref eq))
+          (param $random-access? (ref eq))
+          (param $input-waiting (ref eq))
+          (param $truncate (ref eq))
+          (result (ref eq))
+          (struct.new
+           $port-type
+           (struct.get $string $str (ref.cast $string (local.get $name)))
+           (if (ref.test $proc (local.get $read))
+               (then (ref.cast $proc (local.get $read)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $write))
+               (then (ref.cast $proc (local.get $write)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $seek))
+               (then (ref.cast $proc (local.get $seek)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $close))
+               (then (ref.cast $proc (local.get $close)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $get-natural-buffer-sizes))
+               (then (ref.cast $proc (local.get $get-natural-buffer-sizes)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $random-access?))
+               (then (ref.cast $proc (local.get $random-access?)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $input-waiting))
+               (then (ref.cast $proc (local.get $input-waiting)))
+               (else (ref.null $proc)))
+           (if (ref.test $proc (local.get $truncate))
+               (then (ref.cast $proc (local.get $truncate)))
+               (else (ref.null $proc)))))
+   name read write seek close get-natural-buffer-sizes random-access?
+   input-waiting truncate))
+
+;; FIXME: kwargs
+;; FIXME: suspendability
+(define (%make-port read
+                    write
+                    seek
+                    close
+                    truncate
+                    repr
+                    file-name
+                    read-buf-size
+                    write-buf-size
+                    r/w-random-access?
+                    private-data)
+  (when file-name
+    (unless (string? file-name) (error "bad file name" file-name)))
+  (when read
+    (unless (and (exact-integer? read-buf-size) (< 0 read-buf-size))
+      (error "bad read buf size" read-buf-size)))
+  (when write
+    (unless (and (exact-integer? write-buf-size) (< 0 write-buf-size))
+      (error "bad write buf size" write-buf-size)))
+  (unless (string? repr)
+    (error "missing repr" repr))
+  (%inline-wasm
+   '(func (param $read (ref eq))
+          (param $write (ref eq))
+          (param $seek (ref eq))
+          (param $close (ref eq))
+          (param $truncate (ref eq))
+          (param $repr (ref eq))
+          (param $file-name (ref eq))
+          (param $read-buf-size (ref eq))
+          (param $write-buf-size (ref eq))
+          (param $r/w-random-access? (ref eq))
+          (param $private-data (ref eq))
+          (result (ref eq))
+          (struct.new
+           $port
+           (i32.const 0)
+           (if (ref null $proc)
+               (ref.test $proc (local.get $read))
+               (then (ref.cast $proc (local.get $read)))
+               (else (ref.null $proc)))
+           (if (ref null $proc)
+               (ref.test $proc (local.get $write))
+               (then (ref.cast $proc (local.get $write)))
+               (else (ref.null $proc)))
+           (if (ref null $proc)
+               (ref.test $proc (local.get $seek))
+               (then (ref.cast $proc (local.get $seek)))
+               (else (ref.null $proc)))
+           (if (ref null $proc)
+               (ref.test $proc (local.get $close))
+               (then (ref.cast $proc (local.get $close)))
+               (else (ref.null $proc)))
+           (if (ref null $proc)
+               (ref.test $proc (local.get $truncate))
+               (then (ref.cast $proc (local.get $truncate)))
+               (else (ref.null $proc)))
+           (ref.cast $string (local.get $repr))
+           (if (ref null $string)
+               (ref.test $string (local.get $file-name))
+               (then (ref.cast $string (local.get $file-name)))
+               (else (ref.null $string)))
+           (struct.new $mutable-pair
+                       (i32.const 0)
+                       (i31.new (i32.const 0))
+                       (i31.new (i32.const 0)))
+           (if (ref null $mutable-vector)
+               (ref.test $proc (local.get $read))
+               (then (call $make-port-buffer
+                           (call $scm->u32/truncate (local.get $read-buf-size))))
+               (else (ref.null $mutable-vector)))
+           (if (ref null $mutable-vector)
+               (ref.test $proc (local.get $write))
+               (then (call $make-port-buffer
+                           (call $scm->u32/truncate (local.get $write-buf-size))))
+               (else (ref.null $mutable-vector)))
+           (ref.null $mutable-vector)
+           (if i32
+               (ref.test $proc (local.get $read))
+               (then (call $scm->u32/truncate (local.get $read-buf-size)))
+               (else (i32.const 0)))
+           (i32.eqz
+            (ref.eq (local.get $r/w-random-access?) (i31.new (i32.const 1))))
+           (local.get $private-data)))
+   read write seek close truncate
+   repr file-name read-buf-size write-buf-size r/w-random-access?
+   private-data))
+
+(define (%port-private-data port)
+  ;; FIXME: arg type checking
+  (%inline-wasm
+   '(func (param $port (ref eq)) (result (ref eq))
+          (struct.get $port $private-data
+                      (ref.cast $port (local.get $port))))
+   port))
+
+(define (get-output-bytevector port)
+  ;; FIXME: How to know it's a bytevector output port?
+  (define accum (%port-private-data port))
+  (match (box-ref accum)
+    (() #vu8())
+    ((bv) bv)
+    (bv*
+     (let* ((len (fold (lambda (bv len) (+ (bytevector-length bv) len))
+                       0 (box-ref accum)))
+            (flattened (make-bytevector len 0)))
+       (let lp ((bv* bv*) (cur len))
+         (match bv*
+           (()
+            (box-set! accum flattened)
+            flattened)
+           ((bv . bv*)
+            (let ((cur (- cur (bytevector-length bv))))
+              (bytevector-copy! flattened cur bv)
+              (lp bv* cur)))))))))
+
+(define (open-output-bytevector)
+  (define accum (make-box '()))
+  (define pos #f)
+  (define (appending?) (not pos))
+  (define default-buffer-size 1024)
+  (define (bv-write bv start count)  ; write
+    (unless (zero? count)
+      (cond
+       ((appending?)
+        (box-set! accum
+                  (cons (bytevector-copy bv start (+ start count))
+                        (box-ref accum))))
+       (else
+        (let* ((dst (get-output-bytevector port))
+               (to-copy (min count (- (bytevector-length dst) pos))))
+          (bytevector-copy! dst pos bv start to-copy)
+          (cond
+           ((< to-copy count)
+            (box-set!
+             accum
+             (list (bytevector-copy bv (+ start to-copy) (- count to-copy))
+                   dst))
+            (set! pos #f))
+           (else
+            (set! pos (+ pos count))))))))
+    count)
+  (define (bv-seek offset whence)    ; seek
+    (define len (bytevector-length (get-output-bytevector port)))
+    (define base (match whence
+                   ('start 0)
+                   ('cur (or pos len))
+                   ('end len)))
+    (define dst (+ base offset))
+    (when (or (< dst 0) (< len dst))
+      (error "out of range" offset))
+    (set! pos (if (= pos dst) #f dst))
+    dst)
+
+  (define port
+    (%make-port #f                      ; read
+                bv-write
+                bv-seek
+                #f                      ; close
+                #f                      ; truncate
+                "bytevector"            ; repr
+                #f                      ; file-name
+                #f                      ; read-buf-size
+                1024                    ; write-buf-size
+                #f                      ; r/w-random-access
+                accum                   ; private data
+                ))
+  port)
+
 ;; R7RS ports
 (define (eof-object? x) (%eof-object? x))
 (define (eof-object)
@@ -611,9 +830,6 @@
 
 (define (open-input-bytevector bv)
   (error "unimplemented"))
-
-(define (open-output-bytevector) (error "unimplemented"))
-(define (get-output-bytevector x) (error "unimplemented"))
 
 ;; (scheme file); perhaps drop?
 (define (open-binary-input-file filename) (error "files unimplemented"))

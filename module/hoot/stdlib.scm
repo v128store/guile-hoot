@@ -234,9 +234,9 @@
                (field $repr (ref $string))
                (field $file-name (mut (ref null $string)))
                (field $position (ref $mutable-pair))
-               (field $read-buf (mut (ref null $mutable-vector)))  ;; A 5-vector
-               (field $write-buf (mut (ref null $mutable-vector))) ;; A 5-vector
-               (field $write-buf-aux (mut (ref null $mutable-vector)))   ;; A 5-vector
+               (field $read-buf (mut (ref null $mutable-vector)))  ;; A 4-vector
+               (field $write-buf (mut (ref null $mutable-vector))) ;; A 4-vector
+               (field $write-buf-aux (mut (ref null $mutable-vector)))   ;; A 4-vector
                (field $read-buffering (mut i32))
                (field $r/w-random-access? (mut i8))
                (field $private-data (ref eq)))))
@@ -2680,6 +2680,18 @@
              `((ref.test $flonum (local.get $x))
                (return (local.get $x)))))
 
+     ;; compute (logand x #xffffFFFF).  precondition: x is exact integer.
+     (func $scm->u32/truncate (param $x (ref eq)) (result i32)
+           (if i32
+               (ref.test i31 (local.get $x))
+               (then (i32.shr_s (i31.get_s (ref.cast i31 (local.get $x)))
+                                (i32.const 1)))
+               (else
+                (i32.wrap_i64
+                 (call $bignum-get-i64
+                       (struct.get $bignum $val
+                                   (ref.cast $bignum (local.get $x))))))))
+
      (func $abs (param $x (ref eq)) (result (ref eq))
            (unreachable))
      (func $sqrt (param $x (ref eq)) (result (ref eq))
@@ -2721,6 +2733,19 @@
                       (i32.shl (i32.wrap_i64 (local.get $a))
                                (i32.const 1))))
                (else (return_call $s64->bignum (local.get $a)))))
+
+     (func $make-port-buffer (param $size i32) (result (ref $mutable-vector))
+           (struct.new $mutable-vector
+                       (i32.const 0)
+                       (array.new_fixed $raw-scmvector 4
+                                        (struct.new $mutable-bytevector
+                                                    (i32.const 0)
+                                                    (array.new_default
+                                                     $raw-bytevector
+                                                     (local.get $size)))
+                                        (i31.new (i32.const 0))
+                                        (i31.new (i32.const 0))
+                                        (i31.new (i32.const 1)))))
 
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))

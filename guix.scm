@@ -21,7 +21,7 @@
              (gnu packages version-control))
 
 (define guile-next-next
-  (let ((commit "c2cba86785a34351788f52ea4fccf9f10f3a1dee")
+  (let ((commit "f31819b6b179429a617c8bd881dbb61219823e39")
         (revision "1"))
     (package
      (inherit guile-next)
@@ -34,7 +34,7 @@
              (commit commit)))
        (file-name (git-file-name "guile" version))
        (sha256
-        (base32 "1k0dkmyf9s4iynjj2qm0szqfpfd3b07cpj0fay14iwbidkrqndzf")))))))
+        (base32 "1pnhihi8bn863vjj4xip3d0gpg3k5kkc1vs56af5fakhai9pjfsh")))))))
 
 (define gn
   (let ((commit "1de45d1a11cc9f8cb5c75a031386151e1c384847")

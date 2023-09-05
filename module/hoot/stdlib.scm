@@ -234,9 +234,9 @@
                (field $repr (ref $string))
                (field $file-name (mut (ref null $string)))
                (field $position (ref $mutable-pair))
-               (field $read-buf (mut (ref null $mutable-vector)))  ;; A 4-vector
-               (field $write-buf (mut (ref null $mutable-vector))) ;; A 4-vector
-               (field $write-buf-aux (mut (ref null $mutable-vector)))   ;; A 4-vector
+               (field $read-buf (mut (ref eq)))  ;; A 4-vector or #f
+               (field $write-buf (mut (ref eq))) ;; A 4-vector or #f
+               (field $write-buf-aux (mut (ref eq)))   ;; A 4-vector or #f
                (field $read-buffering (mut i32))
                (field $r/w-random-access? (mut i8))
                (field $private-data (ref eq)))))

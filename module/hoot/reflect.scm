@@ -329,6 +329,7 @@
       ("weak_map_get" . ,hash-ref)
       ("weak_map_set" . ,hash-set!)
       ("weak_map_delete" . ,hash-remove!)
+      ("fsqrt" . ,sqrt)
       ("fsin" . ,sin)
       ("fcos" . ,cos)
       ("ftan" . ,tan)

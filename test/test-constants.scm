@@ -675,6 +675,12 @@
                (write-bytevector #vu8(130 140) p)
                (get-output-bytevector p))))
 
+(test-call "#vu8(104 101 108 108 111 44 32 119 111 114 108 100)"
+           (lambda ()
+             (let ((p (open-output-bytevector)))
+               (write-string "hello, world" p)
+               (get-output-bytevector p))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

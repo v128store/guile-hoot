@@ -973,13 +973,54 @@
            (%write-bytes port bv start count))))))))
 
 (define* (write-char x #:optional (port (current-output-port)))
-  (error "unimplemented"))
+  (define (low-six i) (logand i #b111111))
+  (let ((i (char->integer x)))
+    (cond
+     ((<= i #x7f)
+      (write-u8 i port))
+     ((<= i #x7ff)
+      (write-bytevector
+       (bytevector (logior #b11000000 (ash i -6))
+                   (logior #b10000000 (low-six i)))
+       port))
+     ((<= i #xffff)
+      (write-bytevector
+       (bytevector (logior #b11100000 (ash i -12))
+                   (logior #b10000000 (low-six (ash i -6)))
+                   (logior #b10000000 (low-six i)))
+       port))
+     (else
+      (write-bytevector
+       (bytevector (logior #b11110000 (ash i -18))
+                   (logior #b10000000 (low-six (ash i -12)))
+                   (logior #b10000000 (low-six (ash i -6)))
+                   (logior #b10000000 (low-six i)))
+       port)))))
 
 (define* (newline #:optional (port (current-output-port)))
   (write-char #\newline port))
 
 (define* (write-string str #:optional (port (current-output-port)))
-  (error "unimplemented"))
+  ;; FIXME: Could avoid the double-copy and encode directly to buffer.
+  (write-bytevector
+   (%inline-wasm
+    '(func (param $str (ref eq))
+           (result (ref eq))
+           (local $vu0 (ref $raw-bytevector))
+           (local.set $vu0
+                      (array.new_default
+                       $raw-bytevector
+                       (string.measure_wtf8
+                        (struct.get $string $str
+                                    (ref.cast $string (local.get $str))))))
+           (string.encode_wtf8_array
+            (struct.get $string $str
+                        (ref.cast $string (local.get $str)))
+            (local.get $vu0)
+            (i32.const 0))
+           (struct.new $bytevector (i32.const 0) (local.get $vu0)))
+    str)
+   port))
 
 (define (open-input-string str)
   (error "unimplemented"))

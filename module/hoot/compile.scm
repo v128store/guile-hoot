@@ -477,7 +477,7 @@
           ...))
 
       (define (analyze-saved-vars reprs)
-        (define (save/raw memory sp grow-stack idx store-inst alignment)
+        (define (save/raw memory sp maybe-grow-stack idx store-inst alignment)
           (lambda (var sizes)
             (define (prepare-save)
               `((global.get ,sp)
@@ -485,20 +485,12 @@
                 (i32.const ,(assq-ref sizes sp))
                 (i32.add)
                 (global.set ,sp)
-                (global.get ,sp)
-                (i32.const 16) ;; Wasm pages are 64 kB.
-                (i32.shr_u)
-                (memory.size ,memory)
-                (i32.ge_u)
-                (if #f ,void-block-type
-                    ((i32.const ,(assq-ref sizes sp))
-                     (call ,grow-stack))
-                    ())))
+                (call ,maybe-grow-stack)))
             `(,@(if (zero? idx) (prepare-save) '())
               (local.get ,sp)
               (local.get ,var)
               (,store-inst ,(make-mem-arg memory idx alignment)))))
-        (define (save/ref table sp grow-stack idx)
+        (define (save/ref table sp maybe-grow-stack idx)
           (lambda (var sizes)
             (define (prepare-save)
               `((global.get ,sp)
@@ -506,13 +498,7 @@
                 (i32.const ,(assq-ref sizes sp))
                 (i32.add)
                 (global.set ,sp)
-                (global.get ,sp)
-                (table.size ,table)
-                (i32.ge_u)
-                (if #f ,void-block-type
-                    ((i32.const ,(assq-ref sizes sp))
-                     (call ,grow-stack))
-                    ())))
+                (call ,maybe-grow-stack)))
             `(,@(if (zero? idx) (prepare-save) '())
               (local.get ,sp)
               ,@(if (zero? idx) '() `((i32.const ,idx) (i32.add)))
@@ -537,22 +523,24 @@
                             ,@cast)))
 
         (define (visit/raw idx store-inst load-inst alignment)
-          (cons (save/raw '$raw-stack '$raw-sp '$grow-raw-stack idx store-inst
-                          alignment)
+          (cons (save/raw '$raw-stack '$raw-sp '$maybe-grow-raw-stack
+                          idx store-inst alignment)
                 (restore/raw '$raw-stack '$raw-sp idx load-inst alignment)))
         (define (visit/ref table sp grow idx restore-cast)
           (cons (save/ref table sp grow idx)
                 (restore/ref table sp idx restore-cast)))
 
-        (define (visit-i64 idx) (visit/raw idx 'i64.store 'i64.load 8))
-        (define (visit-f64 idx) (visit/raw idx 'f64.store 'f64.load 8))
+        (define (visit-i64 idx) (visit/raw idx 'i64.store 'i64.load 3))
+        (define (visit-f64 idx) (visit/raw idx 'f64.store 'f64.load 3))
         (define (visit-scm idx)
-          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx '((ref.as_non_null))))
+          (visit/ref '$scm-stack '$scm-sp '$maybe-grow-scm-stack idx
+                     '((ref.as_non_null))))
         (define (visit-raw-bytevector idx)
-          (visit/ref '$scm-stack '$scm-sp '$grow-scm-stack idx
+          (visit/ref '$scm-stack '$scm-sp '$maybe-grow-scm-stack idx
                      '((ref.cast #f $raw-bytevector))))
         (define (visit-ret idx)
-          (visit/ref '$ret-stack '$ret-sp '$grow-ret-stack idx '((ref.as_non_null))))
+          (visit/ref '$ret-stack '$ret-sp '$maybe-grow-ret-stack idx
+                     '((ref.as_non_null))))
 
         (let lp ((reprs reprs) (out '())
                  (raw-size 0) (scm-size 0) (ret-size 0))

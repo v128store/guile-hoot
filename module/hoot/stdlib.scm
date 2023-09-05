@@ -516,7 +516,7 @@
            (local.get 0)
            (struct.new $keyword))
 
-     (func $grow-raw-stack (param $sp i32)
+     (func $grow-raw-stack
            ;; Grow the stack by at least 50% and at least the needed
            ;; space.  Trap if we fail to grow.
            ;; additional_size = (current_size >> 1) | needed_size
@@ -525,55 +525,68 @@
                  $raw-stack
                  (i32.or (i32.shr_u (memory.size $raw-stack) (i32.const 1))
                          ;; Wasm pages are 64 kB.
-                         (i32.shr_u (local.get $sp) (i32.const 16))))
+                         (i32.sub (i32.add (i32.shr_u (global.get $raw-sp)
+                                                      (i32.const 16))
+                                           (i32.const 1))
+                                  (memory.size $raw-stack))))
                 (i32.const -1))
                (then (call $die0 (string.const "$grow-raw-stack")) (unreachable))))
+     (func $maybe-grow-raw-stack
+           (if (i32.lt_u (i32.shl (memory.size $raw-stack) (i32.const 16))
+                         (global.get $raw-sp))
+               (then (call $grow-raw-stack))))
 
-     (func $grow-scm-stack (param $sp i32)
+     (func $grow-scm-stack
            ;; Grow as in $grow-raw-stack.
-           (i32.const 0)
-           (i31.new)
-           (table.size $scm-stack)
-           (i32.const 1)
-           (i32.shr_u)
-           (local.get $sp)
-           (i32.or)
-           (table.grow $scm-stack)
-           (i32.const -1)
-           (if (i32.eq)
+           (if (i32.eq
+                (table.grow $scm-stack
+                            (i31.new (i32.const 0))
+                            (i32.or (i32.shr_u (table.size $scm-stack)
+                                               (i32.const 1))
+                                    (i32.sub (global.get $scm-sp)
+                                             (table.size $scm-stack))))
+                (i32.const -1))
                (then
                 (call $die0 (string.const "$grow-scm-stack"))
                 (unreachable))))
+     (func $maybe-grow-scm-stack
+           (if (i32.lt_u (table.size $scm-stack) (global.get $scm-sp))
+               (then (call $grow-scm-stack))))
 
      (func $invalid-continuation (type $kvarargs)
            (call $die0 (string.const "$invalid-continuation"))
            (unreachable))
-     (func $grow-ret-stack (param $sp i32)
+     (func $grow-ret-stack
            ;; Grow as in $grow-raw-stack.
-           (ref.func $invalid-continuation)
-           (table.size $ret-stack)
-           (i32.const 1)
-           (i32.shr_u)
-           (local.get $sp)
-           (i32.or)
-           (table.grow $ret-stack)
-           (i32.const -1)
-           (if (i32.eq)
+           (if (i32.eq (table.grow $ret-stack
+                            (ref.func $invalid-continuation)
+                            (i32.or (i32.shr_u (table.size $ret-stack)
+                                               (i32.const 1))
+                                    (i32.sub (global.get $ret-sp)
+                                             (table.size $ret-stack))))
+                       (i32.const -1))
                (then
                 (call $die0 (string.const "$grow-ret-stack"))
                 (unreachable))))
+     (func $maybe-grow-ret-stack
+           (if (i32.lt_u (table.size $ret-stack) (global.get $ret-sp))
+               (then (call $grow-ret-stack))))
 
      (func $grow-dyn-stack
-           ;; Grow as in $grow-raw-stack.
-           (ref.null $dyn)
-           (i32.add (i32.shr_u (table.size $dyn-stack) (i32.const 1))
-                    (i32.const 1))
-           (table.grow $dyn-stack)
-           (i32.const -1)
-           (if (i32.eq)
+           ;; Grow as in $grow-ret-stack.
+           (if (i32.eq (table.grow $dyn-stack
+                                   (ref.null $dyn)
+                                   (i32.or (i32.shr_u (table.size $dyn-stack)
+                                                      (i32.const 1))
+                                           (i32.sub (global.get $dyn-sp)
+                                                    (table.size $dyn-stack))))
+                       (i32.const -1))
                (then
                 (call $die0 (string.const "$grow-dyn-stack"))
                 (unreachable))))
+     (func $maybe-grow-dyn-stack
+           (if (i32.lt_u (table.size $dyn-stack) (global.get $dyn-sp))
+               (then (call $grow-dyn-stack))))
 
      (func $wrong-num-args (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -793,9 +806,7 @@
            (global.set $dyn-sp
                        (i32.add (local.tee $dyn-sp (global.get $dyn-sp))
                                 (i32.const 1)))
-           (if (i32.ge_u (local.get $dyn-sp)
-                         (table.size $dyn-stack))
-               (then (call $grow-dyn-stack)))
+           (call $maybe-grow-dyn-stack)
            (table.set $dyn-stack (local.get $dyn-sp) (local.get $dyn)))
 
      (func $wind-dynstate (param $dynstate (ref $dynstate))
@@ -947,16 +958,9 @@
                    (global.set $raw-sp (i32.add (local.get $base) (i32.const 16)))
                    (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 2)))
                    (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
-                   (if (i32.lt_u (memory.size $raw-stack)
-                                 (i32.shr_u (global.get $scm-sp) (i32.const 16)))
-                       (then
-                        (call $grow-raw-stack (global.get $raw-sp))))
-                   (if (i32.lt_u (table.size $scm-stack) (global.get $scm-sp))
-                       (then
-                        (call $grow-scm-stack (global.get $scm-sp))))
-                   (if (i32.lt_u (table.size $ret-stack) (global.get $ret-sp))
-                       (then
-                        (call $grow-ret-stack (global.get $ret-sp))))
+                   (call $maybe-grow-raw-stack)
+                   (call $maybe-grow-scm-stack)
+                   (call $maybe-grow-ret-stack)
                    (i32.store $raw-stack offset=0 (local.get $base)
                               (local.get $raw-sp-adjust))
                    (i32.store $raw-stack offset=4 (local.get $base)
@@ -1028,9 +1032,7 @@
            (local.set $i (i32.const 0))
            (local.set $len (array.len (local.get $v)))
            (global.set $raw-sp (i32.add (local.get $sp) (local.get $len)))
-           (if (i32.gt_u (global.get $raw-sp)
-                         (i32.shl (memory.size $raw-stack) (i32.const 16)))
-               (then (call $grow-raw-stack (global.get $raw-sp))))
+           (call $maybe-grow-raw-stack)
            (loop $lp
              (if (i32.lt_u (local.get $i) (local.get $len))
                  (then
@@ -1049,8 +1051,7 @@
            (local.set $sp (global.get $scm-sp))
            (local.set $len (array.len (local.get $v)))
            (global.set $scm-sp (i32.add (local.get $sp) (local.get $len)))
-           (if (i32.gt_u (global.get $scm-sp) (table.size $scm-stack))
-               (then (call $grow-scm-stack (global.get $scm-sp))))
+           (call $maybe-grow-scm-stack)
            (loop $lp
              (if (i32.lt_u (local.get $i) (local.get $len))
                  (then
@@ -1069,8 +1070,7 @@
            (local.set $sp (global.get $ret-sp))
            (local.set $len (array.len (local.get $v)))
            (global.set $ret-sp (i32.add (local.get $sp) (local.get $len)))
-           (if (i32.gt_u (global.get $ret-sp) (table.size $ret-stack))
-               (then (call $grow-ret-stack (global.get $ret-sp))))
+           (call $maybe-grow-ret-stack)
            (loop $lp
              (if (i32.lt_u (local.get $i) (local.get $len))
                  (then
@@ -1335,9 +1335,7 @@
                   ;; Use apply + values to pass values to handler.
                   (global.set $ret-sp
                               (i32.add (global.get $ret-sp) (i32.const 1)))
-                  (if (i32.lt_u (global.get $ret-sp) (table.size $ret-stack))
-                      (then
-                       (call $grow-ret-stack (i32.const 1))))
+                  (call $maybe-grow-ret-stack)
                   (table.set $ret-stack
                              (i32.sub (global.get $ret-sp) (i32.const 1))
                              (struct.get $dynprompt $handler
@@ -1354,12 +1352,8 @@
                   (local.set $dynwind (ref.cast $dynwind (local.get $dyn)))
                   (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 3)))
                   (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
-                  (if (i32.lt_u (table.size $scm-stack) (global.get $scm-sp))
-                      (then
-                       (call $grow-scm-stack (global.get $scm-sp))))
-                  (if (i32.lt_u (table.size $ret-stack) (global.get $ret-sp))
-                      (then
-                       (call $grow-ret-stack (global.get $ret-sp))))
+                  (call $maybe-grow-scm-stack)
+                  (call $maybe-grow-ret-stack)
                   (table.set $scm-stack
                              (i32.sub (global.get $scm-sp) (i32.const 3))
                              (local.get $tag))

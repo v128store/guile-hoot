@@ -2211,6 +2211,7 @@
           ((or '$i0 '$i1 '$i2) 'i32)
           ('$str_iter (make-ref-type #f 'stringview_iter))
           ('$s0 scm-type)
+          ('$vu0 (make-ref-type #f '$raw-bytevector))
           (_ #f)))
       (define (add-locals-from-code code)
         (define locals (make-hash-table))

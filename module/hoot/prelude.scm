@@ -352,10 +352,63 @@
 (define (bytevector-append . args) (error "unimplemented"))
 ;; FIXME: start and end args!
 (define* (bytevector-copy x #:optional (start 0) (end (bytevector-length x)))
-  (error "unimplemented"))
+  (unless (and (exact-integer? start) (<= 0 start (bytevector-length x)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (bytevector-length x)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $src (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+          (result (ref eq))
+          (local $i0 i32)
+          (local $i1 i32)
+          (local $vu0 (ref $raw-bytevector))
+          (local.set $i0 (i32.shr_u
+                          (i31.get_u (ref.cast i31 (local.get $start)))
+                          (i32.const 1)))
+          (local.set $i1 (i32.sub
+                          (i32.shr_u
+                           (i31.get_u (ref.cast i31 (local.get $end)))
+                           (i32.const 1))
+                          (local.get $i0)))
+          (local.set $vu0
+                     (array.new_default $raw-bytevector
+                                        (i32.sub (local.get $i1)
+                                                 (local.get $i0))))
+          (array.copy $raw-bytevector $raw-bytevector
+                      (local.get $vu0) (i32.const 0)
+                      (struct.get $bytevector $vals
+                                  (ref.cast $bytevector (local.get $src)))
+                      (local.get $i0) (local.get $i1))
+          (struct.new $bytevector (i32.const 0) (local.get $vu0)))
+   x start end))
 (define* (bytevector-copy! to at from #:optional
                            (start 0) (end (bytevector-length from)))
-  (error "unimplemented"))
+  (unless (and (exact-integer? at) (<= 0 at (bytevector-length to)))
+    (error "bad at" at))
+  (unless (and (exact-integer? start) (<= 0 start (bytevector-length from)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (bytevector-length from)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $to (ref eq)) (param $at (ref eq))
+          (param $from (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+          (array.copy $raw-bytevector $raw-bytevector
+                      (struct.get $bytevector $vals
+                                  (ref.cast $bytevector (local.get $to)))
+                      (i32.shr_u
+                       (i31.get_u (ref.cast i31 (local.get $at)))
+                       (i32.const 1))
+                      (struct.get $bytevector $vals
+                                  (ref.cast $bytevector (local.get $from)))
+                      (i32.shr_u
+                       (i31.get_u (ref.cast i31 (local.get $start)))
+                       (i32.const 1))
+                      (i32.shr_u
+                       (i32.sub
+                        (i31.get_u (ref.cast i31 (local.get $end)))
+                        (i31.get_u (ref.cast i31 (local.get $start))))
+                       (i32.const 1))))
+   to at from start end))
 
 (define-associative-eta-expansion * %*)
 (define-associative-eta-expansion + %+)
@@ -722,6 +775,7 @@
 (define (get-output-bytevector port)
   ;; FIXME: How to know it's a bytevector output port?
   (define accum (%port-private-data port))
+  (flush-output-port port)
   (match (box-ref accum)
     (() #vu8())
     ((bv) bv)
@@ -818,7 +872,7 @@
   (error "unimplemented"))
 
 (define (%write-bytes port bv start count)
-  (let ((written ((%port-write port) port bv start count)))
+  (let ((written ((%port-write port) bv start count)))
     (unless (<= 0 written count)
       (error "bad return from port write function" written))
     (when (< written count)

@@ -1069,6 +1069,12 @@
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (call $fixnum-mul))
               '((call $mul))))
+            (('mul/immediate y x)
+             (compile-fixnum-fast-path
+              x scm-block-type
+              `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-mul))
+              `((i32.const ,(ash y 1))
+                (call $mul/immediate))))
             (('div #f x y)
              `(,(local.get x)
                ,(local.get y)
@@ -1249,9 +1255,7 @@
                (call $atan2)))
 
             ;; Unboxed integer arithmetic and logical operations.
-            (((or 'load-s64 'load-u64) s64)
-             `((i64.const ,s64)))
-            (('load-s64 s64)
+            (((or 'load-u64 'load-s64) s64)
              `((i64.const ,s64)))
             (((or 's64->u64 'u64->s64) #f arg)
              `(,(local.get arg)))
@@ -1394,14 +1398,17 @@
             (('scm->f64 #f src)
              `(,(local.get src)
                (call $scm->f64)))
-            (((or 'scm->u64 'scm->s64) #f src)
+            (('scm->s64 #f src)
              (compile-fixnum-fast-path
               src i64-block-type
               `((local.get $i0)
                 (i32.const 1)
                 (i32.shr_s)
                 (i64.extend_i32_s))
-              '((call $scm->u64))))
+              `((call $scm->s64))))
+            (('scm->u64 #f src)
+             `(,(local.get src)
+               (call $scm->u64)))
             (('scm->u64/truncate #f src)
              (compile-fixnum-fast-path
               src i64-block-type
@@ -1732,7 +1739,7 @@
                (i32.const 1)
                (i32.shr_s)
                (i64.extend_i32_s)))
-            (((or 'tag-fixnum 'tag-fixnum/unlikely) #f src)
+            (('tag-fixnum #f src)
              `(,(local.get src)
                (i32.wrap_i64)
                (i32.const 1)

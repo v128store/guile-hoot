@@ -43,6 +43,7 @@
                             ($call prim (exn)))))
            (build-term
              ($continue kraise src ($prim 'raise-exception)))))
+
        (match cont
          (($ $kargs names vars
              ($ $branch kf kt src 'vtable-has-unboxed-fields? nfields (vtable)))
@@ -50,18 +51,44 @@
                           (build-cont
                             ($kargs names vars
                               ($continue kf src ($values ()))))))
+
          (($ $kargs names vars
              ($ $branch kf kt src 'vtable-field-boxed? idx (vtable)))
           (intmap-replace out label
                           (build-cont
                             ($kargs names vars
                               ($continue kt src ($values ()))))))
+
          (($ $kargs names vars
              ($ $continue k src ($ $primcall 'call-thunk/no-inline #f (thunk))))
           (intmap-replace out label
                           (build-cont
                             ($kargs names vars
                               ($continue k src ($call thunk ()))))))
+
+         (($ $kargs names vars
+             ($ $continue k src ($ $primcall 'load-const/unlikely val ())))
+          (with-cps out
+            (setk label ($kargs names vars ($continue k src ($const val))))))
+
+         (($ $kargs names vars
+             ($ $continue k src ($ $primcall 'tag-fixnum/unlikely #f (val))))
+          (with-cps out
+            (setk label ($kargs names vars
+                          ($continue k src
+                            ($primcall 'tag-fixnum #f (val)))))))
+
+         (($ $kargs names vars
+             ($ $continue k src ($ $primcall 'u64->scm/unlikely #f (val))))
+          (with-cps out
+            (setk label ($kargs names vars
+                          ($continue k src ($primcall 'u64->scm #f (val)))))))
+         (($ $kargs names vars
+             ($ $continue k src ($ $primcall 's64->scm/unlikely #f (val))))
+          (with-cps out
+            (setk label ($kargs names vars
+                          ($continue k src ($primcall 's64->scm #f (val)))))))
+
          (($ $kargs names vars
              ($ $throw src 'throw #f (key args)))
           (with-cps out
@@ -71,6 +98,7 @@
             (setk label ($kargs names vars
                           ($continue kraise src
                             ($primcall 'make-throw-exn #f (key args)))))))
+
          (($ $kargs names vars
              ($ $throw src (or 'throw/value 'throw/value+data) param (val)))
           (with-cps out

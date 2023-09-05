@@ -431,6 +431,9 @@
      (func $debug-str-scm (import "debug" "debug_str_scm")
            (param (ref string) (ref eq)))
 
+     (func $die0 (param $reason (ref string))
+           (call $die (local.get 0) (i31.new (i32.const 1))))
+
      ;; Thomas Wang's integer hasher, from
      ;; http://www.cris.com/~Ttwang/tech/inthash.htm.
      (func $integer-hash (param $v i32) (result i32)
@@ -524,7 +527,7 @@
                          ;; Wasm pages are 64 kB.
                          (i32.shr_u (local.get $sp) (i32.const 16))))
                 (i32.const -1))
-               (then (unreachable))))
+               (then (call $die0 (string.const "$grow-raw-stack")) (unreachable))))
 
      (func $grow-scm-stack (param $sp i32)
            ;; Grow as in $grow-raw-stack.
@@ -537,9 +540,14 @@
            (i32.or)
            (table.grow $scm-stack)
            (i32.const -1)
-           (if (i32.eq) (then (unreachable))))
+           (if (i32.eq)
+               (then
+                (call $die0 (string.const "$grow-scm-stack"))
+                (unreachable))))
 
-     (func $invalid-continuation (type $kvarargs) (unreachable))
+     (func $invalid-continuation (type $kvarargs)
+           (call $die0 (string.const "$invalid-continuation"))
+           (unreachable))
      (func $grow-ret-stack (param $sp i32)
            ;; Grow as in $grow-raw-stack.
            (ref.func $invalid-continuation)
@@ -550,7 +558,10 @@
            (i32.or)
            (table.grow $ret-stack)
            (i32.const -1)
-           (if (i32.eq) (then (unreachable))))
+           (if (i32.eq)
+               (then
+                (call $die0 (string.const "$grow-ret-stack"))
+                (unreachable))))
 
      (func $grow-dyn-stack
            ;; Grow as in $grow-raw-stack.
@@ -559,7 +570,10 @@
                     (i32.const 1))
            (table.grow $dyn-stack)
            (i32.const -1)
-           (if (i32.eq) (then (unreachable))))
+           (if (i32.eq)
+               (then
+                (call $die0 (string.const "$grow-dyn-stack"))
+                (unreachable))))
 
      (func $wrong-num-args (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -1473,8 +1487,10 @@
            (local.get $ret))
 
      (func $apply-to-non-list (param $tail (ref eq))
+           (call $die (string.const "$apply-to-non-list") (local.get $tail))
            (unreachable))
      (func $get-callee-code (param $callee (ref eq)) (result (ref $kvarargs))
+           (call $die (string.const "$get-callee-code") (local.get $callee))
            (unreachable))
 
      (func $apply (param $nargs i32) (param $arg0 (ref eq))
@@ -1600,15 +1616,15 @@
              (struct.new $proc (i32.const 0) (ref.func $apply)))
 
      (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (unreachable))
+           (call $die0 (string.const "$slow-<")) (unreachable))
      (func $slow-<= (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (unreachable))
+           (call $die0 (string.const "$slow-<=")) (unreachable))
      (func $slow-= (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (unreachable))
+           (call $die0 (string.const "$slow-=")) (unreachable))
 
      (func $string-set! (param $str (ref $string)) (param $idx i32)
            (param $ch i32)
-           (unreachable))
+           (call $die0 (string.const "$string-set!")) (unreachable))
 
      ;; cf. compile-test in (hoot compile)
      (func $fixnum? (param $a (ref eq)) (result i32)
@@ -2336,9 +2352,11 @@
                                  (ref.cast $fraction (local.get $b)))))))))
 
      (func $add/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$add/immediate")) (unreachable))
      (func $sub/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$sub/immediate")) (unreachable))
+     (func $mul/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
+           (call $die0 (string.const "$mul/immediate")) (unreachable))
 
      (func $mul (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
@@ -2531,6 +2549,7 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$quo/fixnum-flonum"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
@@ -2548,15 +2567,19 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$quo/bignum-flonum"))
                    (unreachable))))
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
+                   (call $die0 (string.const "$quo/flonum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
+                   (call $die0 (string.const "$quo/flonum-bignum"))
                    (unreachable))
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$quo/flonum-flonum"))
                    (unreachable))))))
 
      (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
@@ -2565,6 +2588,7 @@
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
                  '((call $fixnum? (local.get $b))
+                   (call $die0 (string.const "$rem/fixnum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-rem*
@@ -2576,6 +2600,7 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$rem/fixnum-flonum"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
@@ -2593,15 +2618,19 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$rem/bignum-flonum"))
                    (unreachable))))
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
+                   (call $die0 (string.const "$rem/flonum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
+                   (call $die0 (string.const "$rem/flonum-bignum"))
                    (unreachable))
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$rem/flonum-flonum"))
                    (unreachable))))))
 
      (func $mod (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
@@ -2610,6 +2639,7 @@
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
                  '((call $fixnum? (local.get $b))
+                   (call $die0 (string.const "$mod/fixnum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
                    (return (call $bignum-mod*
@@ -2621,6 +2651,7 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$mod/fixnum-flonum"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
@@ -2638,30 +2669,35 @@
                                  (ref.cast $bignum (local.get $b)))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
+                   (call $die0 (string.const "$mod/flonum-flonum"))
                    (unreachable))))
              ;; TODO: integer flonums
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
+                   (call $die0 (string.const "$mod/flonum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
+                   (call $die0 (string.const "$mod/flonum-bignum"))
                    (unreachable))
                  '((ref.test $flonum (local.get $b))
+                                      (call $die0 (string.const "$mod/flonum-flonum"))
                    (unreachable))))))
 
      (func $logand (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (call $die0 (string.const "$logand"))
            (unreachable))
      (func $logior (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$logior")) (unreachable))
      (func $logxor (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$logxor")) (unreachable))
      (func $logsub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$logsub")) (unreachable))
 
      (func $rsh (param $a (ref eq)) (param $b i64) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$rsh")) (unreachable))
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$lsh")) (unreachable))
 
      (func $inexact (param $x (ref eq)) (result (ref eq))
            ,(arith-cond
@@ -2693,38 +2729,100 @@
                                    (ref.cast $bignum (local.get $x))))))))
 
      (func $abs (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$abs")) (unreachable))
      (func $sqrt (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$sqrt")) (unreachable))
      (func $floor (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$floor")) (unreachable))
      (func $ceiling (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$ceiling")) (unreachable))
 
      (func $sin (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$sin")) (unreachable))
      (func $cos (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$cos")) (unreachable))
      (func $tan (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$tan")) (unreachable))
      (func $asin (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$asin")) (unreachable))
      (func $acos (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$acos")) (unreachable))
      (func $atan (param $x (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$atan")) (unreachable))
      (func $atan2 (param $x (ref eq)) (param $y (ref eq)) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$atan2")) (unreachable))
 
      (func $u64->bignum (param $i64 i64) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$u64->bignum")) (unreachable))
      (func $s64->bignum (param $i64 i64) (result (ref eq))
-           (unreachable))
+           (call $die0 (string.const "$s64->bignum")) (unreachable))
+     (func $bignum->u64 (param $x (ref $bignum)) (result i64)
+           (local $n (ref extern))
+           (local.set $n (struct.get $bignum $val (local.get $x)))
+           (if i64
+               (call $bignum-is-u64 (local.get $n))
+               (then (call $bignum-get-i64 (local.get $n)))
+               (else
+                (call $die (string.const "$bignum->u64 out of range")
+                      (local.get $x))
+                (unreachable))))
+     (func $bignum->s64 (param $x (ref $bignum)) (result i64)
+           (local $n (ref extern))
+           (local.set $n (struct.get $bignum $val (local.get $x)))
+           (if i64
+               (call $bignum-is-i64 (local.get $n))
+               (then (call $bignum-get-i64 (local.get $n)))
+               (else
+                (call $die (string.const "$bignum->s64 out of range")
+                      (local.get $x))
+                (unreachable))))
 
+     (func $scm->s64 (param $a (ref eq)) (result i64)
+           (if i64
+               (call $fixnum? (local.get $a))
+               (then
+                (i64.extend_i32_s
+                 (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                            (i32.const 1))))
+               (else
+                (if i64
+                    (ref.test $bignum (local.get $a))
+                    (then
+                     (return_call $bignum->s64
+                                  (ref.cast $bignum (local.get $a))))
+                    (else
+                     (call $die (string.const "$scm->s64 bad arg")
+                           (local.get $a))
+                     (unreachable))))))
      (func $scm->u64 (param $a (ref eq)) (result i64)
-           (unreachable))
+           (local $i i32)
+           (if i64
+               (ref.test i31 (local.get $a))
+               (then
+                (local.set $i (i31.get_s (ref.cast i31 (local.get $a))))
+                (if i64
+                    (i32.and (local.get $i) (i32.const ,(logior 1 (ash -1 31))))
+                    (then
+                     (call $die
+                           (string.const "$scm->u64 bad arg")
+                           (local.get $a))
+                     (unreachable))
+                    (else
+                     (i64.extend_i32_u
+                      (i32.shr_u (local.get $i) (i32.const 1))))))
+               (else
+                (if i64
+                    (ref.test $bignum (local.get $a))
+                    (then
+                     (return_call $bignum->u64
+                                  (ref.cast $bignum (local.get $a))))
+                    (else
+                     (call $die
+                           (string.const "$scm->u64 bad arg")
+                           (local.get $a))
+                     (unreachable))))))
      (func $scm->u64/truncate (param $a (ref eq)) (result i64)
-           (unreachable))
+           (call $die0 (string.const "$scm->u64/truncate")) (unreachable))
      (func $s64->scm (param $a i64) (result (ref eq))
            (if (result (ref eq))
                (i32.and (i64.ge_s (local.get $a) (i64.const ,(ash -1 29)))

@@ -2294,10 +2294,13 @@
                    (#f (make-type-use '$kvarargs kvarargs-sig))
                    (vars (make-type-use
                           #f
-                          (make-func-sig (map (lambda (_)
-                                                (make-param #f scm-type))
-                                              vars)
-                                         '()))))
+                          (make-func-sig
+                           (map (lambda (var)
+                                  (define repr (intmap-ref reprs var))
+                                  (define type (type-for-repr repr))
+                                  (make-param #f type))
+                                vars)
+                           '()))))
                  locals
                  (init-joins code))))
 

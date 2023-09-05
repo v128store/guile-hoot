@@ -65,8 +65,8 @@
                   (if (pred i) (intset-add! out i) out))
                 set empty-intset)))
 
-(define (intset-pop set)
-  (match (intset-next set)
+(define (intset-pop-right set)
+  (match (intset-prev set)
     (#f (values set #f))
     (i (values (intset-remove set i) i))))
 
@@ -2048,7 +2048,7 @@
           ;; Otherwise render successor inline.
           (do-tree succ ctx))))
       (define (node-within label ys ctx)
-        (call-with-values (lambda () (intset-pop ys))
+        (call-with-values (lambda () (intset-pop-right ys))
           (lambda (ys y)
             (match y
               (#f

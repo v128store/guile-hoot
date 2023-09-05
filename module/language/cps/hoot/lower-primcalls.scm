@@ -90,6 +90,13 @@
                           ($continue k src ($primcall 's64->scm #f (val)))))))
 
          (($ $kargs names vars
+             ($ $continue k src
+                ($ $primcall (or 'assume-u64 'assume-s64) (lo . hi) (val))))
+          (with-cps out
+            (setk label ($kargs names vars
+                          ($continue k src ($values (val)))))))
+
+         (($ $kargs names vars
              ($ $throw src 'throw #f (key args)))
           (with-cps out
             (letv exn)

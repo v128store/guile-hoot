@@ -1408,60 +1408,53 @@
              (struct.new $proc (i32.const 0) (ref.func $abort-to-prompt)))
 
      (func $arg-ref (param $n i32)
-           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (result (ref eq))
            (block
-            $n0
+            $arg-in-register
             (block
-             $n1
+             $n3
              (block
-              $n2
+              $n4
               (block
-               $n3
+               $n5
                (block
-                $n4
+                $n6
                 (block
-                 $n5
+                 $n7
                  (block
-                  $n6
-                  (block
-                   $n7
-                   (block
-                    $nv
-                    (br_table $n0
-                              $n1
-                              $n2
-                              $n3
-                              $n4
-                              $n5
-                              $n6
-                              $n7
-                              $nv
-                              (local.get $n)))
-                   (return (ref.as_non_null
-                            (table.get $argv (i32.sub (local.get $n) (i32.const 8))))))
-                  (return (global.get $arg7)))
-                 (return (global.get $arg6)))
-                (return (global.get $arg5)))
-               (return (global.get $arg4)))
-              (return (global.get $arg3)))
-             (return (local.get $arg2)))
-            (return (local.get $arg1)))
-           (return (local.get $arg0)))
+                  $nv
+                  (br_table $arg-in-register
+                            $arg-in-register
+                            $arg-in-register
+                            $n3
+                            $n4
+                            $n5
+                            $n6
+                            $n7
+                            $nv
+                            (local.get $n)))
+                 (return (ref.as_non_null
+                          (table.get $argv (i32.sub (local.get $n) (i32.const 8))))))
+                (return (global.get $arg7)))
+               (return (global.get $arg6)))
+              (return (global.get $arg5)))
+             (return (global.get $arg4)))
+            (return (global.get $arg3)))
+           (unreachable))
 
      (func $collect-apply-args
-           (param $nargs i32) (param $arg0 (ref eq))
-           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (param $nargs i32) (param $arg2 (ref eq))
            (result (ref eq))
            (local $ret (ref eq))
+           (if (i32.le_u (local.get $nargs) (i32.const 3))
+               (then
+                (call $die0 (string.const "bad collect-apply-args call"))
+                (unreachable)))
            (local.set $ret
                       (call $arg-ref
                             (local.tee $nargs
                                        (i32.sub (local.get $nargs)
-                                                (i32.const 1)))
-                            (local.get $arg0)
-                            (local.get $arg1)
-                            (local.get $arg2)))
+                                                (i32.const 1)))))
            (loop $lp
              (if (i32.lt_u (i32.const 3) (local.get $nargs))
                  (then
@@ -1472,13 +1465,13 @@
                               (call $arg-ref
                                     (local.tee $nargs
                                                (i32.sub (local.get $nargs)
-                                                        (i32.const 1)))
-                                    (local.get $arg0)
-                                    (local.get $arg1)
-                                    (local.get $arg2))
+                                                        (i32.const 1))))
                               (local.get $ret)))
                   (br $lp))))
-           (local.get $ret))
+           (struct.new $pair
+                       (i32.const 0)
+                       (local.get $arg2)
+                       (local.get $ret)))
 
      (func $apply-to-non-list (param $tail (ref eq))
            (call $die (string.const "$apply-to-non-list") (local.get $tail))
@@ -1503,8 +1496,6 @@
                           (then (local.get $arg2))
                           (else (call $collect-apply-args
                                       (local.get $nargs)
-                                      (local.get $arg0)
-                                      (local.get $arg1)
                                       (local.get $arg2)))))
            (if
             (ref.test $pair (local.get $args))

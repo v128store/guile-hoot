@@ -1712,6 +1712,26 @@
                    (then (i32.const 0))
                    (else (i32.const 1))))))
 
+     ;; TODO: write tests once `fixnum?' or similar is available
+     (func $normalize-bignum (param $a (ref $bignum)) (result (ref eq))
+           (local $a-val (ref extern))
+           (local $a64 i64)
+           (local.set $a-val (struct.get $bignum $val (local.get $a)))
+           (if (ref eq)
+               (call $bignum-is-i64 (local.get $a-val))
+               (then (local.set $a64 (call $bignum-get-i64 (local.get $a-val)))
+                     (if (ref eq)
+                         (i32.and (i64.le_s (i64.const #x-20000000)
+                                            (local.get $a64))
+                                  (i64.le_s (local.get $a64)
+                                            (i64.const #x1FFFFFFF)))
+                         (then (i31.new
+                                (i32.shl
+                                 (i32.wrap_i64 (local.get $a64))
+                                 (i32.const 1))))
+                         (else (local.get $a))))
+               (else (local.get $a))))
+
      (func $normalize-fraction (param $a (ref $fraction)) (result (ref eq))
            (if (call $numeric-eqv?
                      (struct.get $fraction $denom (local.get $a))
@@ -1760,29 +1780,32 @@
                                (call $fixnum->i32 (ref.cast i31 (local.get $a)))
                                (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
                  '((ref.test $bignum (local.get $b))
-                   (struct.new $bignum
-                               (i32.const 0)
-                               (call $bignum-gcd
-                                     (call $bignum-from-i32
-                                           (call $fixnum->i32
-                                                 (ref.cast i31 (local.get $a))))
-                                     (struct.get $bignum $val (ref.cast $bignum (local.get $b))))))))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-gcd
+                                           (call $bignum-from-i32
+                                                 (call $fixnum->i32
+                                                       (ref.cast i31 (local.get $a))))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (struct.new $bignum
-                               (i32.const 0)
-                               (call $bignum-gcd
-                                     (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
-                                     (call $bignum-from-i32
-                                           (call $fixnum->i32
-                                                 (ref.cast i31 (local.get $b)))))))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-gcd
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (call $bignum-from-i32
+                                                 (call $fixnum->i32
+                                                       (ref.cast i31 (local.get $b))))))))
                  '((ref.test $bignum (local.get $b))
-                   (struct.new $bignum
-                               (i32.const 0)
-                               (call $bignum-gcd
-                                     (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
-                                     (struct.get $bignum $val (ref.cast $bignum (local.get $b))))))))))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-gcd
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))))))
 
      (func $gcd-i32 (param $a i32) (param $b i32) (result i32)
            (local $r i32)
@@ -1849,10 +1872,11 @@
                         (i64.le_s (local.get $c) (i64.const #x03FFFFFFF)))
                (then (i31.new (i32.wrap_i64 (local.get $c))))
                (else
-                (struct.new $bignum
-                            (i32.const 0)
-                            (call $bignum-from-i64
-                                  (i64.shr_s (local.get $c) (i64.const 1)))))))
+                (call $normalize-bignum
+                      (struct.new $bignum
+                                  (i32.const 0)
+                                  (call $bignum-from-i64
+                                        (i64.shr_s (local.get $c) (i64.const 1))))))))
 
      (func $fixnum-add* (param $a (ref i31)) (param $b (ref i31)) (result (ref eq))
            (call $fixnum-add
@@ -1869,7 +1893,7 @@
                  (i31.get_s (local.get $a))
                  (i31.get_s (local.get $b))))
 
-     (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-add* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -1877,7 +1901,7 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
-     (func $bignum-sub* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-sub* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -1885,7 +1909,7 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
-     (func $bignum-mul* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-mul* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -1893,7 +1917,7 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
-     (func $bignum-quo* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-quo* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -1901,7 +1925,7 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
-     (func $bignum-rem* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-rem* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -1909,7 +1933,7 @@
                   (struct.get $bignum $val (local.get $a))
                   (struct.get $bignum $val (local.get $b)))))
 
-     (func $bignum-mod* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref eq))
+     (func $bignum-mod* (param $a (ref $bignum)) (param $b (ref $bignum)) (result (ref $bignum))
            (struct.new
             $bignum
             (i32.const 0)
@@ -2172,13 +2196,14 @@
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-add*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
-                                                              (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-add*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                                    (i32.const 1))))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return
                     (struct.new $flonum
@@ -2193,17 +2218,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-add*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
-                                                              (i32.const 1)))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-add*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                                    (i32.const 1))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-add*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-add*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return
                     (struct.new $flonum
@@ -2259,13 +2286,14 @@
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-sub*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
-                                                              (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-sub*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                                    (i32.const 1))))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
@@ -2279,17 +2307,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-sub*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
-                                                              (i32.const 1)))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-sub*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                                    (i32.const 1))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-sub*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-sub*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
@@ -2351,13 +2381,14 @@
                                  (ref.cast i31 (local.get $a))
                                  (ref.cast i31 (local.get $b)))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-mul*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
-                                                              (i32.const 1))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mul*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                                                                    (i32.const 1))))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
@@ -2371,17 +2402,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-mul*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
-                                                              (i32.const 1)))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mul*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $b)))
+                                                                    (i32.const 1))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-mul*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mul*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  '((ref.test $flonum (local.get $b))
                    (return (struct.new $flonum
                                        (i32.const 0)
@@ -2524,13 +2557,14 @@
                    (i32.const 1) (i32.shl)
                    (i31.new))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-quo*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $a)))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-quo*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $a)))))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$quo/fixnum-flonum"))
@@ -2538,17 +2572,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-quo*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $b))))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-quo*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $b)))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-quo*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-quo*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$quo/bignum-flonum"))
@@ -2575,13 +2611,14 @@
                    (call $die0 (string.const "$rem/fixnum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-rem*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $a)))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-rem*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $a)))))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$rem/fixnum-flonum"))
@@ -2589,17 +2626,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-rem*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $b))))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-rem*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $b)))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-rem*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-rem*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$rem/bignum-flonum"))
@@ -2626,13 +2665,14 @@
                    (call $die0 (string.const "$mod/fixnum-fixnum"))
                    (unreachable))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-mod*
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $a)))))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mod*
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $a)))))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$mod/fixnum-flonum"))
@@ -2640,17 +2680,19 @@
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
-                   (return (call $bignum-mod*
-                                 (ref.cast $bignum (local.get $a))
-                                 (struct.new $bignum
-                                             (i32.const 0)
-                                             (call $bignum-from-i32
-                                                   (call $fixnum->i32
-                                                         (ref.cast i31 (local.get $b))))))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mod*
+                                       (ref.cast $bignum (local.get $a))
+                                       (struct.new $bignum
+                                                   (i32.const 0)
+                                                   (call $bignum-from-i32
+                                                         (call $fixnum->i32
+                                                               (ref.cast i31 (local.get $b)))))))))
                  '((ref.test $bignum (local.get $b))
-                   (return (call $bignum-mod*
-                                 (ref.cast $bignum (local.get $a))
-                                 (ref.cast $bignum (local.get $b)))))
+                   (return (call $normalize-bignum
+                                 (call $bignum-mod*
+                                       (ref.cast $bignum (local.get $a))
+                                       (ref.cast $bignum (local.get $b))))))
                  ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
                    (call $die0 (string.const "$mod/flonum-flonum"))

@@ -291,7 +291,7 @@
        (when import-abi?
          ;; We'd need instead to create this symbol during _start, along
          ;; with any other constant that references it.
-         (error "unsupported"))
+         (error "symbol constants unsupported" x))
        (intern! (make-ref-type #f '$symbol)
                 `((i32.const ,(hashq-symbol x))
                   ,@(compile-constant (symbol->string x))

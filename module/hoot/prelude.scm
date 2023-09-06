@@ -984,9 +984,9 @@
 
 (define* (read-bytevector! dst #:optional (port (current-input-port))
                            (start 0) (end (bytevector-length dst)))
-  (unless (and (exact-integer? start (<= 0 start (bytevector-length dst))))
+  (unless (and (exact-integer? start) (<= 0 start (bytevector-length dst)))
     (error "bad start" start))
-  (unless (and (exact-integer? end (<= start end (bytevector-length dst))))
+  (unless (and (exact-integer? end) (<= start end (bytevector-length dst)))
     (error "bad end" end))
   (let ((count (- start end)))
     (call-with-values (lambda ()
@@ -1008,10 +1008,73 @@
 
 (define* (char-ready? #:optional (port (current-input-port)))
   (error "unimplemented"))
+
 (define* (peek-char #:optional (port (current-input-port)))
-   (error "unimplemented"))
+  (let ((a (peek-u8 port)))
+    (cond
+     ((eof-object? a) a)
+     ((<= a #x7f) (integer->char a))
+     (else
+      (let ((len (cond ((<= a #x7ff) 2)
+                       ((<= a #xffff) 3)
+                       (else 4))))
+        (call-with-values (lambda ()
+                            (%fill-input port (%port-read-buffer port) len))
+          (lambda (buf avail)
+            (when (< len avail)
+              (error "decoding error: partial utf-8 sequence"))
+            (match buf
+              (#(bv cur end has-eof?)
+               (%inline-wasm
+                '(func (param $bv (ref eq))
+                       (param $cur (ref eq))
+                       (param $end (ref eq))
+                       (result (ref eq))
+                       (i31.new
+                        (stringview_iter.next
+                         (string.as_iter
+                          (string.new_lossy_utf8_array
+                           (struct.get $bytevector $vals
+                                       (ref.cast $bytevector (local.get $bv)))
+                           (i31.get_s (ref.cast i31 (local.get $cur)))
+                           (i31.get_s (ref.cast i31 (local.get $end))))))))
+                bv cur (+ cur len)))))))))))
+
 (define* (read-char #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (let ((a (peek-u8 port)))
+    (cond
+     ((eof-object? a) a)
+     ((<= a #x7f)
+      (match (%port-read-buffer port)
+        ((and buf #(bv cur end has-eof?))
+         (%set-port-buffer-cur! buf (1+ cur))
+         (integer->char a))))
+     (else
+      (let ((len (cond ((<= a #x7ff) 2)
+                       ((<= a #xffff) 3)
+                       (else 4))))
+        (call-with-values (lambda ()
+                            (%fill-input port (%port-read-buffer port) len))
+          (lambda (buf avail)
+            (when (< len avail)
+              (error "decoding error: partial utf-8 sequence"))
+            (match buf
+              (#(bv cur end has-eof?)
+               (%set-port-buffer-cur! buf (+ cur len))
+               (%inline-wasm
+                '(func (param $bv (ref eq))
+                       (param $cur (ref eq))
+                       (param $end (ref eq))
+                       (result (ref eq))
+                       (i31.new
+                        (stringview_iter.next
+                         (string.as_iter
+                          (string.new_lossy_utf8_array
+                           (struct.get $bytevector $vals
+                                       (ref.cast $bytevector (local.get $bv)))
+                           (i31.get_s (ref.cast i31 (local.get $cur)))
+                           (i31.get_s (ref.cast i31 (local.get $end))))))))
+                bv cur (+ cur len)))))))))))
 (define* (read-string k #:optional (port (current-input-port)))
   (error "unimplemented"))
 (define* (read-line #:optional (port (current-input-port)))

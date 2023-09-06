@@ -232,6 +232,13 @@
                   (local.get $val)))
      message val))))
 
+(define* (pk v . v*)
+  (match (reverse (cons v v*))
+    ((val . vals)
+     (for-each (lambda (v) (%debug "pk_" v)) (reverse vals))
+     (%debug "pkv" val)
+     val)))
+
 (define (length l)
   (let lp ((len 0) (l l))
     (if (null? l) len (lp (1+ len) (cdr l)))))

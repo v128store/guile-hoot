@@ -175,8 +175,15 @@
 (define (dynamic-wind wind body unwind)
   (%dynamic-wind wind body unwind))
 
-(define (call-with-values producer consumer)
-  (%call-with-values producer consumer))
+(define-syntax call-with-values
+  (lambda (stx)
+    (syntax-case stx (lambda)
+      ((_ producer (lambda args body0 body ...))
+       #'(%call-with-values producer (lambda args body0 body ...)))
+      (id (identifier? #'id)
+          #'(lambda (producer consumer)
+              (let ((p producer) (c consumer))
+                (%call-with-values p (lambda args (apply c args)))))))))
 
 (define (pair? p) (%pair? p))
 (define (cons x y) (%cons x y))

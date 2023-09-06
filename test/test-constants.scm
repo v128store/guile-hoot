@@ -693,6 +693,20 @@
                     (g (read-u8 p)))
                (vector a b c d e f g))))
 
+(test-call "#(#vu8() #vu8(1) #vu8(1 2) #vu8(1 2 3) #vu8(1 2 3))"
+           (lambda ()
+             (define (read-n n)
+               (read-bytevector n (open-input-bytevector #vu8(1 2 3))))
+             (vector (read-n 0)
+                     (read-n 1)
+                     (read-n 2)
+                     (read-n 3)
+                     (read-n 4))))
+
+(test-call "#eof"
+           (lambda ()
+             (read-bytevector 1 (open-input-bytevector #vu8()))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

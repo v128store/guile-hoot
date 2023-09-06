@@ -891,7 +891,7 @@
        (cond
         ((or has-eof?
              (<= minimum-buffering avail))
-         buf)
+         (values buf avail))
         ((< (bytevector-length bv) minimum-buffering)
          (let* ((expanded (make-bytevector minimum-buffering 0))
                 (buf (vector expanded 0 (- end cur) #f)))
@@ -917,12 +917,12 @@
               ((zero? read)
                (%set-port-buffer-end! buf end)
                (%set-port-buffer-has-eof?! buf #t)
-               #f)
+               (values buf end))
               ((< end minimum-buffering)
                (lp end))
               (else
                (%set-port-buffer-end! buf end)
-               buf))))))))))
+               (values buf end)))))))))))
 
 (define* (peek-u8 #:optional (port (current-input-port)))
   (let lp ((buf (%port-read-buffer port)))
@@ -931,36 +931,80 @@
       (#(bv cur end has-eof?)
        (cond
         ((eq? cur end)
-         (cond
-          (has-eof? (eof-object))
-          ((%fill-input port buf 1) => lp)
-          (else (eof-object))))
+         (if has-eof?
+             (eof-object)
+             (call-with-values (lambda ()
+                                 (%fill-input port buf 1))
+               (lambda (buf avail)
+                 (if (zero? avail)
+                     (eof-object)
+                     (lp buf))))))
         (else
          (bytevector-u8-ref bv cur)))))))
 
 (define* (read-u8 #:optional (port (current-input-port)))
+  (define (read-eof! buf)
+    (%set-port-buffer-has-eof?! buf #f)
+    (eof-object))
   (let lp ((buf (%port-read-buffer port)))
     (match buf
       (#f (error "not an input port"))
       (#(bv cur end has-eof?)
        (cond
         ((eq? cur end)
-         (cond
-          ((and (not has-eof?)
-                (%fill-input port buf 1)) => lp)
-          (else
-           (%set-port-buffer-has-eof?! buf #f)
-           (eof-object))))
+         (if has-eof?
+             (read-eof! buf)
+             (call-with-values (lambda ()
+                                 (%fill-input port buf 1))
+               (lambda (buf avail)
+                 (if (zero? avail)
+                     (read-eof! buf)
+                     (lp buf))))))
         (else
          (%set-port-buffer-cur! buf (1+ cur))
          (bytevector-u8-ref bv cur)))))))
 
 (define* (read-bytevector k #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (unless (and (exact-integer? k) (<= 0 k))
+    (error "read-bytevector: bad k" k))
+  (call-with-values (lambda ()
+                      (%fill-input port (%port-read-buffer port) (max k 1)))
+    (lambda (buf avail)
+      (cond
+       ((zero? avail)
+        (%set-port-buffer-has-eof?! buf #f)
+        (eof-object))
+       (else
+        (match buf
+          (#(src cur end has-eof?)
+           (let* ((cur* (min (+ cur k) end))
+                  (bv (bytevector-copy src cur cur*)))
+             (%set-port-buffer-cur! buf cur*)
+             bv))))))))
 
 (define* (read-bytevector! dst #:optional (port (current-input-port))
                            (start 0) (end (bytevector-length dst)))
-  (error "unimplemented"))
+  (unless (and (exact-integer? start (<= 0 start (bytevector-length dst))))
+    (error "bad start" start))
+  (unless (and (exact-integer? end (<= start end (bytevector-length dst))))
+    (error "bad end" end))
+  (let ((count (- start end)))
+    (call-with-values (lambda ()
+                        (%fill-input port (%port-read-buffer port)
+                                     (max count 1)))
+      (lambda (buf avail)
+        (cond
+         ((zero? avail)
+          (%set-port-buffer-has-eof?! buf #f)
+          (eof-object))
+         (else
+          (match buf
+            (#(src cur end has-eof?)
+             (let* ((cur* (min (+ cur count) end))
+                    (count (- cur* cur)))
+               (bytevector-copy! dst start src cur cur*)
+               (%set-port-buffer-cur! buf cur*)
+               count)))))))))
 
 (define* (char-ready? #:optional (port (current-input-port)))
   (error "unimplemented"))

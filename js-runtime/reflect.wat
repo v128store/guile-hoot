@@ -177,20 +177,19 @@
       (sub $heap-object
         (struct
           (field $hash (mut i32))
-          (field $read (ref null $proc)) ;; (bv, start, count) -> size_t
-          (field $write (ref null $proc)) ;; (bv, start, count) -> size_t
-          (field $seek (ref null $proc)) ;; (offset, whence) -> offset
-          (field $close (ref null $proc)) ;; () -> ()
-          (field $truncate (ref null $proc)) ;; (length) -> ()
+          (field $read (ref eq))              ;; #f | (bv, start, count) -> size
+          (field $write (ref eq))             ;; #f | (bv, start, count) -> size
+          (field $seek (ref eq))              ;; #f | (offset, whence) -> offset
+          (field $close (ref eq))             ;; #f | () -> ()
+          (field $truncate (ref eq))          ;; #f | (length) -> ()
           (field $repr (ref $string))
-          (field $file-name (mut (ref null $string)))
-          (field $position (ref $mutable-pair))
-          (field $read-buf (mut (ref eq)))      ;; A 4-vector or #f
-          (field $write-buf (mut (ref eq)))     ;; A 4-vector or #f
-          (field $write-buf-aux (mut (ref eq))) ;; A 4-vector or #f
-          (field $read-buffering (mut i32))
-          (field $r/w-random-access? (mut i8))
-          (field $private-data (ref eq)))))
+          (field $file-name (mut (ref eq)))   ;; #f | string
+          (field $position (ref $mutable-pair))  ;; (line . column)
+          (field $read-buf (mut (ref eq)))    ;; #f | #(bv cur end has-eof?)
+          (field $write-buf (mut (ref eq)))   ;; #f | #(bv cur end)
+          (field $read-buffering (mut (ref eq))) ;; #f | [1,size,1<<29)
+          (field $r/w-random-access? (ref eq));; #f | #t
+          (field $private-data (ref eq)))))   ;; whatever
     (type $struct
       (sub $heap-object
         (struct

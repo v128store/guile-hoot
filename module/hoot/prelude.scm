@@ -638,146 +638,80 @@
       (error "bad write buf size" write-buf-size)))
   (unless (string? repr)
     (error "missing repr" repr))
-  (%inline-wasm
-   '(func (param $read (ref eq))
-          (param $write (ref eq))
-          (param $seek (ref eq))
-          (param $close (ref eq))
-          (param $truncate (ref eq))
-          (param $repr (ref eq))
-          (param $file-name (ref eq))
-          (param $read-buf-size (ref eq))
-          (param $write-buf-size (ref eq))
-          (param $r/w-random-access? (ref eq))
-          (param $private-data (ref eq))
-          (result (ref eq))
-          (struct.new
-           $port
-           (i32.const 0)
-           (if (ref null $proc)
-               (ref.test $proc (local.get $read))
-               (then (ref.cast $proc (local.get $read)))
-               (else (ref.null $proc)))
-           (if (ref null $proc)
-               (ref.test $proc (local.get $write))
-               (then (ref.cast $proc (local.get $write)))
-               (else (ref.null $proc)))
-           (if (ref null $proc)
-               (ref.test $proc (local.get $seek))
-               (then (ref.cast $proc (local.get $seek)))
-               (else (ref.null $proc)))
-           (if (ref null $proc)
-               (ref.test $proc (local.get $close))
-               (then (ref.cast $proc (local.get $close)))
-               (else (ref.null $proc)))
-           (if (ref null $proc)
-               (ref.test $proc (local.get $truncate))
-               (then (ref.cast $proc (local.get $truncate)))
-               (else (ref.null $proc)))
-           (ref.cast $string (local.get $repr))
-           (if (ref null $string)
-               (ref.test $string (local.get $file-name))
-               (then (ref.cast $string (local.get $file-name)))
-               (else (ref.null $string)))
-           (struct.new $mutable-pair
-                       (i32.const 0)
-                       (i31.new (i32.const 0))
-                       (i31.new (i32.const 0)))
-           (if (ref eq)
-               (ref.test $proc (local.get $read))
-               (then (call $make-port-buffer
-                           (call $scm->u32/truncate (local.get $read-buf-size))))
-               (else (i31.new (i32.const 1))))
-           (if (ref eq)
-               (ref.test $proc (local.get $write))
-               (then (call $make-port-buffer
-                           (call $scm->u32/truncate (local.get $write-buf-size))))
-               (else (i31.new (i32.const 1))))
-           (i31.new (i32.const 1))
-           (if i32
-               (ref.test $proc (local.get $read))
-               (then (call $scm->u32/truncate (local.get $read-buf-size)))
-               (else (i32.const 0)))
-           (i32.eqz
-            (ref.eq (local.get $r/w-random-access?) (i31.new (i32.const 1))))
-           (local.get $private-data)))
-   read write seek close truncate
-   repr file-name read-buf-size write-buf-size r/w-random-access?
-   private-data))
+  (let ((read-buf (and read (vector (make-bytevector read-buf-size 0) 0 0 #f)))
+        (write-buf (and write (vector (make-bytevector write-buf-size 0) 0 0))))
+    (%inline-wasm
+     '(func (param $read (ref eq))
+            (param $write (ref eq))
+            (param $seek (ref eq))
+            (param $close (ref eq))
+            (param $truncate (ref eq))
+            (param $repr (ref eq))
+            (param $file-name (ref eq))
+            (param $read-buf (ref eq))
+            (param $write-buf (ref eq))
+            (param $read-buffering (ref eq))
+            (param $r/w-random-access? (ref eq))
+            (param $private-data (ref eq))
+            (result (ref eq))
+            (struct.new $port (i32.const 0)
+                        (local.get $read)
+                        (local.get $write)
+                        (local.get $seek)
+                        (local.get $close)
+                        (local.get $truncate)
+                        (ref.cast $string (local.get $repr))
+                        (local.get $file-name)
+                        (struct.new $mutable-pair
+                                    (i32.const 0)
+                                    (i31.new (i32.const 0))
+                                    (i31.new (i32.const 0)))
+                        (local.get $read-buf)
+                        (local.get $write-buf)
+                        (local.get $read-buffering)
+                        (local.get $r/w-random-access?)
+                        (local.get $private-data)))
+     read write seek close truncate repr file-name read-buf write-buf
+     read-buf-size r/w-random-access? private-data)))
 
 (define (%set-port-buffer-cur! buf cur)           (vector-set! buf 1 cur))
 (define (%set-port-buffer-end! buf end)           (vector-set! buf 2 end))
 (define (%set-port-buffer-has-eof?! buf has-eof?) (vector-set! buf 3 has-eof?))
 
-(define (%port-read port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (ref.as_non_null (struct.get $port $read (ref.cast $port (local.get $port)))))
-   port))
+(define-syntax-rule (%define-simple-port-getter getter $field)
+  (define (getter port)
+    ;; FIXME: arg type checking
+    (%inline-wasm
+     '(func (param $port (ref eq)) (result (ref eq))
+            (struct.get $port $field (ref.cast $port (local.get $port))))
+     port)))
+(define-syntax-rule (%define-simple-port-setter setter $field)
+  (define (setter port val)
+    ;; FIXME: arg type checking
+    (%inline-wasm
+     '(func (param $port (ref eq)) (param $val (ref eq))
+            (struct.set $port $field (ref.cast $port (local.get $port))
+                        (local.get $val)))
+     port val)))
 
-(define (%port-write port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (ref.as_non_null (struct.get $port $write (ref.cast $port (local.get $port)))))
-   port))
+(%define-simple-port-getter %port-read $read)
+(%define-simple-port-getter %port-write $write)
+(%define-simple-port-getter %port-seek $seek)
+(%define-simple-port-getter %port-close $close)
+(%define-simple-port-getter %port-truncate $truncate)
+(%define-simple-port-getter %port-repr $repr)
+(%define-simple-port-getter %port-file-name $file-name)
+(%define-simple-port-getter %port-position $position)
+(%define-simple-port-getter %port-read-buffer $read-buf)
+(%define-simple-port-getter %port-write-buffer $write-buf)
+(%define-simple-port-getter %port-read-buffering $read-buffering)
+(%define-simple-port-getter %port-r/w-random-access? $r/w-random-access?)
+(%define-simple-port-getter %port-private-data $private-data)
 
-(define (%port-seek port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (ref.as_non_null (struct.get $port $seek (ref.cast $port (local.get $port)))))
-   port))
-
-(define (%port-close port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (ref.as_non_null (struct.get $port $close (ref.cast $port (local.get $port)))))
-   port))
-
-(define (%port-truncate port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (ref.as_non_null (struct.get $port $truncate (ref.cast $port (local.get $port)))))
-   port))
-
-(define (%port-read-buffer port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (struct.get $port $read-buf
-                      (ref.cast $port (local.get $port))))
-   port))
-
-(define (%port-write-buffer port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (struct.get $port $write-buf
-                      (ref.cast $port (local.get $port))))
-   port))
-
-(define (%port-r/w-random-access? port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (if (ref eq)
-              (struct.get_u $port $r/w-random-access?
-                            (ref.cast $port (local.get $port)))
-              (then (i31.new (i32.const 17)))
-              (else (i31.new (i32.const 1)))))
-   port))
-
-(define (%port-private-data port)
-  ;; FIXME: arg type checking
-  (%inline-wasm
-   '(func (param $port (ref eq)) (result (ref eq))
-          (struct.get $port $private-data
-                      (ref.cast $port (local.get $port))))
-   port))
+(%define-simple-port-setter %set-port-file-name! $file-name)
+(%define-simple-port-setter %set-port-read-buffer! $read-buf)
+(%define-simple-port-setter %set-port-write-buffer! $write-buf)
+(%define-simple-port-setter %set-port-read-buffering! $read-buffering)
 
 (define (get-output-bytevector port)
   ;; FIXME: How to know it's a bytevector output port?
@@ -828,10 +762,7 @@
     count)
   (define (bv-seek offset whence)    ; seek
     (define len (bytevector-length (get-output-bytevector port)))
-    (define base (match whence
-                   ('start 0)
-                   ('cur (or pos len))
-                   ('end len)))
+    (define base (match whence ('start 0) ('cur (or pos len)) ('end len)))
     (define dst (+ base offset))
     (when (or (< dst 0) (< len dst))
       (error "out of range" offset))
@@ -847,11 +778,41 @@
                 "bytevector"            ; repr
                 #f                      ; file-name
                 #f                      ; read-buf-size
-                1024                    ; write-buf-size
+                default-buffer-size     ; write-buf-size
                 #f                      ; r/w-random-access
                 accum                   ; private data
                 ))
   port)
+
+(define (open-input-bytevector src)
+  (define pos 0)
+  (define default-buffer-size 1024)
+  (define (bv-read dst start count)
+    (let* ((to-copy (min count (- (bytevector-length src) pos)))
+           (end (+ pos to-copy)))
+      (bytevector-copy! dst start src pos end)
+      (set! pos end)
+      to-copy))
+  (define (bv-seek offset whence)    ; seek
+    (define len (bytevector-length src))
+    (define base (match whence ('start 0) ('cur len) ('end len)))
+    (define dst (+ base offset))
+    (when (or (< dst 0) (< len dst))
+      (error "out of range" offset))
+    (set! pos dst)
+    dst)
+  (%make-port bv-read
+              #f                      ; write
+              bv-seek
+              #f                      ; close
+              #f                      ; truncate
+              "bytevector"            ; repr
+              #f                      ; file-name
+              default-buffer-size     ; read-buf-size
+              #f                      ; write-buf-size
+              #f                      ; r/w-random-access
+              #f                      ; private data
+              ))
 
 ;; R7RS ports
 (define (eof-object? x) (%eof-object? x))
@@ -885,6 +846,12 @@
     (when (< written count)
       (%write-bytes port bv (+ start written) (- count written)))))
 
+(define (%read-bytes port bv start count)
+  (let ((read ((%port-read port) bv start count)))
+    (unless (<= 0 read count)
+      (error "bad return from port read function" read))
+    read))
+
 (define* (flush-input-port #:optional (port (current-output-port)))
   ;; For buffered input+output ports that are random-access?, it's
   ;; likely that when switching from reading to writing that we will
@@ -901,28 +868,98 @@
 (define* (flush-output-port #:optional (port (current-output-port)))
   (match (%port-write-buffer port)
     (#f (error "not an output port"))
-    ((and buf #(bv cur end has-eof?))
+    ((and buf #(bv cur end))
      (when (< cur end)
        (%set-port-buffer-cur! buf 0)
        (%set-port-buffer-end! buf 0)
        (%write-bytes port bv cur (- end cur))))))
+
+(define* (u8-ready? #:optional (port (current-input-port)))
+  (error "unimplemented"))
+
+(define (%fill-input port buf minimum-buffering)
+  (match buf
+    (#(bv cur end has-eof?)
+     (let ((avail (- end cur)))
+       (cond
+        ((or has-eof?
+             (<= minimum-buffering avail))
+         buf)
+        ((< (bytevector-length bv) minimum-buffering)
+         (let* ((expanded (make-bytevector minimum-buffering 0))
+                (buf (vector expanded 0 (- end cur) #f)))
+           (when (< cur end)
+             (bytevector-copy! expanded 0 bv cur end))
+           (%set-port-read-buffer! port buf)
+           (%fill-input port buf minimum-buffering)))
+        (else
+         (when (< 0 cur)
+           (bytevector-copy! bv 0 bv cur end)
+           (%set-port-buffer-cur! buf 0))
+         (let lp ((end avail))
+           (let* ((must-read (- minimum-buffering end))
+                  ;; precondition: read-buffering <= len(read-buffer)
+                  ;; precondition: minimum-buffering <= len(read-buffer)
+                  ;; precondition: end < minimum-buffering
+                  (count (- (max (%port-read-buffering port)
+                                 minimum-buffering)
+                            end))
+                  (read (%read-bytes port bv end count))
+                  (end (+ end read)))
+             (cond
+              ((zero? read)
+               (%set-port-buffer-end! buf end)
+               (%set-port-buffer-has-eof?! buf #t)
+               #f)
+              ((< end minimum-buffering)
+               (lp end))
+              (else
+               (%set-port-buffer-end! buf end)
+               buf))))))))))
+
+(define* (peek-u8 #:optional (port (current-input-port)))
+  (let lp ((buf (%port-read-buffer port)))
+    (match buf
+      (#f (error "not an input port"))
+      (#(bv cur end has-eof?)
+       (cond
+        ((eq? cur end)
+         (cond
+          (has-eof? (eof-object))
+          ((%fill-input port buf 1) => lp)
+          (else (eof-object))))
+        (else
+         (bytevector-u8-ref bv cur)))))))
+
+(define* (read-u8 #:optional (port (current-input-port)))
+  (let lp ((buf (%port-read-buffer port)))
+    (match buf
+      (#f (error "not an input port"))
+      (#(bv cur end has-eof?)
+       (cond
+        ((eq? cur end)
+         (cond
+          ((and (not has-eof?)
+                (%fill-input port buf 1)) => lp)
+          (else
+           (%set-port-buffer-has-eof?! buf #f)
+           (eof-object))))
+        (else
+         (%set-port-buffer-cur! buf (1+ cur))
+         (bytevector-u8-ref bv cur)))))))
+
+(define* (read-bytevector k #:optional (port (current-input-port)))
+  (error "unimplemented"))
+
+(define* (read-bytevector! dst #:optional (port (current-input-port))
+                           (start 0) (end (bytevector-length dst)))
+  (error "unimplemented"))
 
 (define* (char-ready? #:optional (port (current-input-port)))
   (error "unimplemented"))
 (define* (peek-char #:optional (port (current-input-port)))
    (error "unimplemented"))
 (define* (read-char #:optional (port (current-input-port)))
-  (error "unimplemented"))
-(define* (u8-ready? #:optional (port (current-input-port)))
-  (error "unimplemented"))
-(define* (peek-u8 #:optional (port (current-input-port)))
-  (error "unimplemented"))
-(define* (read-u8 #:optional (port (current-input-port)))
-  (error "unimplemented"))
-(define* (read-bytevector k #:optional (port (current-input-port)))
-  (error "unimplemented"))
-(define* (read-bytevector! dst #:optional (port (current-input-port))
-                           (start 0) (end (bytevector-length dst)))
   (error "unimplemented"))
 (define* (read-string k #:optional (port (current-input-port)))
   (error "unimplemented"))
@@ -932,7 +969,7 @@
 (define* (write-u8 u8 #:optional (port (current-output-port)))
   (match (%port-write-buffer port)
     (#f (error "not an output port"))
-    ((and buf #(dst cur end has-eof?))
+    ((and buf #(dst cur end))
      (when (and (eq? cur end) (%port-r/w-random-access? port))
        (flush-input-port port))
      (cond
@@ -952,7 +989,7 @@
   (let ((count (- end start)))
     (match (%port-write-buffer port)
       (#f (error "not an output port"))
-      ((and buf #(dst cur end has-eof?))
+      ((and buf #(dst cur end))
        (when (and (eq? cur end) (%port-r/w-random-access? port))
          (flush-input-port port))
        (let ((size (bytevector-length dst))
@@ -980,6 +1017,7 @@
            (%write-bytes port bv start count))))))))
 
 (define* (write-char x #:optional (port (current-output-port)))
+  ;; FIXME: update port position.
   (define (low-six i) (logand i #b111111))
   (let ((i (char->integer x)))
     (cond
@@ -1034,9 +1072,6 @@
 
 (define (open-output-string) (error "unimplemented"))
 (define (get-output-string x) (error "unimplemented"))
-
-(define (open-input-bytevector bv)
-  (error "unimplemented"))
 
 ;; (scheme file); perhaps drop?
 (define (open-binary-input-file filename) (error "files unimplemented"))

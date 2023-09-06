@@ -707,7 +707,7 @@
            (lambda ()
              (read-bytevector 1 (open-input-bytevector #vu8()))))
 
-(test-call "#(#\h #\h #\e #\l #\l #\o #eof #eof #eof)"
+(test-call "#(#\\h #\\h #\\e #\\l #\\l #\\o #eof #eof #eof)"
            (lambda ()
              (let* ((p (open-input-bytevector #vu8(104 101 108 108 111)))
                     (a (peek-char p))
@@ -720,6 +720,18 @@
                     (h (peek-char p))
                     (i (read-char p)))
                (vector a b c d e f g h i))))
+
+(test-call "#( h he hel hell hello hello)"
+           (lambda ()
+             (define (read-n n)
+               (read-string n (open-input-bytevector #vu8(104 101 108 108 111))))
+             (vector (read-n 0)
+                     (read-n 1)
+                     (read-n 2)
+                     (read-n 3)
+                     (read-n 4)
+                     (read-n 5)
+                     (read-n 6))))
 
 ;; 
 ;; This is how you would debug outside the test suite...
@@ -741,6 +753,7 @@
 (when (and (batch-mode?)
            (or (not (zero? (test-runner-fail-count (test-runner-get))))
                (not (zero? (test-runner-xpass-count (test-runner-get))))))
+  (force-output)
   (exit 1))
 
 (test-end "test-constants")

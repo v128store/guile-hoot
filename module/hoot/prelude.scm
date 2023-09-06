@@ -1013,10 +1013,12 @@
   (let ((a (peek-u8 port)))
     (cond
      ((eof-object? a) a)
-     ((<= a #x7f) (integer->char a))
+     ((< a #b10000000) (integer->char a))
      (else
-      (let ((len (cond ((<= a #x7ff) 2)
-                       ((<= a #xffff) 3)
+      ;; FIXME: This is a sloppy UTF-8 decoder.  Need to think more
+      ;; about this.
+      (let ((len (cond ((< a #b11100000) 2)
+                       ((< a #b11110000) 3)
                        (else 4))))
         (call-with-values (lambda ()
                             (%fill-input port (%port-read-buffer port) len))
@@ -1036,8 +1038,12 @@
                           (string.new_lossy_utf8_array
                            (struct.get $bytevector $vals
                                        (ref.cast $bytevector (local.get $bv)))
-                           (i31.get_s (ref.cast i31 (local.get $cur)))
-                           (i31.get_s (ref.cast i31 (local.get $end))))))))
+                           (i32.shr_s
+                            (i31.get_s (ref.cast i31 (local.get $cur)))
+                            (i32.const 1))
+                           (i32.shr_s
+                            (i31.get_s (ref.cast i31 (local.get $end)))
+                            (i32.const 1)))))))
                 bv cur (+ cur len)))))))))))
 
 (define* (read-char #:optional (port (current-input-port)))
@@ -1050,8 +1056,8 @@
          (%set-port-buffer-cur! buf (1+ cur))
          (integer->char a))))
      (else
-      (let ((len (cond ((<= a #x7ff) 2)
-                       ((<= a #xffff) 3)
+      (let ((len (cond ((< a #b11100000) 2)
+                       ((< a #b11110000) 3)
                        (else 4))))
         (call-with-values (lambda ()
                             (%fill-input port (%port-read-buffer port) len))
@@ -1072,11 +1078,59 @@
                           (string.new_lossy_utf8_array
                            (struct.get $bytevector $vals
                                        (ref.cast $bytevector (local.get $bv)))
-                           (i31.get_s (ref.cast i31 (local.get $cur)))
-                           (i31.get_s (ref.cast i31 (local.get $end))))))))
+                           (i32.shr_s
+                            (i31.get_s (ref.cast i31 (local.get $cur)))
+                            (i32.const 1))
+                           (i32.shr_s
+                            (i31.get_s (ref.cast i31 (local.get $end)))
+                            (i32.const 1)))))))
                 bv cur (+ cur len)))))))))))
 (define* (read-string k #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (cond
+   ;; Call peek-char to ensure we're at the start of some UTF-8.
+   ((eof-object? (peek-char port)) (eof-object))
+   (else
+    (match (%port-read-buffer port)
+      ((and buf #(bv cur end has-eof?))
+       (define (take-string count cur*)
+         (%set-port-buffer-cur! buf cur*)
+         (define str
+           (%inline-wasm
+            '(func (param $bv (ref eq))
+                   (param $cur (ref eq))
+                   (param $end (ref eq))
+                   (result (ref eq))
+                   (struct.new
+                    $string
+                    (i32.const 0)
+                    (string.new_lossy_utf8_array
+                     (struct.get $bytevector $vals
+                                 (ref.cast $bytevector (local.get $bv)))
+                     (i32.shr_s
+                      (i31.get_s (ref.cast i31 (local.get $cur)))
+                      (i32.const 1))
+                     (i32.shr_s
+                      (i31.get_s (ref.cast i31 (local.get $end)))
+                      (i32.const 1)))))
+            bv cur cur*))
+         (let ((remaining (- k count)))
+           (if (zero? remaining)
+               str
+               (match (read-string remaining port)
+                 ((? eof-object?) str)
+                 (tail (string-append str tail))))))
+       ;; Count codepoints in buffer.
+       (let count-codepoints ((count 0) (cur cur))
+         (if (and (< cur end) (< count k))
+             (let* ((u8 (bytevector-u8-ref bv cur))
+                    (len (cond ((< u8 #b10000000) 1)
+                               ((< u8 #b11100000) 2)
+                               ((< u8 #b11110000) 3)
+                               (else 4))))
+               (if (<= (+ cur len) end)
+                   (count-codepoints (1+ count) (+ cur len))
+                   (take-string count cur)))
+             (take-string count cur))))))))
 (define* (read-line #:optional (port (current-input-port)))
   (error "unimplemented"))
 

@@ -1722,6 +1722,7 @@
                    (then (i32.const 0))
                    (else (i32.const 1))))))
 
+     ;; TODO: write tests once `fixnum?' or similar is available
      (func $normalize-bignum (param $a (ref $bignum)) (result (ref eq))
            (local $a-val (ref extern))
            (local $a64 i64)

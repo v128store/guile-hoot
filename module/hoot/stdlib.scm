@@ -38,6 +38,16 @@
               (then ,@res1)
               (else ,(apply arith-cond type (cdr clauses))))))))
 
+(define (call-fmath fn . args)
+  `(struct.new $flonum
+               (i32.const 0)
+               (call ,fn
+                     ,@(map (lambda (arg)
+                              `(struct.get $flonum
+                                           $val
+                                           (call $inexact ,arg)))
+                            args))))
+
 (define (compute-stdlib import-abi?)
   (define (maybe-import id)
     (if import-abi?
@@ -412,6 +422,7 @@
            (param (ref extern) (ref eq))
            (result i32))
 
+     (func $fsqrt (import "rt" "fsqrt") (param f64) (result f64))
      (func $fsin (import "rt" "fsin") (param f64) (result f64))
      (func $fcos (import "rt" "fcos") (param f64) (result f64))
      (func $ftan (import "rt" "ftan") (param f64) (result f64))
@@ -2725,8 +2736,8 @@
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            (call $die0 (string.const "$lsh")) (unreachable))
 
-     (func $inexact (param $x (ref eq)) (result (ref eq))
-           ,(arith-cond
+     (func $inexact (param $x (ref eq)) (result (ref $flonum))
+           ,(arith-cond '(ref $flonum)
              `((call $fixnum? (local.get $x))
                (return
                 (struct.new $flonum
@@ -2740,7 +2751,7 @@
                             (call $bignum->f64
                                   (ref.cast $bignum (local.get $x))))))
              `((ref.test $flonum (local.get $x))
-               (return (local.get $x)))))
+               (return (ref.cast $flonum (local.get $x))))))
 
      ;; compute (logand x #xffffFFFF).  precondition: x is exact integer.
      (func $scm->u32/truncate (param $x (ref eq)) (result i32)
@@ -2756,27 +2767,28 @@
 
      (func $abs (param $x (ref eq)) (result (ref eq))
            (call $die0 (string.const "$abs")) (unreachable))
-     (func $sqrt (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$sqrt")) (unreachable))
      (func $floor (param $x (ref eq)) (result (ref eq))
            (call $die0 (string.const "$floor")) (unreachable))
      (func $ceiling (param $x (ref eq)) (result (ref eq))
            (call $die0 (string.const "$ceiling")) (unreachable))
 
+     (func $sqrt (param $x (ref eq)) (result (ref $flonum))
+           ,(call-fmath '$fsqrt '(local.get $x)))
+
      (func $sin (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$sin")) (unreachable))
+           ,(call-fmath '$fsin '(local.get $x)))
      (func $cos (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$cos")) (unreachable))
+           ,(call-fmath '$fcos '(local.get $x)))
      (func $tan (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$tan")) (unreachable))
+           ,(call-fmath '$ftan '(local.get $x)))
      (func $asin (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$asin")) (unreachable))
+           ,(call-fmath '$fasin '(local.get $x)))
      (func $acos (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$acos")) (unreachable))
+           ,(call-fmath '$facos '(local.get $x)))
      (func $atan (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$atan")) (unreachable))
+           ,(call-fmath '$fatan '(local.get $x)))
      (func $atan2 (param $x (ref eq)) (param $y (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$atan2")) (unreachable))
+           ,(call-fmath '$fatan2 '(local.get $x) '(local.get $y)))
 
      (func $u64->bignum (param $i64 i64) (result (ref eq))
            (call $die0 (string.const "$u64->bignum")) (unreachable))

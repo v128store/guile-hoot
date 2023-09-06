@@ -314,6 +314,16 @@
 (test-call "536870902" (lambda (a b c) (modulo a (+ b c))) -10 536870911 1)
 (test-call "-10" (lambda (a b c) (modulo a (+ b c))) -10 -536870911 -1)
 
+;; Square root and trigonometry
+(test-call "2" (lambda (a) (sqrt a)) 4)
+(test-call "0" (lambda (a) (sin a)) 0)
+(test-call "1" (lambda (a) (cos a)) 0)
+(test-call "0" (lambda (a) (tan a)) 0)
+(test-call "0" (lambda (a) (asin a)) 0)
+(test-call "0" (lambda (a) (acos a)) 1)
+(test-call "0" (lambda (a) (atan a)) 0)
+(test-call "0" (lambda (a b) (atan a b)) 0 1)
+
 (test-call "1"
            (lambda (a b c d) (modulo (+ a b) (+ c d)))
            536870911 2 536870911 1)

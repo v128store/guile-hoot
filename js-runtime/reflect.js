@@ -362,6 +362,7 @@ class SchemeModule {
         weak_map_set(map, k, v) { return map.set(k, v); },
         weak_map_delete(map, k) { return map.delete(k); },
 
+        fsqrt: Math.sqrt,
         fsin: Math.sin,
         fcos: Math.cos,
         ftan: Math.tan,

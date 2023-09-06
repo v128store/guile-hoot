@@ -325,6 +325,7 @@
       ("bignum_quo" . ,quotient)
       ("bignum_rem" . ,remainder)
       ("bignum_mod" . ,modulo)
+      ("bignum_gcd" . ,gcd)
       ("make_weak_map" . ,make-weak-key-hash-table)
       ("weak_map_get" . ,hash-ref)
       ("weak_map_set" . ,hash-set!)

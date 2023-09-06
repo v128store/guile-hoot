@@ -23,10 +23,16 @@
   #:use-module (ice-9 binary-ports)
   #:use-module (ice-9 exceptions)
   #:use-module (ice-9 match)
+  #:use-module (ice-9 pretty-print)
   #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
+  #:use-module (system repl command)
+  #:use-module (system repl common)
+  #:use-module (system repl debug)
+  #:use-module (system repl repl)
+  #:use-module (wasm assemble)
   #:use-module (wasm parse)
   #:use-module (wasm stack)
   #:use-module (wasm types)
@@ -413,16 +419,6 @@ bytevector, an input port, or a <wasm> record produced by
   (stack wasm-runtime-error-stack)
   (blocks wasm-runtime-error-blocks)
   (locals wasm-runtime-error-locals))
-
-;; Branch + index context for debugging.
-(define-record-type <wasm-position>
-  (make-wasm-position instructions index)
-  wasm-position?
-  (instructions wasm-position-instructions)
-  (index wasm-position-index set-wasm-position-index!))
-
-(define (wasm-position-increment! pos)
-  (set-wasm-position-index! pos (+ (wasm-position-index pos) 1)))
 
 ;; TODO: Use a vector instead of a list to avoid allocation for each
 ;; push.  Maximum stack depth for each function can be determined at
@@ -948,14 +944,15 @@ bytevector, an input port, or a <wasm> record produced by
               (apply proc args))
             (set-procedure-property! wrap 'name (string->symbol name))
             wrap)))
-       (define (instantiate-func func)
+       (define (instantiate-func idx func)
          (match func
            (($ <func> _ ($ <type-use> type-idx) locals body)
             (let* ((local-types (map local-type locals))
                    (sig (vector-ref type-vec type-idx))
                    (n-params (length (func-sig-params sig)))
                    (n-results (length (func-sig-results sig)))
-                   (n-locals (length local-types)))
+                   (n-locals (length local-types))
+                   (base-path `(,idx func)))
               (define (wasm-proc . args)
                 (let ((stack (make-wasm-stack))
                       (locals (make-vector (+ n-params n-locals))))
@@ -984,16 +981,16 @@ bytevector, an input port, or a <wasm> record produced by
                   (let ((tail-cont #f))
                     (call-with-block
                      (lambda (tag)
-                       (execute* body (list func) instance stack (list tag) locals))
+                       (execute* body base-path instance stack (list tag) locals))
                      (lambda (k)
                        (set! tail-cont k)))
                     (if tail-cont
                         (tail-cont)
                         (apply values (stack-pop-n! stack n-results))))))
               (make-wasm-func wasm-proc sig)))))
-       (define (exec-init root init)
+       (define (exec-init base-path init)
          (let ((stack (make-wasm-stack)))
-           (execute* init (list root) instance stack '() #())
+           (execute* init (reverse base-path) instance stack '() #())
            (stack-pop! stack)))
        ;; Process imports.
        (let loop ((wasm-imports wasm-imports)
@@ -1045,7 +1042,7 @@ bytevector, an input port, or a <wasm> record produced by
          (match funcs
            (() #t)
            ((func . rest)
-            (vector-set! func-vec idx (instantiate-func func))
+            (vector-set! func-vec idx (instantiate-func idx func))
             (loop rest (+ idx 1)))))
        ;; Initialize globals.
        (let loop ((globals globals)
@@ -1053,7 +1050,7 @@ bytevector, an input port, or a <wasm> record produced by
          (match globals
            (() #t)
            (((and ($ <global> _ ($ <global-type> mutable? type) init) global) . rest)
-            (let ((global (make-wasm-global (exec-init global init) mutable?)))
+            (let ((global (make-wasm-global (exec-init `(global ,idx) init) mutable?)))
               (vector-set! global-vec idx global))
             (loop rest (+ idx 1)))))
        ;; Initialize memories.
@@ -1065,15 +1062,17 @@ bytevector, an input port, or a <wasm> record produced by
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
        ;; Copy data into memory.
-       (for-each (match-lambda
-                   ((and ($ <data> _ mode mem-id instrs init) data)
-                    ;; Invoke the VM to process the constant
-                    ;; expressions that produce the offset value.
-                    (let ((offset (exec-init data instrs))
-                          (memory (vector-ref memory-vec mem-id)))
-                      (bytevector-copy! init 0 (wasm-memory-bytes memory)
-                                        offset (bytevector-length init)))))
-                 datas)
+       (let loop ((datas datas) (idx 0))
+         (match datas
+           (() #t)
+           (((and ($ <data> _ mode mem-id instrs init) data) . rest)
+            ;; Invoke the VM to process the constant
+            ;; expressions that produce the offset value.
+            (let ((offset (exec-init `(data ,idx) instrs))
+                  (memory (vector-ref memory-vec mem-id)))
+              (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                offset (bytevector-length init)))
+            (loop rest (+ idx 1)))))
        ;; Initialize tables.
        (let loop ((tables tables)
                   (idx n-table-imports))
@@ -1089,11 +1088,15 @@ bytevector, an input port, or a <wasm> record produced by
            (() #t)
            (((and elem ($ <elem> _ mode table-idx type offset inits)) . rest)
             (let ((table (and table-idx (vector-ref table-vec table-idx)))
-                  (offset (and (eq? mode 'active) (exec-init elem offset)))
+                  (offset (and (eq? mode 'active)
+                               (exec-init `(elem ,idx 0) offset)))
                   (init-vec (list->vector
-                             (map (lambda (instrs)
-                                    (exec-init elem instrs))
-                                  inits))))
+                             (let init-loop ((inits inits) (j 1))
+                               (match inits
+                                 (() '())
+                                 ((instrs . rest)
+                                  (cons (exec-init `(elem ,idx ,j) instrs)
+                                        (init-loop rest (+ j 1)))))))))
               (vector-set! elem-vec idx init-vec)
               (when table
                 (do ((i 0 (+ i 1)))
@@ -1190,7 +1193,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (return) (return* #f))
   (define (return-call f) (return* (lambda () (call* f))))
   (define (branch l) (abort-to-prompt (list-ref blocks l) #f))
-  (define (block body branch)
+  (define (block path body branch)
     (call-with-block
      (lambda (block)
        (execute* body path instance stack (cons block blocks) locals))
@@ -1352,14 +1355,17 @@ bytevector, an input port, or a <wasm> record produced by
      (runtime-error "unreachable"))
     (('block _ _ body)
      ;; Branching to a 'block' label exits the block.
-     (block body end))
+     (block path body end))
     (('if _ _ consequent alternate)
      ;; Same behavior as branching to 'block', which is to exit.
-     (block (if (= (pop) 0) alternate consequent) end))
+     (let ((test (= (pop) 0)))
+       (block (if test (cons 0 path) (cons 1 path))
+              (if test alternate consequent)
+              end)))
     (('loop _ _ body)
      (define (iterate)
        ;; Branching to a 'loop' label re-enters the loop.
-       (block body iterate))
+       (block path body iterate))
      (iterate))
     (('call idx) (call (func-ref idx)))
     (('call_indirect idx _)
@@ -1649,12 +1655,354 @@ bytevector, an input port, or a <wasm> record produced by
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)
-  (let* ((pos (make-wasm-position instrs 0))
-         (path* (cons pos path)))
-    (let loop ((instrs instrs))
+  (let loop ((instrs instrs) (i 0))
+    (match instrs
+      (() 'end)
+      ((instr . rest)
+       (execute instr (cons i path) instance stack blocks locals)
+       (loop rest (+ i 1))))))
+
+
+;;;
+;;; REPL commands
+;;;
+
+(define current-instance (make-parameter #f))
+(define current-error (make-parameter #f))
+
+(define (current-wasm)
+  (wasm-module-wasm (wasm-instance-module (current-instance))))
+
+(define (assert-current-instance)
+  (unless (wasm-instance? (current-instance))
+    (error "No WASM instance loaded.")))
+
+(define (assert-current-error)
+  (unless (wasm-runtime-error? (current-error))
+    (error "Not debugging a WASM error.")))
+
+(define (print-stack stack)
+  (print-list (lambda (x) (format #t "~s\n" x))
+              "Value stack"
+              (wasm-stack-items stack)))
+
+(define (print-locals locals)
+  (print-list (lambda (x) (format #t "~s\n" x))
+              "Locals"
+              (vector->list locals)))
+
+(define (print-runtime-error e)
+  (format #t "~a\n\n" (exception-message e))
+  (print-stack (wasm-runtime-error-stack e))
+  (newline)
+  (print-locals (wasm-runtime-error-locals e))
+  (newline)
+  (print-location (wasm-module-wasm (wasm-instance-module (current-instance)))
+                  (wasm-runtime-error-position e)))
+
+(define-syntax-rule (with-exception-handling body ...)
+  (with-exception-handler (lambda (e) (print-runtime-error e))
+    (lambda () body ...)
+    #:unwind? #t
+    #:unwind-for-type &wasm-runtime-error))
+
+(define (serialize-type type)
+  (match type
+    ((or (? symbol?) (? number?)) type)
+    ((? promise?) (serialize-type (force type)))
+    (($ <func-sig> params results)
+     `(func ,@(map (match-lambda
+                     (($ <param> id type)
+                      `(param ,(serialize-type type))))
+                   params)
+            ,@(map (lambda (type)
+                     `(result ,(serialize-type type)))
+                   results)))
+    (($ <ref-type> nullable? heap-type)
+     `(ref ,@(if nullable? '(null) '()) ,(serialize-type heap-type)))
+    (($ <array-type> mutable? element-type)
+     (let ((t (serialize-type element-type)))
+       `(array ,(if mutable? `(mut ,t) t))))
+    (($ <struct-type> fields)
+     `(struct
+       ,@(map (match-lambda
+                (($ <field> id mutable? type)
+                 (let ((t (serialize-type type)))
+                   `(field ,(if mutable? `(mut ,t) t)))))
+              fields)))
+    (($ <sub-type> final? supers type)
+     `(sub ,(map serialize-type supers)
+           ,(serialize-type type)))))
+
+(define (for-each/index proc lst)
+  (let loop ((lst lst) (i 0))
+    (match lst
+      (() *unspecified*)
+      ((x . rest)
+       (proc i x)
+       (loop rest (+ i 1))))))
+
+(define (print-list proc title items)
+  (format #t "~a:\n" title)
+  (for-each/index (lambda (i item)
+                    (format #t "  ~a:\t" i)
+                    (proc item))
+                  items))
+
+(define (print-types types)
+  (print-list (lambda (type)
+                (pretty-print (serialize-type type)))
+              "Types"
+              (append-map (match-lambda
+                            (($ <rec-group> (($ <type> id types) ...))
+                             types)
+                            (($ <type> id type)
+                             (list type)))
+                          types)))
+
+(define (print-funcs funcs)
+  (print-list (match-lambda
+                (($ <func> _ ($ <type-use> _
+                                ($ <type> _
+                                   ($ <func-sig>
+                                      (($ <param> _ params) ...)
+                                      results)))
+                    (($ <local> _ locals) ...))
+                 (pretty-print
+                  `(func ,@(map (lambda (type)
+                                  `(param ,(serialize-type type)))
+                                params)
+                         ,@(map (lambda (type)
+                                  `(result ,(serialize-type type)))
+                                results)
+                         ,@(map (lambda (type)
+                                  `(local ,(serialize-type type)))
+                                locals)))))
+              "Functions"
+              funcs))
+
+(define (print-globals globals)
+  (print-list (match-lambda
+                (($ <global> id ($ <global-type> mutable? type) init)
+                 (let ((t (serialize-type type)))
+                   (pretty-print `(global ,(if mutable? `(mut ,t) t) ,init)))))
+              "Globals"
+              globals))
+
+(define (print-memories memories)
+  (print-list (match-lambda
+                (($ <mem-type> ($ <limits> min max))
+                 (pretty-print `(memory ,min ,max))))
+              "Memories"
+              memories))
+
+(define (print-datas datas)
+  (print-list (match-lambda
+                (($ <data> id mode mem offset init)
+                 (pretty-print `(data ,mode ,mem ,offset ,init))))
+              "Datas"
+              datas))
+
+(define (print-tables tables)
+  (print-list (match-lambda
+                (($ <table> id ($ <table-type> ($ <limits> min max) elem-type) init)
+                 (pretty-print `(table ,min ,max ,(serialize-type elem-type)))))
+              "Tables"
+              tables))
+
+(define (print-elems elems)
+  (print-list (match-lambda
+                (($ <elem> id mode table type offset inits)
+                 (let ((t (serialize-type type)))
+                   (pretty-print `(elem ,mode ,table ,t ,offset ,inits)))))
+              "Elements"
+              elems))
+
+(define (print-strings strings)
+  (print-list (lambda (str)
+                (format #t "~a\n" str))
+              "Strings"
+              strings))
+
+(define (print-imports imports)
+  (print-list (match-lambda
+                (($ <import> mod name kind _ (or ($ <type-use> _ ($ <type> _ type)) type))
+                 (let ((t (serialize-type type)))
+                   (pretty-print `(import ,mod ,name ,kind ,t)))))
+              "Imports"
+              imports))
+
+(define (print-exports exports)
+  (print-list (match-lambda
+                (($ <export> name kind idx)
+                 (pretty-print `(export ,name ,kind ,idx))))
+              "Exports"
+              exports))
+
+(define (print-location wasm path)
+  (define invalid-path '(-1))
+  (define (path-remainder path i)
+    (match path
+      ((idx . rest)
+       (if (= idx i) rest invalid-path))))
+  (define (here? path i)
+    (match path
+      ((idx) (= i idx))
+      (_ #f)))
+  (define (indent level)
+    (unless (= level 0)
+      (display "  ")
+      (indent (- level 1))))
+  (define (print-block-type sig)
+    (match sig
+      (($ <func-sig> (($ <param> _ params) ...) results)
+       (for-each (lambda (exp)
+                   (display " ")
+                   (write exp))
+                 (append (map (lambda (t)
+                                `(param ,(serialize-type t)))
+                              params)
+                         (map (lambda (t)
+                                `(result ,(serialize-type t)))
+                              results))))))
+  (define (print-instr level instr path)
+    (match instr
+      (((and op (or 'block 'loop)) _ ($ <type-use> _ sig) body)
+       (format #t "(~a" op)
+       (print-block-type sig)
+       (newline)
+       (print-instrs (+ level 1) body path)
+       (display ")"))
+      (('if _ ($ <type-use> _ sig) consequent alternate)
+       (display "(if")
+       (print-block-type sig)
+       (newline)
+       (print-instrs (+ level 1) consequent
+                     (path-remainder path 0))
+       (newline)
+       (print-instrs (+ level 1) alternate
+                     (path-remainder path 1))
+       (display ")"))
+      (_
+       (write instr))))
+  (define (print-instrs level instrs path)
+    (indent level)
+    (display "(")
+    (let loop ((instrs instrs)
+               (i 0))
       (match instrs
-        (() 'end)
+        (() #t)
         ((instr . rest)
-         (execute instr path* instance stack blocks locals)
-         (wasm-position-increment! pos)
-         (loop rest))))))
+         (if (here? path i)
+             (begin
+               (display "<<< ")
+               (print-instr level instr (path-remainder path i))
+               (display " >>>"))
+             (print-instr level instr (path-remainder path i)))
+         (unless (null? rest)
+           (newline)
+           (indent level)
+           (display " ")
+           (loop rest (+ i 1))))))
+    (display ")"))
+  (match path
+    (('func idx . path*)
+     (match (list-ref (wasm-funcs wasm) idx)
+       (($ <func> id ($ <type-use> _ ($ <type> _ sig)) locals body)
+        (format #t "(func ~a" idx)
+        (print-block-type sig)
+        (newline)
+        (print-instrs 1 body path*)
+        (display ")"))))
+    (('global idx . path*)
+     (match (list-ref (wasm-globals wasm) idx)
+       (($ <global> id ($ <global-type> mutable? type) init)
+        (let ((t (serialize-type type)))
+          (format #t "(global ~a " idx)
+          (write (if mutable? `(mut ,t) t))
+          (newline)
+          (print-instrs 1 init path*)
+          (display ")")))))
+    (('data idx . path*)
+     (match (list-ref (wasm-datas wasm) idx)
+       (($ <data> id mode mem offset init)
+        (format #t "(data ~a ~a ~a ~a\n" idx mode mem offset)
+        (print-instrs 1 init path*)
+        (display ")"))))
+    (('elem idx j . path*)
+     (match (list-ref (wasm-elems wasm) idx)
+       (($ <elem> id mode table type offset inits)
+        (let ((t (serialize-type type)))
+          (format #t "(elem ~a ~a ~a ~a\n" idx mode table t)
+          (print-instrs 1 offset (if (= j 0) path* invalid-path))
+          (let loop ((init inits) (i 1))
+            (match inits
+              (() #t)
+              ((init . rest)
+               (print-instrs 1 init (if (= j 1) path* invalid-path))
+               (loop rest (+ i 1)))))
+          (display ")"))))))
+  (newline))
+
+(define-meta-command ((wasm-load wasm) repl obj #:optional (imports ''()))
+  "wasm-load OBJ [IMPORTS]
+Load OBJ as the current WASM instance."
+  (with-exception-handling
+   (let ((bv (match (repl-eval repl obj)
+               ((? bytevector? bv) bv)
+               ((? string? file-name)
+                (call-with-input-file file-name get-bytevector-all))
+               ((? wasm? wasm)
+                (assemble-wasm wasm))
+               ((and wat ('module . _))
+                (wat->wasm wat)))))
+     (current-instance
+      (make-wasm-instance (make-wasm-module bv)
+                          #:imports (repl-eval repl imports)))
+     (format #t "WASM instance loaded.\n"))))
+
+(define-meta-command ((wasm-reset wasm) repl)
+  "wasm-reset
+Remove currently loaded WASM instance."
+  (with-exception-handling
+   (current-instance #f)
+   (format #t "WASM instance cleared.\n")))
+
+(define-meta-command ((wasm-info wasm) repl)
+  "wasm-info
+Display information about the currently loaded WASM instance."
+  (with-exception-handling
+   (assert-current-instance)
+   (match (current-wasm)
+     (($ <wasm> types imports funcs tables memories globals exports start
+         elems datas tags strings custom)
+      (print-types types)
+      (print-funcs funcs)
+      (print-globals globals)
+      (print-memories memories)
+      (print-datas datas)
+      (print-tables tables)
+      (print-elems elems)
+      (print-strings strings)
+      (print-imports imports)
+      (print-exports exports)))))
+
+(define-meta-command ((wasm-ref wasm) repl name)
+  "wasm-ref NAME
+Show value of NAME export."
+  (with-exception-handling
+   (assert-current-instance)
+   (let* ((name* (repl-eval repl name)))
+     (format #t "~s\n" (wasm-instance-export-ref (current-instance) name*)))))
+
+(define-meta-command ((wasm-call wasm) repl name . args)
+  "wasm-call NAME [ARGS ...]
+Call exported function NAME passing ARGS."
+  (with-exception-handling
+   (assert-current-instance)
+   (let* ((name* (repl-eval repl name))
+          (args* (map (lambda (arg) (repl-eval repl arg)) args))
+          (f (wasm-instance-export-ref (current-instance) name*)))
+     (call-with-values (lambda () (apply f args*))
+       (lambda vals
+         (for-each (lambda (val) (format #t "=> ~s\n" val)) vals))))))

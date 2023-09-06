@@ -414,16 +414,6 @@ bytevector, an input port, or a <wasm> record produced by
   (blocks wasm-runtime-error-blocks)
   (locals wasm-runtime-error-locals))
 
-;; Branch + index context for debugging.
-(define-record-type <wasm-position>
-  (make-wasm-position instructions index)
-  wasm-position?
-  (instructions wasm-position-instructions)
-  (index wasm-position-index set-wasm-position-index!))
-
-(define (wasm-position-increment! pos)
-  (set-wasm-position-index! pos (+ (wasm-position-index pos) 1)))
-
 ;; TODO: Use a vector instead of a list to avoid allocation for each
 ;; push.  Maximum stack depth for each function can be determined at
 ;; validation time.
@@ -948,14 +938,15 @@ bytevector, an input port, or a <wasm> record produced by
               (apply proc args))
             (set-procedure-property! wrap 'name (string->symbol name))
             wrap)))
-       (define (instantiate-func func)
+       (define (instantiate-func idx func)
          (match func
            (($ <func> _ ($ <type-use> type-idx) locals body)
             (let* ((local-types (map local-type locals))
                    (sig (vector-ref type-vec type-idx))
                    (n-params (length (func-sig-params sig)))
                    (n-results (length (func-sig-results sig)))
-                   (n-locals (length local-types)))
+                   (n-locals (length local-types))
+                   (base-path `(,idx func)))
               (define (wasm-proc . args)
                 (let ((stack (make-wasm-stack))
                       (locals (make-vector (+ n-params n-locals))))
@@ -984,16 +975,16 @@ bytevector, an input port, or a <wasm> record produced by
                   (let ((tail-cont #f))
                     (call-with-block
                      (lambda (tag)
-                       (execute* body (list func) instance stack (list tag) locals))
+                       (execute* body base-path instance stack (list tag) locals))
                      (lambda (k)
                        (set! tail-cont k)))
                     (if tail-cont
                         (tail-cont)
                         (apply values (stack-pop-n! stack n-results))))))
               (make-wasm-func wasm-proc sig)))))
-       (define (exec-init root init)
+       (define (exec-init base-path init)
          (let ((stack (make-wasm-stack)))
-           (execute* init (list root) instance stack '() #())
+           (execute* init (reverse base-path) instance stack '() #())
            (stack-pop! stack)))
        ;; Process imports.
        (let loop ((wasm-imports wasm-imports)
@@ -1045,7 +1036,7 @@ bytevector, an input port, or a <wasm> record produced by
          (match funcs
            (() #t)
            ((func . rest)
-            (vector-set! func-vec idx (instantiate-func func))
+            (vector-set! func-vec idx (instantiate-func idx func))
             (loop rest (+ idx 1)))))
        ;; Initialize globals.
        (let loop ((globals globals)
@@ -1053,7 +1044,7 @@ bytevector, an input port, or a <wasm> record produced by
          (match globals
            (() #t)
            (((and ($ <global> _ ($ <global-type> mutable? type) init) global) . rest)
-            (let ((global (make-wasm-global (exec-init global init) mutable?)))
+            (let ((global (make-wasm-global (exec-init `(global ,idx) init) mutable?)))
               (vector-set! global-vec idx global))
             (loop rest (+ idx 1)))))
        ;; Initialize memories.
@@ -1065,15 +1056,17 @@ bytevector, an input port, or a <wasm> record produced by
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
        ;; Copy data into memory.
-       (for-each (match-lambda
-                   ((and ($ <data> _ mode mem-id instrs init) data)
-                    ;; Invoke the VM to process the constant
-                    ;; expressions that produce the offset value.
-                    (let ((offset (exec-init data instrs))
-                          (memory (vector-ref memory-vec mem-id)))
-                      (bytevector-copy! init 0 (wasm-memory-bytes memory)
-                                        offset (bytevector-length init)))))
-                 datas)
+       (let loop ((datas datas) (idx 0))
+         (match datas
+           (() #t)
+           (((and ($ <data> _ mode mem-id instrs init) data) . rest)
+            ;; Invoke the VM to process the constant
+            ;; expressions that produce the offset value.
+            (let ((offset (exec-init `(data ,idx) instrs))
+                  (memory (vector-ref memory-vec mem-id)))
+              (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                offset (bytevector-length init)))
+            (loop rest (+ idx 1)))))
        ;; Initialize tables.
        (let loop ((tables tables)
                   (idx n-table-imports))
@@ -1089,11 +1082,15 @@ bytevector, an input port, or a <wasm> record produced by
            (() #t)
            (((and elem ($ <elem> _ mode table-idx type offset inits)) . rest)
             (let ((table (and table-idx (vector-ref table-vec table-idx)))
-                  (offset (and (eq? mode 'active) (exec-init elem offset)))
+                  (offset (and (eq? mode 'active)
+                               (exec-init `(elem ,idx 0) offset)))
                   (init-vec (list->vector
-                             (map (lambda (instrs)
-                                    (exec-init elem instrs))
-                                  inits))))
+                             (let init-loop ((inits inits) (j 1))
+                               (match inits
+                                 (() '())
+                                 ((instrs . rest)
+                                  (cons (exec-init `(elem ,idx ,j) instrs)
+                                        (init-loop rest (+ j 1)))))))))
               (vector-set! elem-vec idx init-vec)
               (when table
                 (do ((i 0 (+ i 1)))
@@ -1190,7 +1187,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (return) (return* #f))
   (define (return-call f) (return* (lambda () (call* f))))
   (define (branch l) (abort-to-prompt (list-ref blocks l) #f))
-  (define (block body branch)
+  (define (block path body branch)
     (call-with-block
      (lambda (block)
        (execute* body path instance stack (cons block blocks) locals))
@@ -1352,14 +1349,17 @@ bytevector, an input port, or a <wasm> record produced by
      (runtime-error "unreachable"))
     (('block _ _ body)
      ;; Branching to a 'block' label exits the block.
-     (block body end))
+     (block path body end))
     (('if _ _ consequent alternate)
      ;; Same behavior as branching to 'block', which is to exit.
-     (block (if (= (pop) 0) alternate consequent) end))
+     (let ((test (= (pop) 0)))
+       (block (if test (cons 0 path) (cons 1 path))
+              (if test alternate consequent)
+              end)))
     (('loop _ _ body)
      (define (iterate)
        ;; Branching to a 'loop' label re-enters the loop.
-       (block body iterate))
+       (block path body iterate))
      (iterate))
     (('call idx) (call (func-ref idx)))
     (('call_indirect idx _)
@@ -1649,12 +1649,9 @@ bytevector, an input port, or a <wasm> record produced by
     (_ (runtime-error "unimplemented" instr))))
 
 (define (execute* instrs path instance stack blocks locals)
-  (let* ((pos (make-wasm-position instrs 0))
-         (path* (cons pos path)))
-    (let loop ((instrs instrs))
-      (match instrs
-        (() 'end)
-        ((instr . rest)
-         (execute instr path* instance stack blocks locals)
-         (wasm-position-increment! pos)
-         (loop rest))))))
+  (let loop ((instrs instrs) (i 0))
+    (match instrs
+      (() 'end)
+      ((instr . rest)
+       (execute instr (cons i path) instance stack blocks locals)
+       (loop rest (+ i 1))))))

@@ -148,6 +148,54 @@
                #,(emit-with-fluids #'((fluid-tmp val-tmp) ...)
                                    #'(let () exp exp* ...)))))))))
 
+(define* (make-parameter init #:optional (conv (lambda (x) x)))
+  (let ((fluid (make-fluid (conv init))))
+    (%inline-wasm
+     '(func (param $fluid (ref eq))
+            (param $convert (ref eq))
+            (result (ref eq))
+            (struct.new $parameter
+                        (i32.const 0)
+                        (ref.func $parameter)
+                        (ref.cast $fluid (local.get $fluid))
+                        (ref.cast $proc (local.get $convert))))
+     fluid conv)))
+
+(define-syntax parameterize
+  (lambda (x)
+    (syntax-case x ()
+      ((_ ((parameter value) ...) body body* ...)
+       (with-syntax (((p ...) (generate-temporaries #'(parameter ...))))
+         #'(let ((p parameter) ...)
+             (define (parameter? x)
+               (%inline-wasm
+                '(func (param $x (ref eq)) (result (ref eq))
+                       (if (ref eq)
+                           (ref.test $parameter (local.get $x))
+                           (then (i31.new (i32.const 17)))
+                           (else (i31.new (i32.const 1)))))
+                x))
+             (define (parameter-fluid x)
+               (%inline-wasm
+                '(func (param $param (ref eq)) (result (ref eq))
+                       (struct.get $parameter $fluid
+                                   (ref.cast $parameter
+                                             (local.get $param))))
+                x))
+             (define (parameter-convert x)
+               (%inline-wasm
+                '(func (param $param (ref eq)) (result (ref eq))
+                       (struct.get $parameter $convert
+                                   (ref.cast $parameter
+                                             (local.get $param))))
+                x))
+             (unless (parameter? p)
+               (error "not a parameter" p))
+             ...
+             (with-fluids (((parameter-fluid p) ((parameter-convert p) value))
+                           ...)
+               body body* ...)))))))
+
 (define (make-atomic-box x) (%make-atomic-box x))
 (define (atomic-box-ref x) (%atomic-box-ref x))
 (define (atomic-box-set! x y) (%atomic-box-set! x y))
@@ -1269,18 +1317,6 @@
 (define (current-input-port . x) #t)
 (define (current-output-port . x) #t)
 (define (current-error-port . x) #t)
-(define* (make-parameter init #:optional (conv (lambda (x) x)))
-  (let ((fluid (make-fluid (conv init))))
-    (%inline-wasm
-     '(func (param $fluid (ref eq))
-            (param $convert (ref eq))
-            (result (ref eq))
-            (struct.new $parameter
-                        (i32.const 0)
-                        (ref.func $parameter)
-                        (ref.cast $fluid (local.get $fluid))
-                        (ref.cast $proc (local.get $convert))))
-     fluid conv)))
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))

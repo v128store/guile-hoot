@@ -743,13 +743,19 @@
                      (read-n 5)
                      (read-n 6))))
 
-(test-call "#(43 43 70)"
+(test-call "#(43 43 70 #(101 101 421) 70)"
            (lambda ()
              (let* ((p (make-parameter 42 1+))
                     (a (p))
                     (b (p 69))
-                    (c (p)))
-               (vector a b c))))
+                    (c (p))
+                    (d (parameterize ((p 100))
+                         (let* ((a (p))
+                                (b (p 420))
+                                (c (p)))
+                           (vector a b c))))
+                    (e (p)))
+               (vector a b c d e))))
 
 ;; 
 ;; This is how you would debug outside the test suite...

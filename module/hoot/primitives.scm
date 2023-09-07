@@ -185,7 +185,6 @@
    include include-ci
    define-syntax let-syntax letrec-syntax
    syntax-rules syntax-error
-   parameterize
    ;; FIXME: These two need Hoot support.
    ;; guard
    ;; define-record-type

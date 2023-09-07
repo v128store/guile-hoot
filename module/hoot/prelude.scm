@@ -795,12 +795,14 @@
 (%define-simple-port-setter %set-port-write-buffer! $write-buf)
 (%define-simple-port-setter %set-port-read-buffering! $read-buffering)
 
-(define (get-output-bytevector port)
+(define* (get-output-bytevector port #:optional (clear-buffer? #f))
   ;; FIXME: How to know it's a bytevector output port?
   (define accum (%port-private-data port))
   (flush-output-port port)
   (let ((flattened (bytevector-concatenate (box-ref accum))))
-    (box-set! accum (list flattened))
+    (box-set! accum (if clear-buffer?
+                        '()
+                        (list flattened)))
     flattened))
 
 (define (open-output-bytevector)
@@ -889,7 +891,8 @@
   (open-input-bytevector (string->utf8 str)))
 
 (define (open-output-string) (open-output-bytevector))
-(define (get-output-string p) (utf8->string (get-output-bytevector p)))
+(define* (get-output-string p #:optional (clear-buffer? #f))
+  (utf8->string (get-output-bytevector p clear-buffer?)))
 
 ;; R7RS ports
 (define (eof-object? x) (%eof-object? x))

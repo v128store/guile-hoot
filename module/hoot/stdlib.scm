@@ -415,6 +415,43 @@
            (param (ref extern))
            (result (ref extern)))
 
+     (func $bignum-logand-i32 (import "rt" "bignum_logand")
+           (param (ref extern))
+           (param i32)
+           (result (ref extern)))
+     (func $bignum-logand-bignum (import "rt" "bignum_logand")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+     (func $bignum-logior-i32 (import "rt" "bignum_logior")
+           (param (ref extern))
+           (param i32)
+           (result (ref extern)))
+     (func $bignum-logior-bignum (import "rt" "bignum_logior")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+     (func $bignum-logxor-i32 (import "rt" "bignum_logxor")
+           (param (ref extern))
+           (param i32)
+           (result (ref extern)))
+     (func $bignum-logxor-bignum (import "rt" "bignum_logxor")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+     (func $i32-logsub-bignum (import "rt" "bignum_logsub")
+           (param i32)
+           (param (ref extern))
+           (result (ref extern)))
+     (func $bignum-logsub-i32 (import "rt" "bignum_logsub")
+           (param (ref extern))
+           (param i32)
+           (result (ref extern)))
+     (func $bignum-logsub-bignum (import "rt" "bignum_logsub")
+           (param (ref extern))
+           (param (ref extern))
+           (result (ref extern)))
+
      (func $bignum-to-f64 (import "rt" "bignum_to_f64")
            (param (ref extern))
            (result f64))
@@ -2729,18 +2766,202 @@
                                       (call $die0 (string.const "$mod/flonum-flonum"))
                    (unreachable))))))
 
+     ;; Bitwise operators and shifts
+
      (func $logand (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$logand"))
-           (unreachable))
+           ,(arith-cond '(ref eq)
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond '(ref eq)
+                 '((call $fixnum? (local.get $b))
+                   (call $i32->fixnum
+                         (i32.and (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                  (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logand-i32
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$logand"))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond '(ref eq)
+                 '((call $fixnum? (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logand-i32
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logand-bignum
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
+                 `((i32.const 1)
+                   (call $die0 (string.const "$logand"))
+                   (unreachable))))
+             '((ref.test $flonum (local.get $a))
+               (call $die0 (string.const "$logand"))
+               (unreachable))
+             '((ref.test $fraction (local.get $a))
+               (call $die0 (string.const "$logand"))
+               (unreachable))
+             '((i32.const 1)
+               (call $die0 (string.const "$logand"))
+               (unreachable))))
+
      (func $logior (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$logior")) (unreachable))
+           ,(arith-cond
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   (call $i32->fixnum
+                         (i32.or (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                 (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                    (struct.new $bignum
+                                (i32.const 0)
+                                (call $bignum-logior-i32
+                                      (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
+                                      (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$logior"))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   (call $normalize-bignum
+                    (struct.new $bignum
+                                (i32.const 0)
+                                (call $bignum-logior-i32
+                                      (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                      (call $fixnum->i32 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logior-bignum
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
+                 `((i32.const 1)
+                   (call $die0 (string.const "$logior"))
+                   (unreachable))))
+             '((ref.test $flonum (local.get $a))
+               (call $die0 (string.const "$logior"))
+               (unreachable))
+             '((ref.test $fraction (local.get $a))
+               (call $die0 (string.const "$logior"))
+               (unreachable))
+             '((i32.const 1)
+               (call $die0 (string.const "$logior"))
+               (unreachable))))
+
      (func $logxor (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$logxor")) (unreachable))
+           ,(arith-cond
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   (call $i32->fixnum
+                         (i32.xor (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                  (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logxor-i32
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$logxor"))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logxor-i32
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logxor-bignum
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
+                 `((i32.const 1)
+                   (call $die0 (string.const "$logxor"))
+                   (unreachable))))
+             '((ref.test $flonum (local.get $a))
+               (call $die0 (string.const "$logxor"))
+               (unreachable))
+             '((ref.test $fraction (local.get $a))
+               (call $die0 (string.const "$logxor"))
+               (unreachable))
+             '((i32.const 1)
+               (call $die0 (string.const "$logxor"))
+               (unreachable))))
+
      (func $logsub (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$logsub")) (unreachable))
+           ,(arith-cond
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   '(call $i32->fixnum
+                          (i32.and
+                           (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                           (i32.xor (call $fixnum->i32
+                                          (ref.cast i31 (local.get $b)))
+                                    (i32.const -1)))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $i32-logsub-bignum
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$logsub"))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logsub-i32
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (call $fixnum->i32 (ref.cast i31 (local.get $b)))))))
+                 '((ref.test $bignum (local.get $b))
+                   (call $normalize-bignum
+                         (struct.new $bignum
+                                     (i32.const 0)
+                                     (call $bignum-logsub-bignum
+                                           (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                                           (struct.get $bignum $val (ref.cast i31 (local.get $b)))))))
+                 `((i32.const 1)
+                   (call $die0 (string.const "$logsub"))
+                   (unreachable))))
+             '((ref.test $flonum (local.get $a))
+               (call $die0 (string.const "$logsub"))
+               (unreachable))
+             '((ref.test $fraction (local.get $a))
+               (call $die0 (string.const "$logsub"))
+               (unreachable))
+             '((i32.const 1)
+               (call $die0 (string.const "$logsub"))
+               (unreachable))))
 
      (func $rsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            (call $die0 (string.const "$rsh")) (unreachable))
+
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            (call $die0 (string.const "$lsh")) (unreachable))
 

@@ -238,6 +238,7 @@
                (field $hash (mut i32))
                (field $read (ref eq))         ;; #f | (bv, start, count) -> size
                (field $write (ref eq))        ;; #f | (bv, start, count) -> size
+               (field $input-waiting? (ref eq))   ;; #f | () -> bool
                (field $seek (ref eq))         ;; #f | (offset, whence) -> offset
                (field $close (ref eq))        ;; #f | () -> ()
                (field $truncate (ref eq))     ;; #f | (length) -> ()

@@ -698,6 +698,7 @@
 ;; FIXME: suspendability
 (define (%make-port read
                     write
+                    input-waiting?
                     seek
                     close
                     truncate
@@ -723,6 +724,7 @@
      '(func (param $read (ref eq))
             (param $write (ref eq))
             (param $seek (ref eq))
+            (param $input-waiting? (ref eq))
             (param $close (ref eq))
             (param $truncate (ref eq))
             (param $repr (ref eq))
@@ -736,6 +738,7 @@
             (struct.new $port (i32.const 0)
                         (local.get $read)
                         (local.get $write)
+                        (local.get $input-waiting?)
                         (local.get $seek)
                         (local.get $close)
                         (local.get $truncate)
@@ -750,8 +753,8 @@
                         (local.get $read-buffering)
                         (local.get $r/w-random-access?)
                         (local.get $private-data)))
-     read write seek close truncate repr file-name read-buf write-buf
-     read-buf-size r/w-random-access? private-data)))
+     read write input-waiting? seek close truncate repr file-name
+     read-buf write-buf read-buf-size r/w-random-access? private-data)))
 
 (define (%set-port-buffer-cur! buf cur)           (vector-set! buf 1 cur))
 (define (%set-port-buffer-end! buf end)           (vector-set! buf 2 end))
@@ -838,6 +841,7 @@
   (define port
     (%make-port #f                      ; read
                 bv-write
+                #f                      ; input-waiting?
                 bv-seek
                 #f                      ; close
                 #f                      ; truncate
@@ -869,6 +873,7 @@
     dst)
   (%make-port bv-read
               #f                      ; write
+              #f                      ; input-waiting?
               bv-seek
               #f                      ; close
               #f                      ; truncate

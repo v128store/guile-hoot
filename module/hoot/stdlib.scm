@@ -265,6 +265,13 @@
                (field $field1 (mut (ref eq)))
                (field $field2 (mut (ref eq)))
                (field $field3 (mut (ref eq))))))
+      (type $parameter
+            (sub $proc
+              (struct
+               (field $hash (mut i32))
+               (field $func (ref $kvarargs))
+               (field $fluid (ref $fluid))
+               (field $convert (ref $proc)))))
 
       (type $dyn (struct))
       (type $dynwind
@@ -2870,18 +2877,71 @@
                                (i32.const 1))))
                (else (return_call $s64->bignum (local.get $a)))))
 
-     (func $make-port-buffer (param $size i32) (result (ref $mutable-vector))
-           (struct.new $mutable-vector
-                       (i32.const 0)
-                       (array.new_fixed $raw-scmvector 4
-                                        (struct.new $mutable-bytevector
-                                                    (i32.const 0)
-                                                    (array.new_default
-                                                     $raw-bytevector
-                                                     (local.get $size)))
-                                        (i31.new (i32.const 0))
-                                        (i31.new (i32.const 0))
-                                        (i31.new (i32.const 1)))))
+     (func $set-fluid-and-return-prev (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq))
+           (param $arg2 (ref eq))
+           (local $fluid (ref $fluid))
+           (local $prev (ref eq))
+           (if (i32.eqz (local.get $nargs))
+               (then
+                (return_call $wrong-num-args
+                             (local.get $nargs)
+                             (local.get $arg0)
+                             (local.get $arg1)
+                             (local.get $arg2))))
+           (global.set $scm-sp (i32.sub (global.get $scm-sp) (i32.const 1)))
+           (local.set $fluid
+                      (ref.cast $fluid
+                                (table.get $scm-stack (global.get $scm-sp))))
+           (local.set $prev (call $fluid-ref (local.get $fluid)))
+           (call $fluid-set! (local.get $fluid) (local.get $arg0))
+           (global.set $ret-sp (i32.sub (global.get $ret-sp) (i32.const 1)))
+           (return_call_ref $kvarargs
+                            (i32.const 1)
+                            (local.get $prev)
+                            (i31.new (i32.const 1))
+                            (i31.new (i32.const 1))
+                            (table.get $ret-stack (global.get $ret-sp))))
+     (func $parameter (param $nargs i32) (param $arg0 (ref eq))
+           (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (local $parameter (ref $parameter))
+           (local.set $parameter (ref.cast $parameter (local.get $arg0)))
+           (if (i32.eq (local.get $nargs) (i32.const 1))
+               (then
+                (global.set $ret-sp
+                            (i32.sub (global.get $ret-sp) (i32.const 1)))
+                (return_call_ref $kvarargs
+                                 (i32.const 1)
+                                 (call $fluid-ref
+                                       (struct.get $parameter $fluid
+                                                   (local.get $parameter)))
+                                 (i31.new (i32.const 1))
+                                 (i31.new (i32.const 1))
+                                 (table.get $ret-stack (global.get $ret-sp)))))
+           (if (i32.ne (local.get $nargs) (i32.const 2))
+               (then
+                (return_call $wrong-num-args
+                             (local.get $nargs)
+                             (local.get $arg0)
+                             (local.get $arg1)
+                             (local.get $arg2))))
+           (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 1)))
+           (call $maybe-grow-scm-stack)
+           (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
+           (call $maybe-grow-ret-stack)
+           (table.set $scm-stack (i32.sub (global.get $scm-sp) (i32.const 1))
+                      (struct.get $parameter $fluid (local.get $parameter)))
+           (table.set $ret-stack (i32.sub (global.get $ret-sp) (i32.const 1))
+                      (ref.func $set-fluid-and-return-prev))
+           (return_call_ref $kvarargs
+                            (i32.const 2)
+                            (struct.get $parameter $convert
+                                        (local.get $parameter))
+                            (local.get $arg1)
+                            (i31.new (i32.const 1))
+                            (struct.get $proc $func
+                                        (struct.get $parameter $convert
+                                                    (local.get $parameter)))))
 
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))

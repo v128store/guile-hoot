@@ -743,6 +743,14 @@
                      (read-n 5)
                      (read-n 6))))
 
+(test-call "#(43 43 70)"
+           (lambda ()
+             (let* ((p (make-parameter 42 1+))
+                    (a (p))
+                    (b (p 69))
+                    (c (p)))
+               (vector a b c))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

@@ -206,6 +206,13 @@
           (field $field1 (mut (ref eq)))
           (field $field2 (mut (ref eq)))
           (field $field3 (mut (ref eq))))))
+    (type $parameter
+      (sub $proc
+        (struct
+          (field $hash (mut i32))
+          (field $func (ref $kvarargs))
+          (field $fluid (ref $fluid))
+          (field $convert (ref $proc)))))
     (type $dyn (struct))
     (type $dynwind
       (sub $dyn

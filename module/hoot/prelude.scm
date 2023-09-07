@@ -1269,7 +1269,18 @@
 (define (current-input-port . x) #t)
 (define (current-output-port . x) #t)
 (define (current-error-port . x) #t)
-(define (make-parameter . x) (error "unimplemented"))
+(define* (make-parameter init #:optional (conv (lambda (x) x)))
+  (let ((fluid (make-fluid (conv init))))
+    (%inline-wasm
+     '(func (param $fluid (ref eq))
+            (param $convert (ref eq))
+            (result (ref eq))
+            (struct.new $parameter
+                        (i32.const 0)
+                        (ref.func $parameter)
+                        (ref.cast $fluid (local.get $fluid))
+                        (ref.cast $proc (local.get $convert))))
+     fluid conv)))
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))

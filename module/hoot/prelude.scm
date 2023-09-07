@@ -1167,25 +1167,7 @@
       ((and buf #(bv cur end has-eof?))
        (define (take-string count cur*)
          (%set-port-buffer-cur! buf cur*)
-         (define str
-           (%inline-wasm
-            '(func (param $bv (ref eq))
-                   (param $cur (ref eq))
-                   (param $end (ref eq))
-                   (result (ref eq))
-                   (struct.new
-                    $string
-                    (i32.const 0)
-                    (string.new_lossy_utf8_array
-                     (struct.get $bytevector $vals
-                                 (ref.cast $bytevector (local.get $bv)))
-                     (i32.shr_s
-                      (i31.get_s (ref.cast i31 (local.get $cur)))
-                      (i32.const 1))
-                     (i32.shr_s
-                      (i31.get_s (ref.cast i31 (local.get $end)))
-                      (i32.const 1)))))
-            bv cur cur*))
+         (define str (utf8->string bv cur cur*))
          (let ((remaining (- k count)))
            (if (zero? remaining)
                str
@@ -1321,25 +1303,7 @@
 
 (define* (write-string str #:optional (port (current-output-port)))
   ;; FIXME: Could avoid the double-copy and encode directly to buffer.
-  (write-bytevector
-   (%inline-wasm
-    '(func (param $str (ref eq))
-           (result (ref eq))
-           (local $vu0 (ref $raw-bytevector))
-           (local.set $vu0
-                      (array.new_default
-                       $raw-bytevector
-                       (string.measure_wtf8
-                        (struct.get $string $str
-                                    (ref.cast $string (local.get $str))))))
-           (string.encode_wtf8_array
-            (struct.get $string $str
-                        (ref.cast $string (local.get $str)))
-            (local.get $vu0)
-            (i32.const 0))
-           (struct.new $bytevector (i32.const 0) (local.get $vu0)))
-    str)
-   port))
+  (write-bytevector (string->utf8 str) port))
 
 ;; (scheme file); perhaps drop?
 (define (open-binary-input-file filename) (error "files unimplemented"))
@@ -1410,12 +1374,55 @@
 (define* (vector->string v #:optional (start 0) (end (vector-length v)))
   (list->string (vector->list v start end)))
 (define (string->utf8 str)
-  (let ((p (open-output-bytevector)))
-    (write-string str p)
-    (get-output-bytevector p)))
-(define (utf8->string utf8)
-  (let ((p (open-input-bytevector utf8)))
-    (read-string (bytevector-length utf8) p)))
+  (%inline-wasm
+   '(func (param $str (ref eq))
+          (result (ref eq))
+          (local $vu0 (ref $raw-bytevector))
+          (local.set $vu0
+                     (array.new_default
+                      $raw-bytevector
+                      (string.measure_wtf8
+                       (struct.get $string $str
+                                   (ref.cast $string (local.get $str))))))
+          (string.encode_wtf8_array
+           (struct.get $string $str
+                       (ref.cast $string (local.get $str)))
+           (local.get $vu0)
+           (i32.const 0))
+          (struct.new $bytevector (i32.const 0) (local.get $vu0)))
+   str))
+(define* (utf8->string utf8 #:optional
+                       (start 0) (end (bytevector-length utf8)))
+  (unless (bytevector? utf8)
+    (error "bad utf8" utf8))
+  (unless (and (exact-integer? start) (<= 0 start (bytevector-length utf8)))
+    (error "bad start" start))
+  (unless (and (exact-integer? start) (<= start end (bytevector-length utf8)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $utf8 (ref eq))
+          (param $start (ref eq))
+          (param $end (ref eq))
+          (result (ref eq))
+          (local $i0 i32)
+          (local $i1 i32)
+          (local.set $i0
+                     (i32.shr_s
+                      (i31.get_s (ref.cast i31 (local.get $start)))
+                      (i32.const 1)))
+          (local.set $i1
+                     (i32.shr_s
+                      (i31.get_s (ref.cast i31 (local.get $end)))
+                      (i32.const 1)))
+          (struct.new
+           $string
+           (i32.const 0)
+           (string.new_lossy_utf8_array
+            (struct.get $bytevector $vals
+                        (ref.cast $bytevector (local.get $utf8)))
+            (local.get $i0)
+            (i32.sub (local.get $i1) (local.get $i0)))))
+   utf8 start end))
 
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str) (%string->symbol str))

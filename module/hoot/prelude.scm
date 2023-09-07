@@ -869,6 +869,12 @@
               #f                      ; private data
               ))
 
+(define (open-input-string str)
+  (open-input-bytevector (string->utf8 str)))
+
+(define (open-output-string) (open-output-bytevector))
+(define (get-output-string p) (utf8->string (get-output-bytevector p)))
+
 ;; R7RS ports
 (define (eof-object? x) (%eof-object? x))
 (define (eof-object)
@@ -1283,12 +1289,6 @@
     str)
    port))
 
-(define (open-input-string str)
-  (error "unimplemented"))
-
-(define (open-output-string) (error "unimplemented"))
-(define (get-output-string x) (error "unimplemented"))
-
 ;; (scheme file); perhaps drop?
 (define (open-binary-input-file filename) (error "files unimplemented"))
 (define (open-binary-output-file filename) (error "files unimplemented"))
@@ -1363,8 +1363,7 @@
     (get-output-bytevector p)))
 (define (utf8->string utf8)
   (let ((p (open-input-bytevector utf8)))
-    (read-string (bytevector-length utf8) p)
-    (get-output-bytevector p)))
+    (read-string (bytevector-length utf8) p)))
 
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str) (%string->symbol str))
@@ -1447,6 +1446,7 @@
       (match (fluid-ref* %exception-handler depth)
         (#f
          ;; No exception handlers bound; fall back.
+         (pk 'uncaught-exception exn)
          (%inline-wasm
           '(func (param $exn (ref eq))
                  (call $die (string.const "uncaught exception")

@@ -355,6 +355,11 @@ class SchemeModule {
             return a;
         },
 
+        bignum_logand(a, b) { return BigInt(a) & BigInt(b); },
+        bignum_logior(a, b) { return BigInt(a) | BigInt(b); },
+        bignum_logxor(a, b) { return BigInt(a) ^ BigInt(b); },
+        bignum_logsub(a, b) { return BigInt(a) ^ (~ BigInt(b)); },
+
         bignum_to_f64(n) { return Number(n); },
 
         make_weak_map() { return new WeakMap; },

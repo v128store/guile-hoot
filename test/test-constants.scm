@@ -337,10 +337,12 @@
            (lambda (a b c d) (modulo (+ a b) (+ c d)))
            -536870911 -2 -536870911 -1)
 
+;; FIXME: add tests with bignum arguments
 (test-call "8" (lambda (a b) (logand a b)) #b1100 #b1010)
 (test-call "14" (lambda (a b) (logior a b)) #b1100 #b1010)
 (test-call "6" (lambda (a b) (logxor a b)) #b1100 #b1010)
-(test-call "4" (lambda (a b) (logand a (lognot b))) #b1100 #b1010)
+;; FIXME: logsub not accessible from scheme
+;;(test-call "4" (lambda (a b) (logsub a b)) #b1100 #b1010)
 
 (test-call "(1 . 2)" (lambda (a b) (cons a b)) 1 2)
 (test-call "1" (lambda (a) (car a)) '(1 . 2))

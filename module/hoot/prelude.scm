@@ -887,6 +887,52 @@
               #f                      ; private data
               ))
 
+;; FIXME: kwargs
+(define (%make-soft-port repr %read-string %write-string input-waiting? close)
+  (define (make-reader read-string)
+    (define transcoder (open-output-bytevector))
+    (define buffer #f)
+    (define buffer-pos 0)
+    (lambda (port bv start count)
+      (unless (and buffer (< buffer-pos (bytevector-length buffer)))
+        (let* ((str (%read-string)))
+          (write-string str transcoder)
+          (set! buffer (get-output-bytevector transcoder #t))
+          (set! buffer-pos 0)))
+
+      (let* ((to-copy (min count (- (bytevector-length buffer) buffer-pos)))
+             (next-pos (+ buffer-pos to-copy)))
+        (bytevector-copy! bv start buffer buffer-pos next-pos)
+        (if (= (bytevector-length buffer) next-pos)
+            (set! buffer #f)
+            (set! buffer-pos next-pos))
+        to-copy)))
+
+  (define (make-writer write-string)
+    (lambda (port bv start count)
+      ;; FIXME: If the writer is binary, that could split a codepoint in
+      ;; two, resulting in badness.  Shouldn't happen with textual
+      ;; writers but it's worth noting.
+      (%write-string (utf8->string bv start (+ start count)))
+      count))
+
+  (unless (string? repr)
+    (error "invalid repr" repr))
+  (define default-buffer-size 1024)
+  (%make-port (and read-string (make-reader read-string))
+              (and write-string (make-writer write-string))
+              input-waiting?
+              #f                        ; seek
+              #f                        ; close
+              #f                        ; truncate
+              repr                      ; repr
+              #f                        ; file-name
+              default-buffer-size       ; read-buf-size
+              default-buffer-size       ; write-buf-size
+              #f                        ; r/w-random-access
+              #f                        ; private data
+              ))
+
 (define (open-input-string str)
   (open-input-bytevector (string->utf8 str)))
 

@@ -757,6 +757,17 @@
                     (e (p)))
                (vector a b c d e))))
 
+(test-call "#(foo bar baz asdfa #eof #eof)"
+           (lambda ()
+             (let* ((p (open-input-string "foo\nbar\r\nbaz\rasdfa"))
+                             (a (read-line p))
+                             (b (read-line p))
+                             (c (read-line p))
+                             (d (read-line p))
+                             (e (read-line p))
+                             (f (read-line p)))
+                        (vector a b c d e f))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

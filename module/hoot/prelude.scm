@@ -411,8 +411,35 @@
         (bytevector-u8-set! bv i (car inits))
         (lp (1+ i) (cdr inits))))
     bv))
-(define (bytevector-append . args) (error "unimplemented"))
-;; FIXME: start and end args!
+(define (bytevector-concatenate bv*)
+  (match bv*
+    (() #vu8())
+    ((bv) bv)
+    (bv*
+     (let* ((len (fold (lambda (bv len) (+ (bytevector-length bv) len)) 0 bv*))
+            (flattened (make-bytevector len 0)))
+       (let lp ((bv* bv*) (cur 0))
+         (match bv*
+           (() flattened)
+           ((bv . bv*)
+            (bytevector-copy! flattened cur bv)
+            (lp bv* (+ cur (bytevector-length bv))))))))))
+(define (bytevector-concatenate-reverse bv*)
+  (match bv*
+    (() #vu8())
+    ((bv) bv)
+    (bv*
+     (let* ((len (fold (lambda (bv len) (+ (bytevector-length bv) len)) 0 bv*))
+            (flattened (make-bytevector len 0)))
+       (let lp ((bv* bv*) (cur len))
+         (match bv*
+           (() flattened)
+           ((bv . bv*)
+            (let ((cur (- cur (bytevector-length bv))))
+              (bytevector-copy! flattened cur bv)
+              (lp bv* cur)))))))))
+(define (bytevector-append . args)
+  (bytevector-concatenate args))
 (define* (bytevector-copy x #:optional (start 0) (end (bytevector-length x)))
   (unless (and (exact-integer? start) (<= 0 start (bytevector-length x)))
     (error "bad start" start))
@@ -432,10 +459,7 @@
                            (i31.get_u (ref.cast i31 (local.get $end)))
                            (i32.const 1))
                           (local.get $i0)))
-          (local.set $vu0
-                     (array.new_default $raw-bytevector
-                                        (i32.sub (local.get $i1)
-                                                 (local.get $i0))))
+          (local.set $vu0 (array.new_default $raw-bytevector (local.get $i1)))
           (array.copy $raw-bytevector $raw-bytevector
                       (local.get $vu0) (i32.const 0)
                       (struct.get $bytevector $vals
@@ -772,22 +796,9 @@
   ;; FIXME: How to know it's a bytevector output port?
   (define accum (%port-private-data port))
   (flush-output-port port)
-  (match (box-ref accum)
-    (() #vu8())
-    ((bv) bv)
-    (bv*
-     (let* ((len (fold (lambda (bv len) (+ (bytevector-length bv) len))
-                       0 (box-ref accum)))
-            (flattened (make-bytevector len 0)))
-       (let lp ((bv* bv*) (cur len))
-         (match bv*
-           (()
-            (box-set! accum flattened)
-            flattened)
-           ((bv . bv*)
-            (let ((cur (- cur (bytevector-length bv))))
-              (bytevector-copy! flattened cur bv)
-              (lp bv* cur)))))))))
+  (let ((flattened (bytevector-concatenate (box-ref accum))))
+    (box-set! accum (list flattened))
+    flattened))
 
 (define (open-output-bytevector)
   (define accum (make-box '()))
@@ -1186,7 +1197,40 @@
                    (take-string count cur)))
              (take-string count cur))))))))
 (define* (read-line #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (define bytes '())
+  (define (finish)
+    (utf8->string (bytevector-concatenate-reverse bytes)))
+  (let read-some ((buf (%port-read-buffer port)))
+    (match buf
+      (#(bv cur end has-eof?)
+       (define (accumulate-bytes! end)
+         (set! bytes (cons (bytevector-copy bv cur end) bytes)))
+       (let scan-for-newline ((pos cur))
+         (cond
+          ((< pos end)
+           (let ((u8 (bytevector-u8-ref bv pos)))
+             (cond
+              ((or (eq? u8 (char->integer #\newline))
+                   (eq? u8 (char->integer #\return)))
+               (accumulate-bytes! pos)
+               (%set-port-buffer-cur! buf (1+ pos))
+               (when (and (eq? u8 (char->integer #\return))
+                          (eq? (peek-u8 port) (char->integer #\newline)))
+                 (read-u8 port))
+               (finish))
+              (else
+               (scan-for-newline (1+ pos))))))
+          ((< cur pos)
+           (accumulate-bytes! pos)
+           (%set-port-buffer-cur! buf pos)
+           (read-some (%fill-input port buf 1)))
+          ((not has-eof?)
+           (read-some (%fill-input port buf 1)))
+          ((null? bytes)
+           (%set-port-buffer-has-eof?! buf #f)
+           (eof-object))
+          (else
+           (finish))))))))
 
 (define* (write-u8 u8 #:optional (port (current-output-port)))
   (match (%port-write-buffer port)

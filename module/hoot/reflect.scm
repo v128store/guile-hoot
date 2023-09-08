@@ -355,12 +355,12 @@
     ("bignum" (~ reflector "bignum_value" x))
     ("complex"
      (make-hoot-complex reflector x
-                        (~ reflector "complex_real" x)
-                        (~ reflector "complex_imag" x)))
+                        (wasm->guile reflector (~ reflector "complex_real" x))
+                        (wasm->guile reflector (~ reflector "complex_imag" x))))
     ("fraction"
      (make-hoot-fraction reflector x
-                         (~ reflector "fraction_num" x)
-                         (~ reflector "fraction_denom" x)))
+                         (wasm->guile reflector (~ reflector "fraction_num" x))
+                         (wasm->guile reflector (~ reflector "fraction_denom" x))))
     ("symbol" (make-hoot-symbol reflector x))
     ("keyword" (make-hoot-keyword reflector x))
     ("pair"

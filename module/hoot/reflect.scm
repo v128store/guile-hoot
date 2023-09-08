@@ -455,8 +455,16 @@
                    (wasm-instance-export-names instance)))))
 
 (define (hoot-instantiate reflector scheme-wasm)
+  (define debug-imports
+    `(("debug" .
+       (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
+        ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
+        ("debug_str_scm" . ,(lambda (x y)
+                              (format #t "debug: ~s: ~s\n" x
+                                      (wasm->guile reflector y))))))))
   (define (instantiate wasm imports)
-    (make-wasm-instance (make-wasm-module wasm) #:imports imports))
+    (make-wasm-instance (make-wasm-module wasm)
+                        #:imports (append imports debug-imports)))
   ;; You can either pass an existing reflector and import its ABI, or
   ;; pass a parsed reflection WASM module and create a new reflector.
   (if (reflector? reflector)

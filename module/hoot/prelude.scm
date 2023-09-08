@@ -893,7 +893,7 @@
     (define transcoder (open-output-bytevector))
     (define buffer #f)
     (define buffer-pos 0)
-    (lambda (port bv start count)
+    (lambda (bv start count)
       (unless (and buffer (< buffer-pos (bytevector-length buffer)))
         (let* ((str (%read-string)))
           (write-string str transcoder)
@@ -909,7 +909,7 @@
         to-copy)))
 
   (define (make-writer write-string)
-    (lambda (port bv start count)
+    (lambda (bv start count)
       ;; FIXME: If the writer is binary, that could split a codepoint in
       ;; two, resulting in badness.  Shouldn't happen with textual
       ;; writers but it's worth noting.
@@ -1375,10 +1375,39 @@
           (close-port p)
           (apply values vals))))))
 
-;; FIXME: these should be parameters
-(define (current-input-port . x) #t)
-(define (current-output-port . x) #t)
-(define (current-error-port . x) #t)
+(define (standard-input-port)
+  (%make-soft-port "stdin"
+                   (lambda ()
+                     (%inline-wasm
+                      '(func (result (ref eq))
+                             (struct.new $string
+                                         (i32.const 0)
+                                         (call $read-stdin)))))
+                   #f #f #f))
+(define (standard-output-port)
+  (%make-soft-port "stdout"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref eq))
+                             (call $write-stdout
+                                   (struct.get $string $str
+                                               (ref.cast $string
+                                                         (local.get $str)))))
+                      str))
+                   #f #f))
+(define (standard-error-port)
+  (%make-soft-port "stderr"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref eq))
+                             (call $write-stderr
+                                   (struct.get $string $str
+                                               (ref.cast $string
+                                                         (local.get $str)))))
+                      str))
+                   #f #f))
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))
@@ -1642,3 +1671,7 @@
 (define (jiffies-per-second) (error "unimplemented"))
 (define (current-jiffy) (error "unimplemented"))
 (define (current-second) (error "unimplemented"))
+
+(define current-input-port (make-parameter (standard-input-port)))
+(define current-output-port (make-parameter (standard-output-port)))
+(define current-error-port (make-parameter (standard-error-port)))

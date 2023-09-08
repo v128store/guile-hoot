@@ -376,6 +376,10 @@ class SchemeModule {
         fatan: Math.atan,
         fatan2: Math.atan2,
 
+        write_stdout(str) { console.log(str); },
+        write_stderr(str) { console.log('error ' + str); },
+        read_stdin() { return ''; },
+
         die(tag, data) { throw new SchemeTrapError(tag, data); }
     };
 

@@ -79,6 +79,33 @@
            (letk k ($kargs names temps
                      ($continue knil src ($const '()))))
            k)))
+      ((and rest (zero? (length req)))
+       ;; Very annoyingly, this can happen as a result of the
+       ;; compilation of e.g. (letrec ((x A)) B), where X is not used in
+       ;; B.  This gets compiled to (<seq> A B), and when the CPS
+       ;; converter doesn't know that A is zero-valued, it just makes a
+       ;; (lambda ignored B) continuation.  This happens to us when
+       ;; prelude bindings that are inline-wasm forms are unused in a
+       ;; user program.  So, we cons it up!
+       (let ((names (enumerate (lambda (n) 'result) nvals))
+             (temps (enumerate (lambda (n) (fresh-var)) nvals)))
+         (define (cons-values cps temps k)
+           (match temps
+             (()
+              (with-cps cps
+                (build-term
+                  ($continue k src ($const '())))))
+             ((temp . temps)
+              (with-cps cps
+                (letv rest)
+                (letk kcons ($kargs ('rest) (rest)
+                              ($continue k src
+                                ($primcall 'cons #f (temp rest)))))
+                ($ (cons-values temps kcons))))))
+         (with-cps cps
+           (let$ term (cons-values temps kargs))
+           (letk k ($kargs names temps ,term))
+           k)))
       (else
        (error "unexpected continuation for n-valued result" nvals))))))
 

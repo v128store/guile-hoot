@@ -1706,12 +1706,17 @@ bytevector, an input port, or a <wasm> record produced by
               (vector->list locals)))
 
 (define (print-runtime-error e)
-  (format #t "~a\n\n" (exception-message e))
+  (print-exception (current-output-port) #f
+                   (exception-kind e)
+                   (exception-args e))
+  (newline)
   (print-stack (wasm-runtime-error-stack e))
   (newline)
   (print-locals (wasm-runtime-error-locals e))
   (newline)
-  (print-location (wasm-module-wasm (wasm-instance-module (current-instance)))
+  (print-location (wasm-module-wasm
+                   (wasm-instance-module
+                    (wasm-runtime-error-instance e)))
                   (wasm-runtime-error-position e)))
 
 (define-syntax-rule (with-exception-handling body ...)

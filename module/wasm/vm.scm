@@ -1260,7 +1260,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (popcnt32 n) (popcnt n 32))
   (define (popcnt64 n) (popcnt n 64))
   (define (wrap n k)
-    (modulo n (ash 1 k)))
+    (remainder n (ash 1 k)))
   (define (wrap8 n) (wrap n 8))
   (define (wrap16 n) (wrap n 16))
   (define (wrap32 n) (wrap n 32))

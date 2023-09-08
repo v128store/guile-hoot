@@ -380,11 +380,17 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
-(test-vm "i32.wrap_i64"
+(test-vm "i32.wrap_i64 positive"
          3
          `(module
            (func (export "main") (result i32)
                  (i32.wrap_i64 (i64.const ,(+ (ash 1 32) 3))))))
+
+(test-vm "i32.wrap_i64 negative"
+         -3
+         `(module
+           (func (export "main") (result i32)
+                 (i32.wrap_i64 (i64.const ,(- (ash -1 32) 3))))))
 
 (test-vm "i32.trunc_f32_s"
          -1

@@ -928,14 +928,27 @@ bytevector, an input port, or a <wasm> record produced by
                               (loop rest-vals rest-types)))))))
            (error (format #f "type mismatch; expected ~a" types)
                   vals)))
-       ;; TODO: Handle functions imported from other WASM modules.
-       (define (make-import-closure proc sig)
+       (define (convert-results vals types)
+         (map (lambda (val type)
+                (match type
+                  ('i32
+                   (match val
+                     ((? s32?) val)
+                     (#t 1)
+                     (#f 0)
+                     (_ (error "invalid i32" val))))
+                  (_ val)))
+              vals types))
+       (define (make-import-closure mod name proc sig)
          (let ((result-types (func-sig-results sig)))
-           (lambda args
+           (define (wrap . args)
              (call-with-values (lambda () (apply proc args))
                (lambda vals
-                 (type-check vals result-types)
-                 (apply values vals))))))
+                 (let ((vals* (convert-results vals result-types)))
+                   (type-check vals* result-types)
+                   (apply values vals*)))))
+           (set-procedure-property! wrap 'name (format #f "~a:~a" mod name))
+           wrap))
        (define (make-export-closure name func)
          (match func
            (($ <wasm-func> proc ($ <func-sig> (($ <param> _ param-types) ...)))
@@ -1015,7 +1028,8 @@ bytevector, an input port, or a <wasm> record produced by
                         (instance-error "imported function signature mismatch"
                                         sig other-sig)))
                    (#f
-                    (vector-set! func-vec func-idx (make-wasm-func proc sig))))
+                    (let ((wrap (make-import-closure mod name proc sig)))
+                      (vector-set! func-vec func-idx (make-wasm-func wrap sig)))))
                  (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
                 (x (instance-error "invalid function import" mod name x)))))
            ((($ <import> mod name 'global _ type) . rest)

@@ -58,6 +58,15 @@
             mutable-hoot-string?
             mutable-hoot-string->string
             hoot-procedure?
+            hoot-variable?
+            hoot-atomic-box?
+            hoot-hash-table?
+            hoot-weak-table?
+            hoot-fluid?
+            hoot-dynamic-state?
+            hoot-syntax?
+            hoot-port?
+            hoot-struct?
 
             hoot-instantiate
             hoot-load
@@ -175,6 +184,60 @@
   (reflector hoot-keyword-reflector)
   (obj hoot-keyword-obj))
 
+(define-record-type <hoot-variable>
+  (make-hoot-variable reflector obj)
+  hoot-variable?
+  (reflector hoot-variable-reflector)
+  (obj hoot-variable-obj))
+
+(define-record-type <hoot-atomic-box>
+  (make-hoot-atomic-box reflector obj)
+  hoot-atomic-box?
+  (reflector hoot-atomic-box-reflector)
+  (obj hoot-atomic-box-obj))
+
+(define-record-type <hoot-hash-table>
+  (make-hoot-hash-table reflector obj)
+  hoot-hash-table?
+  (reflector hoot-hash-table-reflector)
+  (obj hoot-hash-table-obj))
+
+(define-record-type <hoot-weak-table>
+  (make-hoot-weak-table reflector obj)
+  hoot-weak-table?
+  (reflector hoot-weak-table-reflector)
+  (obj hoot-weak-table-obj))
+
+(define-record-type <hoot-fluid>
+  (make-hoot-fluid reflector obj)
+  hoot-fluid?
+  (reflector hoot-fluid-reflector)
+  (obj hoot-fluid-obj))
+
+(define-record-type <hoot-dynamic-state>
+  (make-hoot-dynamic-state reflector obj)
+  hoot-dynamic-state?
+  (reflector hoot-dynamic-state-reflector)
+  (obj hoot-dynamic-state-obj))
+
+(define-record-type <hoot-syntax>
+  (make-hoot-syntax reflector obj)
+  hoot-syntax?
+  (reflector hoot-syntax-reflector)
+  (obj hoot-syntax-obj))
+
+(define-record-type <hoot-port>
+  (make-hoot-port reflector obj)
+  hoot-port?
+  (reflector hoot-port-reflector)
+  (obj hoot-port-obj))
+
+(define-record-type <hoot-struct>
+  (make-hoot-struct reflector obj)
+  hoot-struct?
+  (reflector hoot-struct-reflector)
+  (obj hoot-struct-obj))
+
 (define (hoot-object? obj)
   (or (hoot-complex? obj)
       (hoot-fraction? obj)
@@ -189,7 +252,16 @@
       (mutable-hoot-string? obj)
       (hoot-procedure? obj)
       (hoot-symbol? obj)
-      (hoot-keyword? obj)))
+      (hoot-keyword? obj)
+      (hoot-variable? obj)
+      (hoot-atomic-box? obj)
+      (hoot-hash-table? obj)
+      (hoot-weak-table? obj)
+      (hoot-fluid? obj)
+      (hoot-dynamic-state? obj)
+      (hoot-syntax? obj)
+      (hoot-port? obj)
+      (hoot-struct? obj)))
 
 (define-syntax-rule (~ reflector name args ...)
   ((wasm-instance-export-ref (reflector-instance reflector) name) args ...))
@@ -311,12 +383,20 @@
          (display (hoot-bitvector-ref obj i) port))))
     ((? mutable-hoot-string?)
      (display (mutable-hoot-string->string obj) port))
-    ((? hoot-procedure?)
-     (display "procedure" port))
     ((? hoot-symbol?)
      (display (hoot-symbol-name obj) port))
     ((? hoot-keyword?)
-     (format port "#:~a" (hoot-keyword-name obj)))))
+     (format port "#:~a" (hoot-keyword-name obj)))
+    ((? hoot-procedure?) (display "#<procedure>" port))
+    ((? hoot-variable?) (display "#<variable>" port))
+    ((? hoot-atomic-box?) (display "#<atomic-box>" port))
+    ((? hoot-hash-table?) (display "#<hash-table>" port))
+    ((? hoot-weak-table?) (display "#<weak-table>" port))
+    ((? hoot-fluid?) (display "#<fluid>" port))
+    ((? hoot-dynamic-state?) (display "#<dynamic-state>" port))
+    ((? hoot-syntax?) (display "#<syntax>" port))
+    ((? hoot-port?) (display "#<port>" port))
+    ((? hoot-struct?) (display "#<struct>" port))))
 
 (define (hoot-print obj port)
   (display "#<hoot " port)
@@ -337,7 +417,16 @@
                 <mutable-hoot-string>
                 <hoot-procedure>
                 <hoot-symbol>
-                <hoot-keyword>))
+                <hoot-keyword>
+                <hoot-variable>
+                <hoot-atomic-box>
+                <hoot-hash-table>
+                <hoot-weak-table>
+                <hoot-fluid>
+                <hoot-dynamic-state>
+                <hoot-syntax>
+                <hoot-port>
+                <hoot-struct>))
 
 (define (wasm->guile reflector x)
   (match (~ reflector "describe" x)
@@ -377,7 +466,16 @@
     ("mutable-bytevector" (make-mutable-hoot-bytevector reflector x))
     ("bitvector" (make-hoot-bitvector reflector x))
     ("mutable-bitvector" (make-mutable-hoot-bitvector reflector x))
-    ("procedure" (make-hoot-procedure reflector x))))
+    ("procedure" (make-hoot-procedure reflector x))
+    ("variable" (make-hoot-variable reflector x))
+    ("atomic-box" (make-hoot-atomic-box reflector x))
+    ("hash-table" (make-hoot-hash-table reflector x))
+    ("weak-table" (make-hoot-weak-table reflector x))
+    ("fluid" (make-hoot-fluid reflector x))
+    ("dynamic-state" (make-hoot-dynamic-state reflector x))
+    ("syntax" (make-hoot-syntax reflector x))
+    ("port" (make-hoot-port reflector x))
+    ("struct" (make-hoot-struct reflector x))))
 
 (define (guile->wasm reflector x)
   (match x
@@ -411,7 +509,16 @@
          ($ <mutable-hoot-string> _ obj)
          ($ <hoot-procedure> _ obj)
          ($ <hoot-symbol> _ obj)
-         ($ <hoot-keyword> _ obj))
+         ($ <hoot-keyword> _ obj)
+         ($ <hoot-variable> _ obj)
+         ($ <hoot-atomic-box> _ obj)
+         ($ <hoot-hash-table> _ obj)
+         ($ <hoot-weak-table> _ obj)
+         ($ <hoot-fluid> _ obj)
+         ($ <hoot-dynamic-state> _ obj)
+         ($ <hoot-syntax> _ obj)
+         ($ <hoot-port> _ obj)
+         ($ <hoot-struct> _ obj))
      obj)))
 
 (define %runtime-imports

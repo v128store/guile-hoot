@@ -203,6 +203,11 @@
            (lambda (a b c) (/ (+ a b) (inexact c)))
            536870911 1 5)
 
+(test-call "1" (lambda (a) (inexact a)) 1)
+(test-call "536870912" (lambda (a b) (inexact (+ a b))) 536870911 1)
+(test-call "Infinity" (lambda (a b) (/ (inexact a) (inexact b))) 1 0)
+(test-call "0.5" (lambda (a b) (inexact (/ a b))) 1 2)
+
 ;; Exact fraction arithmetic
 (test-call "1/2" (lambda (a b) (/ a b)) 1 2)
 (test-call "3/536870912" (lambda (a b c) (/ a (+ b c))) 3 536870911 1)

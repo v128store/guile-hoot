@@ -2968,19 +2968,25 @@
      (func $inexact (param $x (ref eq)) (result (ref $flonum))
            ,(arith-cond '(ref $flonum)
              `((call $fixnum? (local.get $x))
-               (return
-                (struct.new $flonum
-                            (i32.const 0)
-                            (call $fixnum->f64
-                                  (ref.cast i31 (local.get $x))))))
+               (struct.new $flonum
+                           (i32.const 0)
+                           (call $fixnum->f64
+                                 (ref.cast i31 (local.get $x)))))
              `((ref.test $bignum (local.get $x))
-               (return
-                (struct.new $flonum
-                            (i32.const 0)
-                            (call $bignum->f64
-                                  (ref.cast $bignum (local.get $x))))))
+               (struct.new $flonum
+                           (i32.const 0)
+                           (call $bignum->f64
+                                 (ref.cast $bignum (local.get $x)))))
              `((ref.test $flonum (local.get $x))
-               (return (ref.cast $flonum (local.get $x))))))
+               (ref.cast $flonum (local.get $x)))
+             ;; FIXME: improve fraction approximation
+             `((ref.test $fraction (local.get $x))
+               (ref.cast $flonum
+                (call $div
+                      (call $inexact
+                            (struct.get $fraction $num (ref.cast $fraction (local.get $x))))
+                      (call $inexact
+                            (struct.get $fraction $denom (ref.cast $fraction (local.get $x)))))))))
 
      ;; compute (logand x #xffffFFFF).  precondition: x is exact integer.
      (func $scm->u32/truncate (param $x (ref eq)) (result i32)

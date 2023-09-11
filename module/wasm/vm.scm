@@ -824,6 +824,7 @@ bytevector, an input port, or a <wasm> record produced by
     ('i31 (s31? x))
     ('struct (wasm-struct? x))
     ('array (wasm-array? x))
+    ('string (string? x))
     (($ <ref-type> _ heap-type)
      (is-a? x heap-type))
     (_

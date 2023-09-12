@@ -1897,7 +1897,7 @@
           (#('keyword? #f (a))          `(,(local.get a) (ref.test #f $keyword)))
           (#('atomic-box? #f (a))       `(,(local.get a) (ref.test #f $atomic-box)))
           (#('syntax? #f (a))           `(,(local.get a) (ref.test #f $syntax)))
-          (#('program? #f (a))          `(,(local.get a) (ref.test #f $proc)))
+          (#('procedure? #f (a))        `(,(local.get a) (ref.test #f $proc)))
           (#('bytevector? #f (a))       `(,(local.get a) (ref.test #f $bytevector)))
           (#('weak-table? #f (a))       `(,(local.get a) (ref.test #f $weak-table)))
           (#('bitvector? #f (a))        `(,(local.get a) (ref.test #f $bitvector)))

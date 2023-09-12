@@ -50,10 +50,10 @@ for you.
 First, clone the repository:
 
 ```
-$ git clone https://gitlab.com/spritely/guile-hoot
-$ cd guile-hoot
-$ guix shell
-$ ./bootstrap.sh && ./configure && make
+git clone https://gitlab.com/spritely/guile-hoot
+cd guile-hoot
+guix shell
+./bootstrap.sh && ./configure && make
 ```
 
 The `guix shell` step will take a while to build because we're using a
@@ -61,7 +61,7 @@ custom version of Guile and a bleeding edge version of V8.
 If everything worked okay you can now run `make check`:
 
 ```
-$ make check
+make check
 ```
 
 Did everything pass?  Cool!  That means Hoot works on your machine!
@@ -77,10 +77,10 @@ You need Guile from the `wip-tailify` branch.  Then you check out this
 repo:
 
 ```
-$ git clone https://gitlab.com/spritely/guile-hoot
-$ cd guile-hoot
-$ echo 42 > 42.scm
-$ GUILE_LOAD_PATH=`pwd`/module guild compile-wasm -o 42.wasm 42.scm
+git clone https://gitlab.com/spritely/guile-hoot
+cd guile-hoot
+echo 42 > 42.scm
+GUILE_LOAD_PATH=`pwd`/module guild compile-wasm -o 42.wasm 42.scm
 wrote `42.wasm`
 ```
 
@@ -100,7 +100,7 @@ compiled from [`reflect.wat`](./js-runtime/reflect.wat).
 In `guile-hoot` type `make`:
 
 ```
-$ make
+make
 ```
 
 Now, to load these files in V8, again you need a really recent V8.
@@ -113,7 +113,7 @@ in `out/x64.release` (if you are on an x86-64 platform).
 If all that works you should be able to `make check`:
 
 ```
-$ make check
+make check
 ============================================================================
 Testsuite summary for guile-hoot 0.1.0
 ============================================================================

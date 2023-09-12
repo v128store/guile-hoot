@@ -227,10 +227,96 @@
     (%inline-wasm
      '(func (result (ref eq)) (global.get $default-prompt-tag))))))
 
+(define (%backtrace)
+  (define (scm-sp)
+    (%inline-wasm
+     '(func (result (ref eq))
+            (i31.new (i32.shl (global.get $scm-sp) (i32.const 1))))))
+  (define (raw-sp)
+    (%inline-wasm
+     '(func (result (ref eq))
+            (i31.new (i32.shl (global.get $raw-sp) (i32.const 1))))))
+  (define (ret-sp)
+    (%inline-wasm
+     '(func (result (ref eq))
+            (i31.new (i32.shl (global.get $ret-sp) (i32.const 1))))))
+  (define (dyn-sp)
+    (%inline-wasm
+     '(func (result (ref eq))
+            (i31.new (i32.shl (global.get $dyn-sp) (i32.const 1))))))
+  (define (scm-ref n)
+    (%inline-wasm
+     '(func (param $n (ref eq))
+            (result (ref eq))
+            (ref.as_non_null
+             (table.get $scm-stack
+                        (i32.shr_s (i31.get_s (ref.cast i31 (local.get $n)))
+                                   (i32.const 1)))))
+     n))
+  (define (raw-ref n)
+    (%inline-wasm
+     '(func (param $n (ref eq))
+            (result (ref eq))
+            (i31.new
+             (i32.shl
+              (i32.load8_s $raw-stack
+                           (i32.shr_s (i31.get_s (ref.cast i31 (local.get $n)))
+                                      (i32.const 1)))
+              (i32.const 1))))
+     n))
+  (let ((scm-sp (scm-sp))
+        (raw-sp (raw-sp))
+        (ret-sp (ret-sp))
+        (dyn-sp (dyn-sp)))
+    (%debug "scm backtrace" scm-sp)
+    (let lp ((i 1))
+      (when (<= 0 (- scm-sp i))
+        (%debug "scm" (scm-ref (- scm-sp i)))
+        (lp (1+ i))))
+    (%debug "raw backtrace" raw-sp)
+    (let lp ((i 1))
+      (when (<= 0 (- raw-sp i))
+        (%debug "raw" (raw-ref (- raw-sp i)))
+        (lp (1+ i))))
+    (%debug "ret stack height" ret-sp)
+    (%debug "dyn stack height" dyn-sp)
+    (%debug "")))
+
+;; This is an implementation of call/cc in terms of delimited
+;; continuations.  It correct except as regards dynamic-wind: capturing
+;; the continuation unwinds all dynamic-winds, then rewinds them; and
+;; invoking the continuation does the same, even if the invoking and
+;; captured continuations overlap.  Oh well; call/cc is strictly less
+;; useful than call-with-prompt anyway.
 (define (call-with-current-continuation f)
-  ;; FIXME: Implement delimited call/cc.
-  (error "unimplemented"))
+  ((abort-to-prompt
+    (default-prompt-tag)
+    (lambda (captured)
+      (captured (lambda ()
+                  (f (lambda args
+                       (abort-to-prompt
+                        (default-prompt-tag)
+                        (lambda (discarded)
+                          (captured (lambda () (apply values args)))))))))))))
+
 (define call/cc call-with-current-continuation)
+
+(define-syntax %
+  (syntax-rules ()
+    ((_ expr)
+     (call-with-prompt (default-prompt-tag)
+                       (lambda () expr)
+                       default-prompt-handler))
+    ((_ expr handler)
+     (call-with-prompt (default-prompt-tag)
+                       (lambda () expr)
+                       handler))
+    ((_ tag expr handler)
+     (call-with-prompt tag
+                       (lambda () expr)
+                       handler))))
+
+(define (default-prompt-handler k proc) (% (proc k)))
 
 (define (dynamic-wind wind body unwind)
   (%dynamic-wind wind body unwind))

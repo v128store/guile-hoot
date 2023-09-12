@@ -775,6 +775,10 @@
                              (f (read-line p)))
                         (vector a b c d e f))))
 
+(test-call "4"
+           (lambda ()
+             (% (+ 1 (call/cc (lambda (k) (+ 2 (k 3))))))))
+
 ;; 
 ;; This is how you would debug outside the test suite...
 ;; (call-with-compiled-wasm-file

@@ -947,9 +947,16 @@
     (lambda (stx) #`'#,%the-eof-object))
   (eof-object))
 
-(define (port? x) (error "unimplemented"))
-(define (input-port? x) (error "unimplemented"))
-(define (output-port? x) (error "unimplemented"))
+(define (port? x)
+  (%inline-wasm '(func (param $obj (ref eq))
+                       (result (ref eq))
+                       (if (ref eq)
+                           (ref.test $port (local.get $obj))
+                           (then (i31.new (i32.const 17)))
+                           (else (i31.new (i32.const 1)))))
+                x))
+(define (input-port? x) (and (port? x) (%port-read x) #t))
+(define (output-port? x) (and (port? x) (%port-write x) #t))
 (define (binary-port? x) (port? x))
 (define (textual-port? x) (port? x))
 (define (input-port-open? x) (error "unimplemented"))
@@ -960,7 +967,8 @@
 (define (close-output-port x)
   (unless (output-port? x) (error "not an output port"))
   (close-port x))
-(define (close-port x) (error "unimplemented"))
+(define (close-port x)
+  (error "unimplemented"))
 
 (define (seek port offset whence)
   (error "unimplemented"))
@@ -1375,40 +1383,6 @@
           (close-port p)
           (apply values vals))))))
 
-(define (standard-input-port)
-  (%make-soft-port "stdin"
-                   (lambda ()
-                     (%inline-wasm
-                      '(func (result (ref eq))
-                             (struct.new $string
-                                         (i32.const 0)
-                                         (call $read-stdin)))))
-                   #f #f #f))
-(define (standard-output-port)
-  (%make-soft-port "stdout"
-                   #f
-                   (lambda (str)
-                     (%inline-wasm
-                      '(func (param $str (ref eq))
-                             (call $write-stdout
-                                   (struct.get $string $str
-                                               (ref.cast $string
-                                                         (local.get $str)))))
-                      str))
-                   #f #f))
-(define (standard-error-port)
-  (%make-soft-port "stderr"
-                   #f
-                   (lambda (str)
-                     (%inline-wasm
-                      '(func (param $str (ref eq))
-                             (call $write-stderr
-                                   (struct.get $string $str
-                                               (ref.cast $string
-                                                         (local.get $str)))))
-                      str))
-                   #f #f))
-
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))
 (define (equal? x y) (error "unimplemented"))
@@ -1612,14 +1586,11 @@
    with-exception-handler
    raise-exception))
  (hoot-aux
+  (define with-exception-handler
+    (%inline-wasm
+     '(func (result (ref eq))
+            (global.get $with-exception-handler))))
   ;; FIXME: #:key
-  (define* (with-exception-handler handler thunk
-                                   #:optional keyword (unwind? #f))
-    (define with-exception-handler
-      (%inline-wasm
-       '(func (result (ref eq))
-              (global.get $with-exception-handler))))
-    (with-exception-handler handler thunk #:unwind? unwind?))
   (define* (raise-exception exn #:optional keyword continuable?)
     (%raise-exception exn #:continuable? continuable?))))
 
@@ -1672,6 +1643,77 @@
 (define (current-jiffy) (error "unimplemented"))
 (define (current-second) (error "unimplemented"))
 
-(define current-input-port (make-parameter (standard-input-port)))
-(define current-output-port (make-parameter (standard-output-port)))
-(define current-error-port (make-parameter (standard-error-port)))
+(define (standard-input-port)
+    (%make-soft-port "stdin"
+                     (lambda ()
+                       (%inline-wasm
+                        '(func (result (ref eq))
+                               (struct.new $string
+                                           (i32.const 0)
+                                           (call $read-stdin)))))
+                     #f #f #f))
+(define (standard-output-port)
+  (%make-soft-port "stdout"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref eq))
+                             (call $write-stdout
+                                   (struct.get $string $str
+                                               (ref.cast $string
+                                                         (local.get $str)))))
+                      str))
+                   #f #f))
+(define (standard-error-port)
+  (%make-soft-port "stderr"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref eq))
+                             (call $write-stderr
+                                   (struct.get $string $str
+                                               (ref.cast $string
+                                                         (local.get $str)))))
+                      str))
+                   #f #f))
+
+(cond-expand
+ (hoot-main
+  (define current-input-port
+    (make-parameter (standard-input-port)
+                    (lambda (val)
+                      (unless (input-port? val)
+                        (error "expected input port" val))
+                      val)))
+  (define current-output-port
+    (make-parameter (standard-output-port)
+                    (lambda (val)
+                      (unless (output-port? val)
+                        (error "expected output port" val))
+                      val)))
+  (define current-error-port
+    (make-parameter (standard-error-port)
+                    (lambda (val)
+                      (unless (output-port? val)
+                        (error "expected output port" val))
+                      val)))
+  (%inline-wasm
+   '(func (param $current-input-port (ref eq))
+          (param $current-output-port (ref eq))
+          (param $current-error-port (ref eq))
+          (global.set $current-input-port (local.get $current-input-port))
+          (global.set $current-output-port (local.get $current-output-port))
+          (global.set $current-error-port (local.get $current-error-port)))
+   current-input-port
+   current-output-port
+   current-error-port))
+ (hoot-aux
+  (define current-input-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-input-port))))
+  (define current-output-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-output-port))))
+  (define current-error-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-error-port))))))

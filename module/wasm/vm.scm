@@ -657,7 +657,8 @@ bytevector, an input port, or a <wasm> record produced by
   (vector-fill! (wasm-array-vector array) fill start (+ start length)))
 
 (define (wasm-array-copy! dst at src start length)
-  (vector-copy! (wasm-array-vector dst) at (wasm-array-vector src) start length))
+  (vector-copy! (wasm-array-vector dst) at
+                (wasm-array-vector src) start (+ start length)))
 
 (define-record-type <wasm-string-iterator>
   (make-wasm-string-iterator string index)

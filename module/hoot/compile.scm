@@ -578,7 +578,7 @@
                     raw-size scm-size (1+ ret-size))))))))
 
       (define (compile-fixnum-fast-path a block-type
-                                                 fast-expr slow-expr)
+                                        fast-expr slow-expr)
         `((block #f ,block-type
                  ((block #f ,void-block-type
                          (,(local.get a)
@@ -1049,13 +1049,15 @@
               x scm-block-type
               `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-add))
               `((i32.const ,(ash y 1))
-                (call $add/immediate))))
+                (i31.new)
+                (call $add))))
             (('sub/immediate y x)
              (compile-fixnum-fast-path
               x scm-block-type
               `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-sub))
               `((i32.const ,(ash y 1))
-                (call $sub/immediate))))
+                (i31.new)
+                (call $sub))))
             (('mul #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
@@ -1066,7 +1068,8 @@
               x scm-block-type
               `((local.get $i0) (i32.const ,(ash y 1)) (call $fixnum-mul))
               `((i32.const ,(ash y 1))
-                (call $mul/immediate))))
+                (i31.new)
+                (call $mul))))
             (('div #f x y)
              `(,(local.get x)
                ,(local.get y)

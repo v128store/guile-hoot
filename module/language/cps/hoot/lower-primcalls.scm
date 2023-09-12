@@ -30,6 +30,9 @@
   #:use-module (language cps with-cps)
   #:export (lower-primcalls))
 
+(define (hoot-fixnum? x) (<= (ash -1 29) x (1- (ash 1 29))))
+(define (not-hoot-fixnum? x) (not (hoot-fixnum? x)))
+
 (define (lower-primcalls cps)
   (with-fresh-name-state cps
     (intmap-fold
@@ -95,6 +98,36 @@
           (with-cps out
             (setk label ($kargs names vars
                           ($continue k src ($values (val)))))))
+
+         (($ $kargs names vars
+             ($ $continue k src
+                ($ $primcall 'add/immediate (? not-hoot-fixnum? y) (x))))
+          (with-cps out
+            (letv y*)
+            (letk k* ($kargs ('y) (y*)
+                       ($continue k src ($primcall 'add #f (x y*)))))
+            (setk label ($kargs names vars
+                          ($continue k* src ($const y))))))
+
+         (($ $kargs names vars
+             ($ $continue k src
+                ($ $primcall 'sub/immediate (? not-hoot-fixnum? y) (x))))
+          (with-cps out
+            (letv y*)
+            (letk k* ($kargs ('y) (y*)
+                       ($continue k src ($primcall 'sub #f (x y*)))))
+            (setk label ($kargs names vars
+                          ($continue k* src ($const y))))))
+
+         (($ $kargs names vars
+             ($ $continue k src
+                ($ $primcall 'mul/immediate (? not-hoot-fixnum? y) (x))))
+          (with-cps out
+            (letv y*)
+            (letk k* ($kargs ('y) (y*)
+                       ($continue k src ($primcall 'mul #f (x y*)))))
+            (setk label ($kargs names vars
+                          ($continue k* src ($const y))))))
 
          (($ $kargs names vars
              ($ $throw src 'throw #f (key args)))

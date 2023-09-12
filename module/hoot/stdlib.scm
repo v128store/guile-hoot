@@ -956,7 +956,10 @@
      (func $fluid-set! (param $fluid (ref $fluid)) (param $val (ref eq))
            (call $hashq-set! (global.get $current-fluids)
                  (local.get $fluid)
-                 (local.get $val)))     (func $find-prompt (param $tag (ref eq))
+                 (local.get $val)))
+
+     ;; FIXME: Better error handling if prompt not found.
+     (func $find-prompt (param $tag (ref eq))
            (result (ref $dynprompt) i32)
            (local $dyn (ref $dyn))
            (local $prompt (ref $dynprompt))
@@ -2425,13 +2428,6 @@
                    (return (call $sub-fracnum-fracnum
                                  (ref.cast $fraction (local.get $a))
                                  (ref.cast $fraction (local.get $b)))))))))
-
-     (func $add/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
-           (call $die0 (string.const "$add/immediate")) (unreachable))
-     (func $sub/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
-           (call $die0 (string.const "$sub/immediate")) (unreachable))
-     (func $mul/immediate (param $a (ref eq)) (param $b i32) (result (ref eq))
-           (call $die0 (string.const "$mul/immediate")) (unreachable))
 
      (func $mul (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond

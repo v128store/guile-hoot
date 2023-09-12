@@ -288,16 +288,22 @@
 ;; invoking the continuation does the same, even if the invoking and
 ;; captured continuations overlap.  Oh well; call/cc is strictly less
 ;; useful than call-with-prompt anyway.
-(define (call-with-current-continuation f)
-  ((abort-to-prompt
-    (default-prompt-tag)
-    (lambda (captured)
-      (captured (lambda ()
-                  (f (lambda args
-                       (abort-to-prompt
-                        (default-prompt-tag)
-                        (lambda (discarded)
-                          (captured (lambda () (apply values args)))))))))))))
+(define (call-with-current-continuation proc)
+  (define (unwind-and-call handler)
+    (abort-to-prompt (default-prompt-tag) handler))
+
+  (define (continue/local captured-continuation)
+    (define-syntax-rule (reinstate expr)
+      (captured-continuation (lambda () expr)))
+    (define (continue/nonlocal . args)
+      (define (return-values discarded-continuation)
+        (reinstate (apply values args)))
+      (unwind-and-call return-values))
+
+    (reinstate (proc continue/nonlocal)))
+
+  (let ((thunk (unwind-and-call continue/local)))
+    (thunk)))
 
 (define call/cc call-with-current-continuation)
 

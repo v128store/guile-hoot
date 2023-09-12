@@ -292,17 +292,16 @@
   (define (unwind-and-call handler)
     (abort-to-prompt (default-prompt-tag) handler))
 
-  (define (continue/local captured-continuation)
+  (define (rewind-and-continue captured-continuation)
     (define-syntax-rule (reinstate expr)
       (captured-continuation (lambda () expr)))
-    (define (continue/nonlocal . args)
-      (define (return-values discarded-continuation)
+    (define (k . args)
+      (define (rewind-and-return-values discarded-continuation)
         (reinstate (apply values args)))
-      (unwind-and-call return-values))
+      (unwind-and-call rewind-and-return-values))
+    (reinstate (proc k)))
 
-    (reinstate (proc continue/nonlocal)))
-
-  (let ((thunk (unwind-and-call continue/local)))
+  (let ((thunk (unwind-and-call rewind-and-continue)))
     (thunk)))
 
 (define call/cc call-with-current-continuation)

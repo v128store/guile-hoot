@@ -763,8 +763,11 @@
             (($ <sub-type> _ supers type)
              (or (and supers (memq super supers))
                  (lp type)))
-            (($ <array-type>)
-             (memq super '(array eq any)))
+            (($ <array-type> mutable? type)
+             (match super
+               ('$i8-array (eq? type 'i8))
+               ('$i16-array (eq? type 'i16))
+               (_ (memq super '(array eq any)))))
             (($ <struct-type>)
              (memq super '(struct eq any)))
             (($ <func-sig>)

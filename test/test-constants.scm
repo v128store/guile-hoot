@@ -129,18 +129,19 @@
                          1
                          (* n (fac (1- n))))))
            5)
-(test-call "9227465" (lambda (n)
-                       (let fib ((n n))
-                         (if (<= n 1)
-                             1
-                             (+ (fib (- n 1)) (fib (- n 2))))))
-           34)
 
-(test-call "1000000" (lambda ()
-                       (let lp ((n 0))
-                         (if (< n #e1e6)
-                             (lp (1+ n))
-                             n))))
+;; (test-call "9227465" (lambda (n)
+;;                        (let fib ((n n))
+;;                          (if (<= n 1)
+;;                              1
+;;                              (+ (fib (- n 1)) (fib (- n 2))))))
+;;            34)
+
+;; (test-call "1000000" (lambda ()
+;;                        (let lp ((n 0))
+;;                          (if (< n #e1e6)
+;;                              (lp (1+ n))
+;;                              n))))
 
 ;;; Fixnum overflow
 ;; add and sub

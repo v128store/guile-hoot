@@ -660,6 +660,14 @@ bytevector, an input port, or a <wasm> record produced by
   (vector-copy! (wasm-array-vector dst) at
                 (wasm-array-vector src) start (+ start length)))
 
+(define (wasm-array->string array start end)
+  (list->string
+   (let loop ((i start))
+     (if (= i end)
+         '()
+         (cons (integer->char (wasm-array-ref-unsigned array i))
+               (loop (+ i 1)))))))
+
 (define-record-type <wasm-string-iterator>
   (make-wasm-string-iterator string index)
   wasm-string-iterator?
@@ -1661,6 +1669,8 @@ bytevector, an input port, or a <wasm> record produced by
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
     ;; Strings:
     (('string.const idx) (push (string-ref idx)))
+    (('string.new_lossy_utf8_array)
+     (lets (array start end) (push (wasm-array->string array start end))))
     (('string.as_iter)
      (lets (str)
            (push (make-wasm-string-iterator str 0))))

@@ -1894,6 +1894,21 @@
                  (string.const "Hello, world!")))
          #:d8-read get-line)
 
+(test-vm "string.new_lossy_utf8_array"
+         "HELLO"
+         '(module
+           (type $utf8 (array (mut i8)))
+           (func (export "main") (result (ref string))
+                 (string.new_lossy_utf8_array (array.new_fixed $utf8 5
+                                                               (i32.const 72)
+                                                               (i32.const 69)
+                                                               (i32.const 76)
+                                                               (i32.const 76)
+                                                               (i32.const 79))
+                                              (i32.const 0)
+                                              (i32.const 5))))
+         #:d8-read get-line)
+
 (test-equal "inter-instance function calls"
   17
   (let* ((wat-a '(module

@@ -1909,6 +1909,18 @@
                                               (i32.const 5))))
          #:d8-read get-line)
 
+(test-vm "string.measure_utf8"
+         5
+         '(module
+           (func (export "main") (result i32)
+                 (string.measure_utf8 (string.const "HELLO")))))
+
+(test-vm "string.measure_wtf8"
+         5
+         '(module
+           (func (export "main") (result i32)
+                 (string.measure_wtf8 (string.const "HELLO")))))
+
 (test-equal "inter-instance function calls"
   17
   (let* ((wat-a '(module

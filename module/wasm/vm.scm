@@ -1671,6 +1671,8 @@ bytevector, an input port, or a <wasm> record produced by
     (('string.const idx) (push (string-ref idx)))
     (('string.new_lossy_utf8_array)
      (lets (array start end) (push (wasm-array->string array start end))))
+    (((or 'string.measure_utf8 'string.measure_wtf8))
+     (lets (str) (push (string-utf8-length str))))
     (('string.as_iter)
      (lets (str)
            (push (make-wasm-string-iterator str 0))))

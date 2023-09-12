@@ -1909,6 +1909,17 @@
                                               (i32.const 5))))
          #:d8-read get-line)
 
+(test-vm "string.encode_wtf8_array"
+         5
+         '(module
+           (type $utf8 (array (mut i8)))
+           (func (export "main") (result i32)
+                 (string.encode_wtf8_array (string.const "HELLO")
+                                           (array.new $utf8
+                                                      (i32.const 0)
+                                                      (i32.const 5))
+                                           (i32.const 0)))))
+
 (test-vm "string.measure_utf8"
          5
          '(module

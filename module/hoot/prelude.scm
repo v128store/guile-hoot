@@ -215,6 +215,18 @@
 (define* (make-prompt-tag #:optional (stem "prompt"))
   (list stem))
 
+(cond-expand
+ (hoot-main
+  (define default-prompt-tag (make-parameter (make-prompt-tag "%")))
+  (%inline-wasm
+   '(func (param $default-prompt-tag (ref eq))
+          (global.set $default-prompt-tag (local.get $default-prompt-tag)))
+   default-prompt-tag))
+ (hoot-aux
+  (define default-prompt-tag
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $default-prompt-tag))))))
+
 (define (call-with-current-continuation f)
   ;; FIXME: Implement delimited call/cc.
   (error "unimplemented"))

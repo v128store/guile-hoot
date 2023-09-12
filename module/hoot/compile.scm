@@ -118,6 +118,7 @@
           (make-export "$current-input-port" 'global '$current-input-port)
           (make-export "$current-output-port" 'global '$current-output-port)
           (make-export "$current-error-port" 'global '$current-error-port)
+          (make-export "$default-prompt-tag" 'global '$default-prompt-tag)
           (make-export "$raw-stack" 'memory '$raw-stack)
           (make-export "$scm-stack" 'table '$scm-stack)
           (make-export "$ret-stack" 'table '$ret-stack)

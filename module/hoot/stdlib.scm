@@ -3203,4 +3203,6 @@
      (global ,@(maybe-import '$current-output-port) (mut (ref eq))
              ,@maybe-init-i31-zero)
      (global ,@(maybe-import '$current-error-port) (mut (ref eq))
+             ,@maybe-init-i31-zero)
+     (global ,@(maybe-import '$default-prompt-tag) (mut (ref eq))
              ,@maybe-init-i31-zero))))

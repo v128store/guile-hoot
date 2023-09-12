@@ -1877,6 +1877,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (print-block-type sig)
     (match sig
       (#f (display " #f"))
+      ((? symbol? sym) (format #t " ~s" sym))
       (($ <func-sig> (($ <param> _ params) ...) results)
        (for-each (lambda (exp)
                    (display " ")

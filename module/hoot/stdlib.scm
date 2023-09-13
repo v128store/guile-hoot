@@ -236,6 +236,7 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
+               (field $open? (mut (ref eq)))  ;; #f | #t
                (field $read (ref eq))         ;; #f | (bv, start, count) -> size
                (field $write (ref eq))        ;; #f | (bv, start, count) -> size
                (field $input-waiting? (ref eq))   ;; #f | () -> bool

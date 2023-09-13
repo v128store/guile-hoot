@@ -1541,7 +1541,16 @@
 (define (equal? x y) (error "unimplemented"))
 (define (not x) (if x #f #t))
 
-(define (boolean=? . x) (error "unimplemented"))
+(define (and-map pred l)
+  (or (null? l)
+      (and (pred (car l))
+           (and-map pred (cdr l)))))
+
+(define (boolean? x) (match x ((or #f #t) #t) (_ #f)))
+(define (boolean=? x y . z)
+  (unless (and (boolean? x) (boolean? y) (and-map boolean? z))
+    (error "expected booleans" x y z))
+  (apply eq? x y z))
 
 ;; R7RS strings
 (define (string? x) (%string? x))

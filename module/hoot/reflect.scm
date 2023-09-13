@@ -28,7 +28,47 @@
   #:use-module (wasm assemble)
   #:use-module (wasm parse)
   #:use-module (wasm vm)
-  #:export (hoot-instantiate
+  #:export (hoot-object?
+            hoot-complex?
+            hoot-complex-real
+            hoot-complex-imag
+            hoot-fraction?
+            hoot-fraction-num
+            hoot-fraction-denom
+            hoot-pair?
+            mutable-hoot-pair?
+            hoot-pair-car
+            hoot-pair-cdr
+            hoot-vector?
+            mutable-hoot-vector?
+            hoot-vector-length
+            hoot-vector-ref
+            hoot-bytevector?
+            mutable-hoot-bytevector?
+            hoot-bytevector-length
+            hoot-bytevector-ref
+            hoot-bitvector?
+            mutable-hoot-bitvector?
+            hoot-bitvector-length
+            hoot-bitvector-ref
+            hoot-symbol?
+            hoot-symbol-name
+            hoot-keyword?
+            hoot-keyword-name
+            mutable-hoot-string?
+            mutable-hoot-string->string
+            hoot-procedure?
+            hoot-variable?
+            hoot-atomic-box?
+            hoot-hash-table?
+            hoot-weak-table?
+            hoot-fluid?
+            hoot-dynamic-state?
+            hoot-syntax?
+            hoot-port?
+            hoot-struct?
+
+            hoot-instantiate
             hoot-load
             hoot-call
             compile-call
@@ -73,8 +113,8 @@
   hoot-pair?
   (reflector hoot-pair-reflector)
   (obj hoot-pair-obj)
-  (car hoot-pair-car)
-  (cdr hoot-pair-cdr))
+  (car %hoot-pair-car)
+  (cdr %hoot-pair-cdr))
 
 (define-record-type <mutable-hoot-pair>
   (make-mutable-hoot-pair reflector obj car cdr)
@@ -144,8 +184,146 @@
   (reflector hoot-keyword-reflector)
   (obj hoot-keyword-obj))
 
+(define-record-type <hoot-variable>
+  (make-hoot-variable reflector obj)
+  hoot-variable?
+  (reflector hoot-variable-reflector)
+  (obj hoot-variable-obj))
+
+(define-record-type <hoot-atomic-box>
+  (make-hoot-atomic-box reflector obj)
+  hoot-atomic-box?
+  (reflector hoot-atomic-box-reflector)
+  (obj hoot-atomic-box-obj))
+
+(define-record-type <hoot-hash-table>
+  (make-hoot-hash-table reflector obj)
+  hoot-hash-table?
+  (reflector hoot-hash-table-reflector)
+  (obj hoot-hash-table-obj))
+
+(define-record-type <hoot-weak-table>
+  (make-hoot-weak-table reflector obj)
+  hoot-weak-table?
+  (reflector hoot-weak-table-reflector)
+  (obj hoot-weak-table-obj))
+
+(define-record-type <hoot-fluid>
+  (make-hoot-fluid reflector obj)
+  hoot-fluid?
+  (reflector hoot-fluid-reflector)
+  (obj hoot-fluid-obj))
+
+(define-record-type <hoot-dynamic-state>
+  (make-hoot-dynamic-state reflector obj)
+  hoot-dynamic-state?
+  (reflector hoot-dynamic-state-reflector)
+  (obj hoot-dynamic-state-obj))
+
+(define-record-type <hoot-syntax>
+  (make-hoot-syntax reflector obj)
+  hoot-syntax?
+  (reflector hoot-syntax-reflector)
+  (obj hoot-syntax-obj))
+
+(define-record-type <hoot-port>
+  (make-hoot-port reflector obj)
+  hoot-port?
+  (reflector hoot-port-reflector)
+  (obj hoot-port-obj))
+
+(define-record-type <hoot-struct>
+  (make-hoot-struct reflector obj)
+  hoot-struct?
+  (reflector hoot-struct-reflector)
+  (obj hoot-struct-obj))
+
+(define (hoot-object? obj)
+  (or (hoot-complex? obj)
+      (hoot-fraction? obj)
+      (hoot-pair? obj)
+      (mutable-hoot-pair? obj)
+      (hoot-vector? obj)
+      (mutable-hoot-vector? obj)
+      (hoot-bytevector? obj)
+      (mutable-hoot-bytevector? obj)
+      (hoot-bitvector? obj)
+      (mutable-hoot-bitvector? obj)
+      (mutable-hoot-string? obj)
+      (hoot-procedure? obj)
+      (hoot-symbol? obj)
+      (hoot-keyword? obj)
+      (hoot-variable? obj)
+      (hoot-atomic-box? obj)
+      (hoot-hash-table? obj)
+      (hoot-weak-table? obj)
+      (hoot-fluid? obj)
+      (hoot-dynamic-state? obj)
+      (hoot-syntax? obj)
+      (hoot-port? obj)
+      (hoot-struct? obj)))
+
 (define-syntax-rule (~ reflector name args ...)
   ((wasm-instance-export-ref (reflector-instance reflector) name) args ...))
+
+(define (hoot-pair-car pair)
+  (match pair
+    ((or ($ <hoot-pair> _ _ car) ($ <mutable-hoot-pair> _ _ car)) car)))
+
+(define (hoot-pair-cdr pair)
+  (match pair
+    ((or ($ <hoot-pair> _ _ _ cdr) ($ <mutable-hoot-pair> _ _ _ cdr)) cdr)))
+
+(define (hoot-vector-length vec)
+  (match vec
+    ((or ($ <hoot-vector> reflector obj)
+         ($ <mutable-hoot-vector> reflector obj))
+     (~ reflector "vector_length" obj))))
+
+(define (hoot-vector-ref vec idx)
+  (match vec
+    ((or ($ <hoot-vector> reflector obj)
+         ($ <mutable-hoot-vector> reflector obj))
+     (wasm->guile reflector (~ reflector "vector_ref" obj idx)))))
+
+(define (hoot-bytevector-length bv)
+  (match bv
+    ((or ($ <hoot-bytevector> reflector obj)
+         ($ <mutable-hoot-bytevector> reflector obj))
+     (~ reflector "bytevector_length" obj))))
+
+(define (hoot-bytevector-ref bv idx)
+  (match bv
+    ((or ($ <hoot-bytevector> reflector obj)
+         ($ <mutable-hoot-bytevector> reflector obj))
+     (~ reflector "bytevector_ref" obj idx))))
+
+(define (hoot-bitvector-length bv)
+  (match bv
+    ((or ($ <hoot-bitvector> reflector obj)
+         ($ <mutable-hoot-bitvector> reflector obj))
+     (~ reflector "bitvector_length" obj))))
+
+(define (hoot-bitvector-ref bv idx)
+  (match bv
+    ((or ($ <hoot-bitvector> reflector obj)
+         ($ <mutable-hoot-bitvector> reflector obj))
+     (~ reflector "bitvector_ref" obj idx))))
+
+(define (hoot-symbol-name sym)
+  (match sym
+    (($ <hoot-symbol> reflector obj)
+     (~ reflector "symbol_name" obj))))
+
+(define (hoot-keyword-name kw)
+  (match kw
+    (($ <hoot-keyword> reflector obj)
+     (~ reflector "keyword_name" obj))))
+
+(define (mutable-hoot-string->string str)
+  (match str
+    (($ <mutable-hoot-string> reflector obj)
+     (~ reflector "string_value" obj))))
 
 ;; UH OH: This doesn't detect cycles!
 (define (%hoot-print obj port)
@@ -153,66 +331,72 @@
     ((or #t #f () #nil (? number?) (? eof-object?)
          (? unspecified?) (? char?) (? string?))
      (write obj port))
-    (($ <hoot-complex> _ _ real imag)
-     (%hoot-print real port)
+    ((? hoot-complex?)
+     (%hoot-print (hoot-complex-real obj) port)
      (display "+" port)
-     (%hoot-print imag port)
+     (%hoot-print (hoot-complex-imag obj) port)
      (display "i" port))
-    (($ <hoot-fraction> _ _ num denom)
-     (%hoot-print num port)
+    ((? hoot-fraction?)
+     (%hoot-print (hoot-fraction-num obj) port)
      (display "/" port)
-     (%hoot-print denom port))
-    ((or ($ <hoot-pair> _ _ car cdr)
-         ($ <mutable-hoot-pair> _ _ car cdr))
+     (%hoot-print (hoot-fraction-denom obj) port))
+    ((or (? hoot-pair?) (? mutable-hoot-pair?))
      (display "(" port)
-     (%hoot-print car port)
-     (let loop ((cdr cdr))
+     (%hoot-print (hoot-pair-car obj) port)
+     (let loop ((cdr (hoot-pair-cdr obj)))
        (match cdr
          (() #t)
-         ((or ($ <hoot-pair> _ _ car cdr)
-              ($ <mutable-hoot-pair> _ _ car cdr))
+         ((or (? hoot-pair?) (? mutable-hoot-pair?))
           (display " " port)
-          (%hoot-print car port)
-          (loop cdr))
+          (%hoot-print (hoot-pair-car cdr) port)
+          (loop (hoot-pair-cdr cdr)))
          (obj
           (display " . " port)
           (%hoot-print obj port))))
      (display ")" port))
-    ((or ($ <hoot-vector> reflector v)
-         ($ <mutable-hoot-vector> reflector v))
-     (let ((k (~ reflector "vector_length" v)))
+    ((or (? hoot-vector?) (? mutable-hoot-vector?))
+     (let ((k (hoot-vector-length obj)))
        (display "#(" port)
-       (do ((i 0 (+ i 1)))
-           ((= i (- k 1)))
-         (%hoot-print (~ reflector "vector_ref" v i) port)
-         (display " " port))
-       (%hoot-print (~ reflector "vector_ref" v (- k 1)) port)
+       (unless (= k 0)
+         (do ((i 0 (+ i 1)))
+             ((= i (- k 1)))
+           (%hoot-print (hoot-vector-ref obj i) port)
+           (display " " port))
+         (%hoot-print (hoot-vector-ref obj (- k 1)) port))
        (display ")" port)))
-    ((or ($ <hoot-bytevector> reflector bv)
-         ($ <mutable-hoot-bytevector> reflector bv))
-     (let ((k (~ reflector "bytevector_length" bv)))
+    ((or (? hoot-bytevector?) (? mutable-hoot-bytevector?))
+     (let ((k (hoot-bytevector-length obj)))
        (display "#vu8(" port)
-       (do ((i 0 (+ i 1)))
-           ((= i (- k 1)))
-         (display (~ reflector "bytevector_ref" bv i) port)
-         (display " " port))
-       (display (~ reflector "bytevector_ref" bv (- k 1)) port)
+       (unless (= k 0)
+         (do ((i 0 (+ i 1)))
+             ((= i (- k 1)))
+           (display (hoot-bytevector-ref obj i) port)
+           (display " " port))
+         (display (hoot-bytevector-ref obj (- k 1)) port))
        (display ")" port)))
-    ((or ($ <hoot-bitvector> reflector bv)
-         ($ <mutable-hoot-bitvector> reflector bv))
-     (let ((k (~ reflector "bitvector_length" bv)))
+    ((or (? hoot-bitvector?)
+         (? mutable-hoot-bitvector?))
+     (let ((k (hoot-bitvector-length obj)))
        (display "#*" port)
        (do ((i 0 (+ i 1)))
            ((= i k))
-         (display (~ reflector "bitvector_ref" bv i) port))))
-    (($ <mutable-hoot-string> reflector str)
-     (display (~ reflector "string_value" str) port))
-    (($ <hoot-procedure>)
-     (display "procedure" port))
-    (($ <hoot-symbol> reflector sym)
-     (display (~ reflector "symbol_name" sym) port))
-    (($ <hoot-keyword> reflector sym)
-     (display (~ reflector "keyword_name" sym) port))))
+         (display (hoot-bitvector-ref obj i) port))))
+    ((? mutable-hoot-string?)
+     (display (mutable-hoot-string->string obj) port))
+    ((? hoot-symbol?)
+     (display (hoot-symbol-name obj) port))
+    ((? hoot-keyword?)
+     (format port "#:~a" (hoot-keyword-name obj)))
+    ((? hoot-procedure?) (display "#<procedure>" port))
+    ((? hoot-variable?) (display "#<variable>" port))
+    ((? hoot-atomic-box?) (display "#<atomic-box>" port))
+    ((? hoot-hash-table?) (display "#<hash-table>" port))
+    ((? hoot-weak-table?) (display "#<weak-table>" port))
+    ((? hoot-fluid?) (display "#<fluid>" port))
+    ((? hoot-dynamic-state?) (display "#<dynamic-state>" port))
+    ((? hoot-syntax?) (display "#<syntax>" port))
+    ((? hoot-port?) (display "#<port>" port))
+    ((? hoot-struct?) (display "#<struct>" port))))
 
 (define (hoot-print obj port)
   (display "#<hoot " port)
@@ -233,7 +417,16 @@
                 <mutable-hoot-string>
                 <hoot-procedure>
                 <hoot-symbol>
-                <hoot-keyword>))
+                <hoot-keyword>
+                <hoot-variable>
+                <hoot-atomic-box>
+                <hoot-hash-table>
+                <hoot-weak-table>
+                <hoot-fluid>
+                <hoot-dynamic-state>
+                <hoot-syntax>
+                <hoot-port>
+                <hoot-struct>))
 
 (define (wasm->guile reflector x)
   (match (~ reflector "describe" x)
@@ -251,12 +444,12 @@
     ("bignum" (~ reflector "bignum_value" x))
     ("complex"
      (make-hoot-complex reflector x
-                        (~ reflector "complex_real" x)
-                        (~ reflector "complex_imag" x)))
+                        (wasm->guile reflector (~ reflector "complex_real" x))
+                        (wasm->guile reflector (~ reflector "complex_imag" x))))
     ("fraction"
      (make-hoot-fraction reflector x
-                         (~ reflector "fraction_num" x)
-                         (~ reflector "fraction_denom" x)))
+                         (wasm->guile reflector (~ reflector "fraction_num" x))
+                         (wasm->guile reflector (~ reflector "fraction_denom" x))))
     ("symbol" (make-hoot-symbol reflector x))
     ("keyword" (make-hoot-keyword reflector x))
     ("pair"
@@ -273,7 +466,16 @@
     ("mutable-bytevector" (make-mutable-hoot-bytevector reflector x))
     ("bitvector" (make-hoot-bitvector reflector x))
     ("mutable-bitvector" (make-mutable-hoot-bitvector reflector x))
-    ("procedure" (make-hoot-procedure reflector x))))
+    ("procedure" (make-hoot-procedure reflector x))
+    ("variable" (make-hoot-variable reflector x))
+    ("atomic-box" (make-hoot-atomic-box reflector x))
+    ("hash-table" (make-hoot-hash-table reflector x))
+    ("weak-table" (make-hoot-weak-table reflector x))
+    ("fluid" (make-hoot-fluid reflector x))
+    ("dynamic-state" (make-hoot-dynamic-state reflector x))
+    ("syntax" (make-hoot-syntax reflector x))
+    ("port" (make-hoot-port reflector x))
+    ("struct" (make-hoot-struct reflector x))))
 
 (define (guile->wasm reflector x)
   (match x
@@ -307,8 +509,20 @@
          ($ <mutable-hoot-string> _ obj)
          ($ <hoot-procedure> _ obj)
          ($ <hoot-symbol> _ obj)
-         ($ <hoot-keyword> _ obj))
+         ($ <hoot-keyword> _ obj)
+         ($ <hoot-variable> _ obj)
+         ($ <hoot-atomic-box> _ obj)
+         ($ <hoot-hash-table> _ obj)
+         ($ <hoot-weak-table> _ obj)
+         ($ <hoot-fluid> _ obj)
+         ($ <hoot-dynamic-state> _ obj)
+         ($ <hoot-syntax> _ obj)
+         ($ <hoot-port> _ obj)
+         ($ <hoot-struct> _ obj))
      obj)))
+
+(define (logsub a b)
+  (logand a (lognot b)))
 
 (define %runtime-imports
   `(("rt" .
@@ -351,8 +565,16 @@
                    (wasm-instance-export-names instance)))))
 
 (define (hoot-instantiate reflector scheme-wasm)
+  (define debug-imports
+    `(("debug" .
+       (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
+        ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
+        ("debug_str_scm" . ,(lambda (x y)
+                              (format #t "debug: ~s: ~s\n" x
+                                      (wasm->guile reflector y))))))))
   (define (instantiate wasm imports)
-    (make-wasm-instance (make-wasm-module wasm) #:imports imports))
+    (make-wasm-instance (make-wasm-module wasm)
+                        #:imports (append imports debug-imports)))
   ;; You can either pass an existing reflector and import its ABI, or
   ;; pass a parsed reflection WASM module and create a new reflector.
   (if (reflector? reflector)

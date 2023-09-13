@@ -657,7 +657,22 @@ bytevector, an input port, or a <wasm> record produced by
   (vector-fill! (wasm-array-vector array) fill start (+ start length)))
 
 (define (wasm-array-copy! dst at src start length)
-  (vector-copy! (wasm-array-vector dst) at (wasm-array-vector src) start length))
+  (vector-copy! (wasm-array-vector dst) at
+                (wasm-array-vector src) start (+ start length)))
+
+(define (wasm-array->string array start end)
+  (list->string
+   (let loop ((i start))
+     (if (= i end)
+         '()
+         (cons (integer->char (wasm-array-ref-unsigned array i))
+               (loop (+ i 1)))))))
+
+(define (wasm-array-encode-string! array str start)
+  (let ((utf8 (string->utf8 str)))
+    (do ((i 0 (+ i 1)))
+        ((= i (bytevector-length utf8)))
+      (wasm-array-set! array (+ i start) (bytevector-u8-ref utf8 i)))))
 
 (define-record-type <wasm-string-iterator>
   (make-wasm-string-iterator string index)
@@ -824,6 +839,7 @@ bytevector, an input port, or a <wasm> record produced by
     ('i31 (s31? x))
     ('struct (wasm-struct? x))
     ('array (wasm-array? x))
+    ('string (string? x))
     (($ <ref-type> _ heap-type)
      (is-a? x heap-type))
     (_
@@ -928,14 +944,27 @@ bytevector, an input port, or a <wasm> record produced by
                               (loop rest-vals rest-types)))))))
            (error (format #f "type mismatch; expected ~a" types)
                   vals)))
-       ;; TODO: Handle functions imported from other WASM modules.
-       (define (make-import-closure proc sig)
+       (define (convert-results vals types)
+         (map (lambda (val type)
+                (match type
+                  ('i32
+                   (match val
+                     ((? s32?) val)
+                     (#t 1)
+                     (#f 0)
+                     (_ (error "invalid i32" val))))
+                  (_ val)))
+              vals types))
+       (define (make-import-closure mod name proc sig)
          (let ((result-types (func-sig-results sig)))
-           (lambda args
+           (define (wrap . args)
              (call-with-values (lambda () (apply proc args))
                (lambda vals
-                 (type-check vals result-types)
-                 (apply values vals))))))
+                 (let ((vals* (convert-results vals result-types)))
+                   (type-check vals* result-types)
+                   (apply values vals*)))))
+           (set-procedure-property! wrap 'name (format #f "~a:~a" mod name))
+           wrap))
        (define (make-export-closure name func)
          (match func
            (($ <wasm-func> proc ($ <func-sig> (($ <param> _ param-types) ...)))
@@ -1015,7 +1044,8 @@ bytevector, an input port, or a <wasm> record produced by
                         (instance-error "imported function signature mismatch"
                                         sig other-sig)))
                    (#f
-                    (vector-set! func-vec func-idx (make-wasm-func proc sig))))
+                    (let ((wrap (make-import-closure mod name proc sig)))
+                      (vector-set! func-vec func-idx (make-wasm-func wrap sig)))))
                  (loop rest global-idx (+ func-idx 1) memory-idx table-idx))
                 (x (instance-error "invalid function import" mod name x)))))
            ((($ <import> mod name 'global _ type) . rest)
@@ -1260,7 +1290,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (popcnt32 n) (popcnt n 32))
   (define (popcnt64 n) (popcnt n 64))
   (define (wrap n k)
-    (modulo n (ash 1 k)))
+    (remainder n (ash 1 k)))
   (define (wrap8 n) (wrap n 8))
   (define (wrap16 n) (wrap n 16))
   (define (wrap32 n) (wrap n 32))
@@ -1645,6 +1675,14 @@ bytevector, an input port, or a <wasm> record produced by
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
     ;; Strings:
     (('string.const idx) (push (string-ref idx)))
+    (('string.new_lossy_utf8_array)
+     (lets (array start end) (push (wasm-array->string array start end))))
+    (('string.encode_wtf8_array)
+     (lets (str array start)
+           (wasm-array-encode-string! array str start)
+           (push (string-utf8-length str))))
+    (((or 'string.measure_utf8 'string.measure_wtf8))
+     (lets (str) (push (string-utf8-length str))))
     (('string.as_iter)
      (lets (str)
            (push (make-wasm-string-iterator str 0))))
@@ -1692,12 +1730,17 @@ bytevector, an input port, or a <wasm> record produced by
               (vector->list locals)))
 
 (define (print-runtime-error e)
-  (format #t "~a\n\n" (exception-message e))
+  (print-exception (current-output-port) #f
+                   (exception-kind e)
+                   (exception-args e))
+  (newline)
   (print-stack (wasm-runtime-error-stack e))
   (newline)
   (print-locals (wasm-runtime-error-locals e))
   (newline)
-  (print-location (wasm-module-wasm (wasm-instance-module (current-instance)))
+  (print-location (wasm-module-wasm
+                   (wasm-instance-module
+                    (wasm-runtime-error-instance e)))
                   (wasm-runtime-error-position e)))
 
 (define-syntax-rule (with-exception-handling body ...)
@@ -1844,7 +1887,7 @@ bytevector, an input port, or a <wasm> record produced by
   (define (path-remainder path i)
     (match path
       ((idx . rest)
-       (if (= idx i) rest invalid-path))))
+       (if (and (= idx i) (not (null? rest))) rest invalid-path))))
   (define (here? path i)
     (match path
       ((idx) (= i idx))
@@ -1855,6 +1898,8 @@ bytevector, an input port, or a <wasm> record produced by
       (indent (- level 1))))
   (define (print-block-type sig)
     (match sig
+      (#f (display " #f"))
+      ((? symbol? sym) (format #t " ~s" sym))
       (($ <func-sig> (($ <param> _ params) ...) results)
        (for-each (lambda (exp)
                    (display " ")
@@ -1864,30 +1909,41 @@ bytevector, an input port, or a <wasm> record produced by
                               params)
                          (map (lambda (t)
                                 `(result ,(serialize-type t)))
-                              results))))))
+                              results))))
+      (($ <ref-type> nullable? ht)
+       (format #t " ~s"
+               `(ref ,@(if nullable? '(null) '())
+                     ,(serialize-type ht))))))
   (define (print-instr level instr path)
     (match instr
-      (((and op (or 'block 'loop)) _ ($ <type-use> _ sig) body)
+      (((and op (or 'block 'loop)) _ (or ($ <type-use> _ sig) sig) body)
        (format #t "(~a" op)
        (print-block-type sig)
        (newline)
        (print-instrs (+ level 1) body path)
        (display ")"))
-      (('if _ ($ <type-use> _ sig) consequent alternate)
+      (('if _ (or ($ <type-use> _ sig) sig) consequent alternate)
        (display "(if")
        (print-block-type sig)
-       (newline)
-       (print-instrs (+ level 1) consequent
-                     (path-remainder path 0))
-       (newline)
-       (print-instrs (+ level 1) alternate
-                     (path-remainder path 1))
+       (unless (null? consequent)
+         (newline)
+         (indent (+ level 1))
+         (display "(then\n")
+         (print-instrs (+ level 2) consequent
+                       (path-remainder path 0))
+         (display ")"))
+       (unless (null? alternate)
+         (newline)
+         (indent (+ level 1))
+         (display "(else\n")
+         (print-instrs (+ level 2) alternate
+                       (path-remainder path 1))
+         (display ")"))
        (display ")"))
       (_
        (write instr))))
   (define (print-instrs level instrs path)
     (indent level)
-    (display "(")
     (let loop ((instrs instrs)
                (i 0))
       (match instrs
@@ -1902,12 +1958,16 @@ bytevector, an input port, or a <wasm> record produced by
          (unless (null? rest)
            (newline)
            (indent level)
-           (display " ")
-           (loop rest (+ i 1))))))
-    (display ")"))
+           (loop rest (+ i 1)))))))
+  (define (count-imports kind)
+    (fold (lambda (i sum)
+            (match i
+              (($ <import> _ _ k)
+               (if (eq? kind k) (+ sum 1) sum))))
+          0 (wasm-imports wasm)))
   (match path
     (('func idx . path*)
-     (match (list-ref (wasm-funcs wasm) idx)
+     (match (list-ref (wasm-funcs wasm) (- idx (count-imports 'func)))
        (($ <func> id ($ <type-use> _ ($ <type> _ sig)) locals body)
         (format #t "(func ~a" idx)
         (print-block-type sig)
@@ -1915,7 +1975,7 @@ bytevector, an input port, or a <wasm> record produced by
         (print-instrs 1 body path*)
         (display ")"))))
     (('global idx . path*)
-     (match (list-ref (wasm-globals wasm) idx)
+     (match (list-ref (wasm-globals wasm) (- idx (count-imports 'global)))
        (($ <global> id ($ <global-type> mutable? type) init)
         (let ((t (serialize-type type)))
           (format #t "(global ~a " idx)

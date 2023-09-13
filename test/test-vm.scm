@@ -380,11 +380,17 @@
            (func (export "main") (result i32)
                  (i32.popcnt (i32.const ,(s32-overflow #xaaaaAAAA))))))
 
-(test-vm "i32.wrap_i64"
+(test-vm "i32.wrap_i64 positive"
          3
          `(module
            (func (export "main") (result i32)
                  (i32.wrap_i64 (i64.const ,(+ (ash 1 32) 3))))))
+
+(test-vm "i32.wrap_i64 negative"
+         -3
+         `(module
+           (func (export "main") (result i32)
+                 (i32.wrap_i64 (i64.const ,(- (ash -1 32) 3))))))
 
 (test-vm "i32.trunc_f32_s"
          -1
@@ -1887,6 +1893,44 @@
            (func (export "main") (result (ref string))
                  (string.const "Hello, world!")))
          #:d8-read get-line)
+
+(test-vm "string.new_lossy_utf8_array"
+         "HELLO"
+         '(module
+           (type $utf8 (array (mut i8)))
+           (func (export "main") (result (ref string))
+                 (string.new_lossy_utf8_array (array.new_fixed $utf8 5
+                                                               (i32.const 72)
+                                                               (i32.const 69)
+                                                               (i32.const 76)
+                                                               (i32.const 76)
+                                                               (i32.const 79))
+                                              (i32.const 0)
+                                              (i32.const 5))))
+         #:d8-read get-line)
+
+(test-vm "string.encode_wtf8_array"
+         5
+         '(module
+           (type $utf8 (array (mut i8)))
+           (func (export "main") (result i32)
+                 (string.encode_wtf8_array (string.const "HELLO")
+                                           (array.new $utf8
+                                                      (i32.const 0)
+                                                      (i32.const 5))
+                                           (i32.const 0)))))
+
+(test-vm "string.measure_utf8"
+         5
+         '(module
+           (func (export "main") (result i32)
+                 (string.measure_utf8 (string.const "HELLO")))))
+
+(test-vm "string.measure_wtf8"
+         5
+         '(module
+           (func (export "main") (result i32)
+                 (string.measure_wtf8 (string.const "HELLO")))))
 
 (test-equal "inter-instance function calls"
   17

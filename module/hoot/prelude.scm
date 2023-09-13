@@ -883,6 +883,7 @@
 (%define-simple-port-getter %port-open? $open?)
 (%define-simple-port-getter %port-read $read)
 (%define-simple-port-getter %port-write $write)
+(%define-simple-port-getter %port-input-waiting? $input-waiting?)
 (%define-simple-port-getter %port-seek $seek)
 (%define-simple-port-getter %port-close $close)
 (%define-simple-port-getter %port-truncate $truncate)
@@ -1138,7 +1139,7 @@
   ;; port-position is ahead.  This function discards buffered input and
   ;; seeks back from before the buffered input.
   (match (%port-read-buffer port)
-    (#f (error "not an output port"))
+    (#f (error "not an input port"))
     ((and buf #(bv cur end has-eof?))
      (when (< cur end)
        (%set-port-buffer-cur! buf 0)
@@ -1154,7 +1155,14 @@
        (%write-bytes port bv cur (- end cur))))))
 
 (define* (u8-ready? #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (match (%port-read-buffer port)
+    (#f (error "not an input port"))
+    (#(bv cur end has-eof?)
+     (or (< cur end)
+         has-eof?
+         (match (%port-input-waiting? port)
+           (#f #t)
+           (proc (proc)))))))
 
 (define (%fill-input port buf minimum-buffering)
   (match buf
@@ -1279,7 +1287,7 @@
                count)))))))))
 
 (define* (char-ready? #:optional (port (current-input-port)))
-  (error "unimplemented"))
+  (u8-ready? port))
 
 (define* (peek-char #:optional (port (current-input-port)))
   (let ((a (peek-u8 port)))

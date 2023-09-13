@@ -521,6 +521,9 @@
          ($ <hoot-struct> _ obj))
      obj)))
 
+(define (logsub a b)
+  (logand a (lognot b)))
+
 (define %runtime-imports
   `(("rt" .
      (("bignum_from_i32" . ,identity)

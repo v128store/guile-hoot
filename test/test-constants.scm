@@ -455,6 +455,10 @@
 ;; FIXME: logsub not accessible from scheme
 ;;(test-call "4" (lambda (a b) (logsub a b)) #b1100 #b1010)
 
+(test-call "true" (lambda (a b) (= a (inexact a))) 23 23)
+(test-call "true" (lambda (a b c) (< a (/ b c))) 0 1 2)
+(test-call "true" (lambda (a b c) (<= a (inexact (/ b c)))) 23 235 10)
+
 (test-call "(1 . 2)" (lambda (a b) (cons a b)) 1 2)
 (test-call "1" (lambda (a) (car a)) '(1 . 2))
 (test-call "2" (lambda (a) (cdr a)) '(1 . 2))

@@ -453,6 +453,69 @@
            (param (ref extern))
            (result (ref extern)))
 
+     (func $lt-fix-big (import "rt" "bignum_lt")
+           (param i32)
+           (param (ref extern))
+           (result i32))
+     (func $lt-big-fix (import "rt" "bignum_lt")
+           (param (ref extern))
+           (param i32)
+           (result i32))
+     (func $lt-big-big (import "rt" "bignum_lt")
+           (param (ref extern))
+           (param (ref extern))
+           (result i32))
+     (func $lt-big-flo (import "rt" "bignum_lt")
+           (param (ref extern))
+           (param f64)
+           (result i32))
+     (func $lt-flo-big (import "rt" "bignum_lt")
+           (param f64)
+           (param (ref extern))
+           (result i32))
+
+     (func $le-fix-big (import "rt" "bignum_le")
+           (param i32)
+           (param (ref extern))
+           (result i32))
+     (func $le-big-fix (import "rt" "bignum_le")
+           (param (ref extern))
+           (param i32)
+           (result i32))
+     (func $le-big-big (import "rt" "bignum_le")
+           (param (ref extern))
+           (param (ref extern))
+           (result i32))
+     (func $le-big-flo (import "rt" "bignum_le")
+           (param (ref extern))
+           (param f64)
+           (result i32))
+     (func $le-flo-big (import "rt" "bignum_le")
+           (param f64)
+           (param (ref extern))
+           (result i32))
+
+     (func $eq-fix-big (import "rt" "bignum_eq")
+           (param i32)
+           (param (ref extern))
+           (result i32))
+     (func $eq-big-fix (import "rt" "bignum_eq")
+           (param (ref extern))
+           (param i32)
+           (result i32))
+     (func $eq-big-big (import "rt" "bignum_eq")
+           (param (ref extern))
+           (param (ref extern))
+           (result i32))
+     (func $eq-big-flo (import "rt" "bignum_eq")
+           (param (ref extern))
+           (param f64)
+           (result i32))
+     (func $eq-flo-big (import "rt" "bignum_eq")
+           (param f64)
+           (param (ref extern))
+           (result i32))
+
      (func $bignum-to-f64 (import "rt" "bignum_to_f64")
            (param (ref extern))
            (result f64))
@@ -1664,12 +1727,288 @@
      (global $apply-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $apply)))
 
+     ;; FIXME: Number comparison functions should convert inexact
+     ;; arguments to rationals when possible, as specified by R7RS-small
+     ;; (see also CLHS 12.1.4.1, Rule of Float and Rational Contagion).
+
      (func $slow-< (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (call $die0 (string.const "$slow-<")) (unreachable))
+           ,(arith-cond 'i32
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (i32.lt_s (i31.get_s (ref.cast i31 (local.get $a)))
+                             (i31.get_s (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $lt-fix-big
+                         (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.lt (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                           (call $flonum->f64 (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<"))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (call $lt-big-fix
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (call $fixnum->i32 (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $lt-big-big
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (call $lt-big-flo
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<"))
+                   (unreachable))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (f64.lt (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $lt-flo-big
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.lt (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<"))
+                   (unreachable))))
+             `((ref.test $fraction (local.get $a))
+               (call $slow-<
+                     (call $div
+                           (call $inexact
+                                 (struct.get $fraction $num
+                                             (ref.cast $fraction (local.get $b))))
+                           (call $inexact
+                                 (struct.get $fraction $denom
+                                             (ref.cast $fraction (local.get $b)))))
+                     (local.get $b)))
+             '((i32.const 1)
+               (call $die0 (string.const "$slow-<"))
+               (unreachable))))
+
      (func $slow-<= (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (call $die0 (string.const "$slow-<=")) (unreachable))
+           ,(arith-cond 'i32
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (i32.le_s (i31.get_s (ref.cast i31 (local.get $a)))
+                             (i31.get_s (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $le-fix-big
+                         (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.le (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                           (call $flonum->f64 (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<="))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (call $le-big-fix
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (call $fixnum->i32 (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $le-big-big
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (call $le-big-flo
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<="))
+                   (unreachable))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (i32.le_s (i31.get_s (ref.cast i31 (local.get $a)))
+                             (i31.get_s (ref.cast i31 (local.get $a)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $le-flo-big
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.le (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-<=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<="))
+                   (unreachable))))
+             `((ref.test $fraction (local.get $a))
+               (call $slow-<
+                     (call $div
+                           (call $inexact
+                                 (struct.get $fraction $num
+                                             (ref.cast $fraction (local.get $b))))
+                           (call $inexact
+                                 (struct.get $fraction $denom
+                                             (ref.cast $fraction (local.get $b)))))
+                     (local.get $b)))
+             '((i32.const 1)
+               (call $die0 (string.const "$slow-<="))
+               (unreachable))))
+
      (func $slow-= (param $a (ref eq)) (param $b (ref eq)) (result i32)
-           (call $die0 (string.const "$slow-=")) (unreachable))
+           ,(arith-cond 'i32
+             `((call $fixnum? (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (i32.eq (i31.get_s (ref.cast i31 (local.get $a)))
+                           (i31.get_s (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $eq-fix-big
+                         (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.eq (call $fixnum->f64 (ref.cast i31 (local.get $a)))
+                           (call $flonum->f64 (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-="))
+                   (unreachable))))
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (call $eq-big-fix
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (call $fixnum->i32 (ref.cast i31 (local.get $b)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $eq-big-big
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (call $eq-big-flo
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-<="))
+                   (unreachable))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond 'i32
+                 `((call $fixnum? (local.get $b))
+                   (i32.eq (i31.get_s (ref.cast i31 (local.get $a)))
+                           (i31.get_s (ref.cast i31 (local.get $a)))))
+                 `((ref.test $bignum (local.get $b))
+                   (call $eq-flo-big
+                         (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 `((ref.test $flonum (local.get $b))
+                   (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 `((ref.test $fraction (local.get $b))
+                   (call $slow-=
+                         (local.get $a)
+                         (call $div
+                               (call $inexact
+                                     (struct.get $fraction $num
+                                                 (ref.cast $fraction (local.get $b))))
+                               (call $inexact
+                                     (struct.get $fraction $denom
+                                                 (ref.cast $fraction (local.get $b)))))))
+                 '((i32.const 1)
+                   (call $die0 (string.const "$slow-="))
+                   (unreachable))))
+             `((ref.test $fraction (local.get $a))
+               (call $slow-=
+                     (call $div
+                           (call $inexact
+                                 (struct.get $fraction $num
+                                             (ref.cast $fraction (local.get $b))))
+                           (call $inexact
+                                 (struct.get $fraction $denom
+                                             (ref.cast $fraction (local.get $b)))))
+                     (local.get $b)))
+             '((i32.const 1)
+               (call $die0 (string.const "$slow-="))
+               (unreachable))))
 
      (func $string-set! (param $str (ref $string)) (param $idx i32)
            (param $ch i32)

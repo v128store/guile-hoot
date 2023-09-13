@@ -360,6 +360,10 @@ class SchemeModule {
         bignum_logxor(a, b) { return BigInt(a) ^ BigInt(b); },
         bignum_logsub(a, b) { return BigInt(a) & (~ BigInt(b)); },
 
+        bignum_lt(a, b) { return a < b; },
+        bignum_le(a, b) { return a <= b; },
+        bignum_eq(a, b) { return a == b; },
+
         bignum_to_f64(n) { return Number(n); },
 
         make_weak_map() { return new WeakMap; },

@@ -1562,7 +1562,37 @@
   (error "unimplemented"))
 (define (string-append . strs) (error "unimplemented"))
 (define* (string-copy str #:optional (start 0) (end (string-length str)))
-  (error "unimplemented"))
+  (unless (string? str) (error "expected string" str))
+  (unless (and (exact-integer? start) (<= 0 start (string-length str)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (string-length str)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $str (ref eq))
+          (param $start (ref eq))
+          (param $end (ref eq))
+          (result (ref eq))
+          (local $i0 i32)
+          (local $i1 i32)
+          (local $str_iter (ref stringview_iter))
+          (local.set $i0
+                     (i32.shr_s (i31.get_s (ref.cast i31 (local.get $start)))
+                                (i32.const 1)))
+          (local.set $i1
+                     (i32.shr_s (i31.get_s (ref.cast i31 (local.get $end)))
+                                (i32.const 1)))
+          (local.set $str_iter
+                     (string.as_iter
+                      (struct.get $string $str
+                                  (ref.cast $string (local.get $str)))))
+          (drop
+           (stringview_iter.advance (local.get $str_iter) (local.get $i0)))
+          (struct.new $string
+                      (i32.const 0)
+                      (stringview_iter.slice (local.get $str_iter)
+                                             (i32.sub (local.get $i1)
+                                                      (local.get $i0)))))
+   str start end))
 (define* (string-copy! to at from #:optional (start 0) (end (string-length from)))
   (error "unimplemented"))
 (define (string-fill! . _) (error "unimplemented"))

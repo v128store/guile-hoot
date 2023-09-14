@@ -18,7 +18,7 @@ SUFFIXES = .wat .wasm
 
 TEST_EXTENSIONS = .js .scm
 SCM_LOG_COMPILER = $(top_builddir)/pre-inst-env $(GUILE)
-AM_SCM_LOG_FLAGS = --no-auto-compile
+AM_SCM_LOG_FLAGS = --no-auto-compile -L $(top_srcdir)
 JS_LOG_COMPILER = $(top_builddir)/js-test
 AM_JS_LOG_FLAGS = $(V8_FEATURES)
 CLEANFILES += $(SCM_TESTS:test/%.scm=%.log)
@@ -26,6 +26,21 @@ CLEANFILES += $(SCM_TESTS:test/%.scm=%.log)
 SCM_TESTS = 					\
   test/test-wasm-assembler.scm			\
   test/test-constants.scm			\
+  test/test-ints.scm				\
+  test/test-flonums.scm				\
+  test/test-fractions.scm			\
+  test/test-bitwise.scm				\
+  test/test-strings.scm				\
+  test/test-pairs.scm				\
+  test/test-vectors.scm				\
+  test/test-bytevectors.scm			\
+  test/test-assignment.scm			\
+  test/test-procedures.scm			\
+  test/test-atomics.scm				\
+  test/test-fluids.scm				\
+  test/test-prompts.scm				\
+  test/test-exceptions.scm			\
+  test/test-ports.scm				\
   test/test-vm.scm
 
 JS_TESTS = 					\

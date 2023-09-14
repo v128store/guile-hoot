@@ -561,6 +561,9 @@
       ("facos" . ,acos)
       ("fatan" . ,atan)
       ("fatan2" . ,atan)
+      ("write_stdout" . ,display)
+      ("write_stderr" . ,(lambda (str) (display str (current-error-port))))
+      ("read_stdin" . ,(lambda () ""))
       ("die" . ,(lambda (key . args)
                   (apply throw (string->symbol key) args)))))))
 

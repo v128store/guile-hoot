@@ -561,6 +561,9 @@
       ("facos" . ,acos)
       ("fatan" . ,atan)
       ("fatan2" . ,atan)
+      ("write_stdout" . ,display)
+      ("write_stderr" . ,(lambda (str) (display str (current-error-port))))
+      ("read_stdin" . ,(lambda () ""))
       ("die" . ,(lambda (key . args)
                   (apply throw (string->symbol key) args)))))))
 
@@ -575,8 +578,7 @@
        (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
         ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
         ("debug_str_scm" . ,(lambda (x y)
-                              (format #t "debug: ~s: ~s\n" x
-                                      (wasm->guile reflector y))))))))
+                              (format #t "debug: ~s: ~s\n" x y)))))))
   (define (instantiate wasm imports)
     (make-wasm-instance (make-wasm-module wasm)
                         #:imports (append imports debug-imports)))

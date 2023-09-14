@@ -547,6 +547,8 @@
       ("bignum_lt" . ,<)
       ("bignum_le" . ,<=)
       ("bignum_eq" . ,=)
+      ("string_upcase" . ,string-upcase)
+      ("string_downcase" . ,string-downcase)
       ("make_weak_map" . ,make-weak-key-hash-table)
       ("weak_map_get" . ,hash-ref)
       ("weak_map_set" . ,hash-set!)

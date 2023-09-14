@@ -520,6 +520,13 @@
            (param (ref extern))
            (result f64))
 
+     (func $string-upcase (import "rt" "string_upcase")
+           (param (ref string))
+           (result (ref string)))
+     (func $string-downcase (import "rt" "string_downcase")
+           (param (ref string))
+           (result (ref string)))
+
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
      (func $weak-map-get (import "rt" "weak_map_get")

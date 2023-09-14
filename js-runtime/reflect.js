@@ -366,6 +366,9 @@ class SchemeModule {
 
         bignum_to_f64(n) { return Number(n); },
 
+        string_upcase: Function.call.bind(String.prototype.toUpperCase),
+        string_downcase: Function.call.bind(String.prototype.toLowerCase),
+
         make_weak_map() { return new WeakMap; },
         weak_map_get(map, k) { return map.get(k); },
         weak_map_set(map, k, v) { return map.set(k, v); },
@@ -379,6 +382,7 @@ class SchemeModule {
         facos: Math.acos,
         fatan: Math.atan,
         fatan2: Math.atan2,
+
 
         write_stdout(str) { console.log(str); },
         write_stderr(str) { console.log('error ' + str); },

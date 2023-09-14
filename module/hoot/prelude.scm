@@ -1751,20 +1751,129 @@
 (define (vector-ref x i) (%vector-ref x i))
 (define (vector-set! x i v) (%vector-set! x i v))
 (define* (vector-copy v #:optional (start 0) (end (vector-length v)))
-  (error "unimplemented"))
+  (unless (vector? v) (error "expected vector" v))
+  (unless (and (exact-integer? start) (<= 0 start (vector-length v)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (vector-length v)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $src (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+          (result (ref eq))
+          (local $i0 i32)
+          (local $i1 i32)
+          (local $v0 (ref $raw-scmvector))
+          (local.set $i0 (i32.shr_u
+                          (i31.get_u (ref.cast i31 (local.get $start)))
+                          (i32.const 1)))
+          (local.set $i1 (i32.sub
+                          (i32.shr_u
+                           (i31.get_u (ref.cast i31 (local.get $end)))
+                           (i32.const 1))
+                          (local.get $i0)))
+          (local.set $v0 (array.new $raw-scmvector (i31.new (i32.const 0))
+                                    (local.get $i1)))
+          (array.copy $raw-scmvector $raw-scmvector
+                      (local.get $v0) (i32.const 0)
+                      (struct.get $vector $vals
+                                  (ref.cast $vector (local.get $src)))
+                      (local.get $i0) (local.get $i1))
+          (struct.new $mutable-vector (i32.const 0) (local.get $v0)))
+   v start end))
 (define* (vector-copy! to at from #:optional (start 0) (end (vector-length from)))
-  (error "unimplemented"))
+  (unless (vector? to) (error "expected mutable vector" to))
+  (unless (and (exact-integer? at) (<= 0 at (vector-length to)))
+    (error "bad at" at))
+  (unless (vector? from) (error "expected vector" from))
+  (unless (and (exact-integer? start) (<= 0 start (vector-length from)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (vector-length from)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $to (ref eq)) (param $at (ref eq))
+          (param $from (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+          (array.copy $raw-scmvector $raw-scmvector
+                      (struct.get $mutable-vector $vals
+                                  (ref.cast $mutable-vector (local.get $to)))
+                      (i32.shr_u
+                       (i31.get_u (ref.cast i31 (local.get $at)))
+                       (i32.const 1))
+                      (struct.get $vector $vals
+                                  (ref.cast $vector (local.get $from)))
+                      (i32.shr_u
+                       (i31.get_u (ref.cast i31 (local.get $start)))
+                       (i32.const 1))
+                      (i32.shr_u
+                       (i32.sub
+                        (i31.get_u (ref.cast i31 (local.get $end)))
+                        (i31.get_u (ref.cast i31 (local.get $start))))
+                       (i32.const 1))))
+   to at from start end))
 (define* (vector-fill! v fill #:optional (start 0) (end (vector-length v)))
-  (error "unimplemented"))
+  (unless (vector? v) (error "expected vector" v))
+  (unless (and (exact-integer? start) (<= 0 start (vector-length v)))
+    (error "bad start" start))
+  (unless (and (exact-integer? end) (<= start end (vector-length v)))
+    (error "bad end" end))
+  (%inline-wasm
+   '(func (param $dst (ref eq)) (param $fill (ref eq))
+          (param $start (ref eq)) (param $end (ref eq))
+          (local $i0 i32)
+          (local $i1 i32)
+          (local.set $i0 (i32.shr_u
+                          (i31.get_u (ref.cast i31 (local.get $start)))
+                          (i32.const 1)))
+          (local.set $i1 (i32.sub
+                          (i32.shr_u
+                           (i31.get_u (ref.cast i31 (local.get $end)))
+                           (i32.const 1))
+                          (local.get $i0)))
+          ;; FIXME: Remove this debugging call.  With the current
+          ;; version of V8 though, doing so causes the array.fill
+          ;; instruction to go wrong; test with:
+          ;;  bin/eval.scm '(let ((v (vector 1 2 3))) (vector-fill! v #t 1 2) v)'
+          ;; We expect #(1 true 3) but get 65536 (!!!!)
+          (call $debug-str-scm (string.const "before fill") (local.get $dst))
+          (array.fill $raw-scmvector
+                      (struct.get $mutable-vector $vals
+                                  (ref.cast $mutable-vector (local.get $dst)))
+                      (local.get $i0)
+                      (local.get $fill)
+                      (local.get $i1))
+          )
+   v fill start end))
 (define* (vector->list v #:optional (start 0) (end (vector-length v)))
   (let lp ((i start))
     (if (< i end)
         (cons (vector-ref v i) (lp (1+ i)))
         '())))
-(define (list->vector x) (error "unimplemented"))
-(define (vector-append . vectors) (error "unimplemented"))
-(define (vector-for-each f v . v*) (error "unimplemented"))
-(define (vector-map f v . v*) (error "unimplemented"))
+(define (list->vector elts)
+  (let* ((len (length elts))
+         (v (make-vector len #f)))
+    (let lp ((i 0) (elts elts))
+      (match elts
+        (() v)
+        ((elt . elts)
+         (vector-set! v i elt)
+         (lp (1+ i) elts))))))
+(define (vector-concatenate v*)
+  (match v*
+    (() #())
+    ((v) v)
+    (v*
+     (let* ((len (fold (lambda (v len) (+ (vector-length v) len)) 0 v*))
+            (flattened (make-vector len 0)))
+       (let lp ((v* v*) (cur 0))
+         (match v*
+           (() flattened)
+           ((v . v*)
+            (vector-copy! flattened cur v)
+            (lp v* (+ cur (vector-length v))))))))))
+(define (vector-append . vectors)
+  (vector-concatenate vectors))
+(define (vector-for-each f v . v*)
+  (apply for-each f (vector->list v) (map vector->list v*)))
+(define (vector-map f v . v*)
+  (list->vector (apply map f (vector->list v) (map vector->list v*))))
 
 ;; Error handling
 (define (%generic-error message . args) (error "unimplemented"))

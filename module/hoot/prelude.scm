@@ -725,7 +725,52 @@
 (define* (log x #:optional y) (error "unimplemented"))
 (define (exp x) (error "unimplemented"))
 
-(define (number->string n) (error "unimplemented"))
+(define* (number->string n #:optional (radix 10))
+  (cond
+   ((exact-integer? n)
+    (if (zero? n)
+        "0"
+        (let* ((mag (abs n))
+               (digits
+                (case radix
+                  ((2) (let lp ((mag mag) (out '()))
+                         (if (zero? mag)
+                             out
+                             (lp (ash mag -1)
+                                 (cons (integer->char
+                                        (+ (char->integer #\0)
+                                           (logand mag 1)))
+                                       out)))))
+                  ((8) (let lp ((mag mag) (out '()))
+                         (if (zero? mag)
+                             out
+                             (lp (ash mag -3)
+                                 (cons (integer->char
+                                        (+ (char->integer #\0)
+                                           (logand mag 7)))
+                                       out)))))
+                  ((10) (let lp ((mag mag) (out '()))
+                          (if (zero? mag)
+                              out
+                              (lp (quotient mag 10)
+                                  (cons (integer->char
+                                         (+ (char->integer #\0)
+                                            (remainder mag 10)))
+                                        out)))))
+                  ((16) (let lp ((mag mag) (out '()))
+                          (if (zero? mag)
+                              out
+                              (lp (ash mag -4)
+                                  (cons (integer->char
+                                         (let ((digit (logand mag 15)))
+                                           (+ (if (< digit 10)
+                                                  (char->integer #\0)
+                                                  (char->integer #\a))
+                                              digit)))
+                                        out))))))))
+          (list->string (if (negative? n) (cons #\- digits) digits)))))
+   (else
+    (error "number->string: unimplemented" n))))
 (define (string->number n) (error "unimplemented"))
 
 (define (rationalize x y) (error "unimplemented"))

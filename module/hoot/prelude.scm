@@ -1781,7 +1781,10 @@
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str) (%string->symbol str))
 (define (symbol->string sym) (%symbol->string sym))
-(define (symbol=? x y . z) (error "unimplemented"))
+(define (symbol=? x y . z)
+  (unless (and (symbol? x) (symbol? y) (and-map symbol? z))
+    (error "expected symbols" x y z))
+  (apply eq? x y z))
 
 ;; R7RS vectors
 (define (%generic-vector . args) (list->vector args))

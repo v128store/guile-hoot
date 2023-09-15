@@ -1383,11 +1383,21 @@
 
             ;; Misc.
             (('string->bignum #f x)
-             (error "unimplemented" exp))
+             `(,(local.get x)
+               (ref.cast $string)
+               (call $string->bignum)))
             (('string->symbol #f x)
-             (error "unimplemented" exp))
+             `(,(local.get x)
+               (ref.cast $string)
+               (call $string->symbol)))
             (('symbol->keyword #f x)
-             (error "unimplemented" exp))
+             `(,(local.get x)
+               (ref.cast $symbol)
+               (call $symbol->keyword)))
+            (('symbol->string #f x)
+             `(,(local.get x)
+               (ref.cast $symbol)
+               (struct.get $symbol $name)))
 
             ;; Unboxing and boxing numbers.
             (('scm->f64 #f src)

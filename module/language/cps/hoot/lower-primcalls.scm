@@ -63,6 +63,103 @@
                               ($continue kt src ($values ()))))))
 
          (($ $kargs names vars
+             ($ $branch kf kt src (or 'number? 'complex?) #f (x)))
+          (with-cps out
+            (letk kheap ($kargs () ()
+                          ($branch kf kt src 'heap-number? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kheap kt src 'fixnum? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'real? #f (x)))
+          (with-cps out
+            (letk kfix? ($kargs () ()
+                          ($branch kf kt src 'fixnum? #f (x))))
+            (letk kcomplex? ($kargs () ()
+                              ($branch kt kf src 'compnum? #f (x))))
+            (setk label
+                  ($kargs names vars
+                    ($branch kfix? kcomplex? src 'heap-number? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'rational? #f (x)))
+          (with-cps out
+            (letv real imag)
+            (letk kreal-finite? ($kargs ('real) (real)
+                                  ($branch kf kt src 'f64-finite? #f (real))))
+            (letk kflo ($kargs () ()
+                         ($continue kreal-finite? src
+                           ($primcall 'flonum->f64 #f (x)))))
+            (letk kcomp-real ($kargs () ()
+                               ($continue kreal-finite? src
+                                 ($primcall 'compnum-real #f (x)))))
+            (letk kimag-finite? ($kargs () ()
+                                  ($branch kf kcomp-real src 'f64-finite? #f (imag))))
+            (letk kcomp ($kargs () ()
+                          ($continue kimag-finite? src
+                            ($primcall 'compnum-imag #f (x)))))
+            (letk knum? ($kargs () ()
+                           ($branch kf kt src 'heap-number? #f (x))))
+            (letk kcomp? ($kargs () ()
+                           ($branch knum? kcomp src 'compnum? #f (x))))
+            (letk kflo? ($kargs () ()
+                          ($branch kcomp? kflo src 'flonum? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kflo? kt src 'fixnum? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'integer? #f (x)))
+          (with-cps out
+            (letv real imag)
+            (letk kreal-int? ($kargs ('real) (real)
+                                  ($branch kf kt src 'f64-int? #f (real))))
+            (letk kflo ($kargs () ()
+                         ($continue kreal-int? src
+                           ($primcall 'flonum->f64 #f (x)))))
+            (letk kcomp-real ($kargs () ()
+                               ($continue kreal-int? src
+                                 ($primcall 'compnum-real #f (x)))))
+            (letk kimag-int? ($kargs () ()
+                                  ($branch kf kcomp-real src 'f64-int? #f (imag))))
+            (letk kcomp ($kargs () ()
+                          ($continue kimag-int? src
+                            ($primcall 'compnum-imag #f (x)))))
+            (letk kcomp? ($kargs () ()
+                           ($branch kf kcomp src 'compnum? #f (x))))
+            (letk kflo? ($kargs () ()
+                          ($branch kcomp? kflo src 'flonum? #f (x))))
+            (letk kbig? ($kargs () ()
+                          ($branch kflo? kt src 'bignum? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kbig? kt src 'fixnum? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'exact-integer? #f (x)))
+          (with-cps out
+            (letk kbig? ($kargs () ()
+                          ($branch kf kt src 'bignum? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kbig? kt src 'fixnum? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'exact? #f (x)))
+          (with-cps out
+            (letk kfrac? ($kargs () ()
+                           ($branch kf kt src 'fracnum? #f (x))))
+            (letk kbig? ($kargs () ()
+                          ($branch kfrac? kt src 'bignum? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kbig? kt src 'fixnum? #f (x))))))
+
+         (($ $kargs names vars
+             ($ $branch kf kt src 'inexact? #f (x)))
+          (with-cps out
+            (letk kcomp? ($kargs () ()
+                          ($branch kf kt src 'compnum? #f (x))))
+            (setk label ($kargs names vars
+                          ($branch kcomp? kt src 'flonum? #f (x))))))
+
+         (($ $kargs names vars
              ($ $continue k src ($ $primcall 'call-thunk/no-inline #f (thunk))))
           (intmap-replace out label
                           (build-cont

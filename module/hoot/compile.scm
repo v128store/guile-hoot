@@ -1393,6 +1393,18 @@
             (('scm->f64 #f src)
              `(,(local.get src)
                (call $scm->f64)))
+            (('flonum->f64 #f src)
+             `(,(local.get src)
+               (ref.cast $flonum)
+               (struct.get $flonum $val)))
+            (('compnum-real #f src)
+             `(,(local.get src)
+               (ref.cast $complex)
+               (struct.get $complex $real)))
+            (('compnum-imag #f src)
+             `(,(local.get src)
+               (ref.cast $complex)
+               (struct.get $complex $imag)))
             (('scm->s64 #f src)
              (compile-fixnum-fast-path
               src i64-block-type
@@ -1907,7 +1919,7 @@
           (#('port? #f (a))             `(,(local.get a) (ref.test #f $port)))
           (#('bignum? #f (a))           `(,(local.get a) (ref.test #f $bignum)))
           (#('flonum? #f (a))           `(,(local.get a) (ref.test #f $flonum)))
-          (#('compnum? #f (a))          `(,(local.get a) (ref.test #f $compnum)))
+          (#('compnum? #f (a))          `(,(local.get a) (ref.test #f $complex)))
           (#('fracnum? #f (a))          `(,(local.get a) (ref.test #f $fracnum)))
           (#('eq? #f (a b))             `(,(local.get a) ,(local.get b) (ref.eq)))
 
@@ -1986,6 +1998,20 @@
           (#('f64-= #f (a b))
            `(,(local.get a)
              ,(local.get b)
+             (f64.eq)))
+
+          (#('f64-finite? #f (a))
+           `(,(local.get a)
+             ,(local.get a)
+             (f64.sub)
+             (f64.const 0)
+             (f64.eq)))
+          (#('f64-int? #f (a))
+           `(,(local.get a)
+             (f64.trunc)
+             ,(local.get a)
+             (f64.sub)
+             (f64.const 0)
              (f64.eq)))))
          
       (define (compile-throw src op param args)
@@ -2261,6 +2287,7 @@
            ;; results; just `restore' for now.
            (case name
              ((restore) param) ;; param is list of representations.
+             ((flonum->f64 compnum-real compnum-imag) '(f64))
              (else (primcall-raw-representations name param))))))
       (define locals
         (append

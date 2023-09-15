@@ -2063,11 +2063,15 @@
 
       (define (do-tree label ctx)
         (define (code-for-label ctx)
-          ;; here if label is a switch we node-within all children
-          ;; instead of only merge nodes.
-          (define children
-            (intset-filter merge-cont? (intmap-ref dom-children label)))
-          (node-within label children ctx))
+          (let ((children (intmap-ref dom-children label)))
+            (node-within
+             label
+             (match (intmap-ref cps label)
+               (($ $kargs names vars ($ $switch))
+                children)
+               (_
+                (intset-filter merge-cont? children)))
+             ctx)))
         (if (loop-cont? label)
             `((loop #f ,void-block-type
                     ,(code-for-label (push-loop label ctx))))
@@ -2110,7 +2114,9 @@
                            ,(do-branch label kt (push-if ctx))
                            ,(do-branch label kf (push-if ctx)))))
                     (($ $switch kf kt* src arg)
-                     (error "switch unimplemented"))
+                     `(,@(local.get arg)
+                       (br_table ,(map (lambda (k) (lookup-label k ctx)) kt*)
+                                 ,(lookup-label kf ctx))))
                     (($ $prompt k kh src escape? tag)
                      (error "prompts should be removed by tailification?"))
                     (($ $throw src op param args)

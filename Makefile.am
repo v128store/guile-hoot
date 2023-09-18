@@ -43,6 +43,7 @@ SCM_TESTS = 					\
   test/test-vectors.scm				\
   test/test-vm.scm				\
   test/test-wasm-assembler.scm			\
+  test/test-write.scm				\
   #
 
 JS_TESTS = 					\

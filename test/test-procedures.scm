@@ -44,18 +44,18 @@
              (cons* a b c d e f g h i j args))
            1 2 3 4 5 6 7 8 9 10 11 12)
 
-(test-call "false" (lambda* (#:optional a) a))
+(test-call "#f" (lambda* (#:optional a) a))
 (test-call "(42 69)" (lambda* (#:optional (a 42) (b 69)) (list a b)))
 (test-call "(10 20)" (lambda* (#:optional (a 42) (b 69)) (list a b)) 10 20)
 
-(test-call "(1 false ())" (lambda* (a #:optional b . rest) (list a b rest)) 1)
+(test-call "(1 #f ())" (lambda* (a #:optional b . rest) (list a b rest)) 1)
 
 (test-call "(1 2 3 4 5 6 7 8 9 10 11 12)"
            (lambda* (a b c d #:optional e f g h i j . args)
              (cons* a b c d e f g h i j args))
            1 2 3 4 5 6 7 8 9 10 11 12)
 
-(test-call "(1 2 3 4 5 6 false false false false)"
+(test-call "(1 2 3 4 5 6 #f #f #f #f)"
            (lambda* (a b c d #:optional e f g h i j . args)
              (cons* a b c d e f g h i j args))
            1 2 3 4 5 6)

@@ -21,7 +21,7 @@
 (use-modules (srfi srfi-64)
              (test utils))
 
-(test-begin "test-flonums")
+(test-begin "test-fractions")
 
 ;; Exact fraction arithmetic
 (test-call "1/2" (lambda (a b) (/ a b)) 1 2)
@@ -59,6 +59,6 @@
 (test-call "-1/6" (lambda (a b c d) (- (/ a b) (/ c d))) 1 2 2 3)
 (test-call "-1/2" (lambda (a b) (/ a b)) 1 -2)
 
-(test-call "true" (lambda (a b c) (< a (/ b c))) 0 1 2)
+(test-call "#t" (lambda (a b c) (< a (/ b c))) 0 1 2)
 
-(test-end* "test-flonums")
+(test-end* "test-fractions")

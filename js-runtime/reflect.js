@@ -8,7 +8,7 @@ class Char {
         return `#\\x${this.codepoint.toString(16)}`;
     }
 }
-class Eof { toString() { return "#eof"; } }
+class Eof { toString() { return "#<eof>"; } }
 class Nil { toString() { return "#nil"; } }
 class Null { toString() { return "()"; } }
 class Unspecified { toString() { return "#<unspecified>"; } }
@@ -78,7 +78,7 @@ class Bytevector extends HeapObject {
         let out = '#vu8(';
         for (let i = 0; i < len; i++) {
             if (i) out += ' ';
-            out += repr(this.reflector.bytevector_ref(this, i));
+            out += this.reflector.bytevector_ref(this, i);
         }
         out += ')';
         return out;
@@ -309,8 +309,20 @@ class SchemeTrapError extends Error {
     toString() { return `SchemeTrap(${this.tag}, <data>)`; }
 }
 
+function flonum_to_string(f64) {
+    if (Number.isFinite(f64)) {
+        let repr = f64 + '';
+        return /^-?[0-9]+$/.test(repr) ? repr + '.0' : repr;
+    } else if (Number.isNaN(f64)) {
+        return '+nan.0';
+    } else {
+        return f64 < 0 ? '-inf.0' : '+inf.0';
+    }
+}
+
 class SchemeModule {
     #instance;
+    #io_handler;
     #debug_handler;
     static #rt = {
         bignum_from_i32(n) { return BigInt(n); },
@@ -384,15 +396,31 @@ class SchemeModule {
         fatan2: Math.atan2,
 
 
-        write_stdout(str) { console.log(str); },
-        write_stderr(str) { console.log('error ' + str); },
-        read_stdin() { return ''; },
-
         die(tag, data) { throw new SchemeTrapError(tag, data); }
     };
 
     constructor(instance) {
         this.#instance = instance;
+        let read_stdin = () => '';
+        if (typeof printErr === 'function') {
+            // On the console, try to use 'write' (v8) or 'putstr' (sm),
+            // as these don't add an extraneous newline.  Unfortunately
+            // JSC doesn't have a printer that doesn't add a newline.
+            let write_no_newline =
+                typeof write === 'function' ? write
+                : typeof putstr === 'function' ? putstr : print;
+            this.#io_handler = {
+                write_stdout: write_no_newline,
+                write_stderr: printErr,
+                read_stdin
+            };
+        } else {
+            this.#io_handler = {
+                write_stdout: console.log,
+                write_stderr: console.error,
+                read_stdin
+            }
+        }
         this.#debug_handler = {
             debug_str(x) { console.log(`debug: ${x}`); },
             debug_str_i32(x, y) { console.log(`debug: ${x}: ${y}`); },
@@ -400,16 +428,22 @@ class SchemeModule {
         }
     }
     static async fetch_and_instantiate(path, imported_abi) {
+        let io = {
+            write_stdout(str) { mod.#io_handler.write_stdout(str); },
+            write_stderr(str) { mod.#io_handler.write_stderr(str); },
+            read_stdin() { return mod.#io_handler.read_stdin(); },
+        }
         let debug = {
             debug_str(x) { mod.#debug_handler.debug_str(x); },
             debug_str_i32(x, y) { mod.#debug_handler.debug_str_i32(x, y); },
             debug_str_scm(x, y) { mod.#debug_handler.debug_str_scm(x, y); },
         }
-        let imports = { rt: SchemeModule.#rt, debug, abi: imported_abi }
+        let imports = { rt: SchemeModule.#rt, debug, io, abi: imported_abi }
         let { module, instance } = await instantiate_streaming(path, imports);
         let mod = new SchemeModule(instance);
         return mod;
     }
+    set_io_handler(h) { this.#io_handler = h; }
     set_debug_handler(h) { this.#debug_handler = h; }
     all_exports() { return this.#instance.exports; }
     exported_abi() {
@@ -441,5 +475,12 @@ class SchemeModule {
 function repr(obj) {
     if (obj instanceof HeapObject)
         return obj.repr();
+    if (typeof obj === 'boolean')
+        return obj ? '#t' : '#f';
+    if (typeof obj === 'number')
+        return flonum_to_string(obj);
+    if (typeof obj === 'string')
+        // FIXME: Improve to match Scheme.
+        return '"' + obj.replace(/(["\\])/g, '\\$1') + '"';
     return obj + '';
 }

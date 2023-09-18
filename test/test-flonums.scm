@@ -24,32 +24,32 @@
 (test-begin "test-flonums")
 
 ;; Flonum addition
-(test-call "84" (lambda (a) (+ (inexact a) (inexact a))) 42)
-(test-call "84" (lambda (a) (+ (inexact a) a)) 42)
-(test-call "536870954" (lambda (a b c) (+ (inexact a) (+ b c))) 42 536870911 1)
-(test-call "84" (lambda (a) (+ a (inexact a))) 42)
-(test-call "536870954" (lambda (a b c) (+ (+ a b) (inexact c))) 536870911 1 42)
+(test-call "84.0" (lambda (a) (+ (inexact a) (inexact a))) 42)
+(test-call "84.0" (lambda (a) (+ (inexact a) a)) 42)
+(test-call "536870954.0" (lambda (a b c) (+ (inexact a) (+ b c))) 42 536870911 1)
+(test-call "84.0" (lambda (a) (+ a (inexact a))) 42)
+(test-call "536870954.0" (lambda (a b c) (+ (+ a b) (inexact c))) 536870911 1 42)
 
 ;; Flonum subtraction
-(test-call "0" (lambda (a) (- (inexact a) (inexact a))) 42)
-(test-call "0" (lambda (a) (- (inexact a) a)) 42)
-(test-call "-536870870" (lambda (a b c) (- (inexact a) (+ b c))) 42 536870911 1)
-(test-call "0" (lambda (a) (- a (inexact a))) 42)
-(test-call "536870870" (lambda (a b c) (- (+ a b) (inexact c))) 536870911 1 42)
+(test-call "0.0" (lambda (a) (- (inexact a) (inexact a))) 42)
+(test-call "0.0" (lambda (a) (- (inexact a) a)) 42)
+(test-call "-536870870.0" (lambda (a b c) (- (inexact a) (+ b c))) 42 536870911 1)
+(test-call "0.0" (lambda (a) (- a (inexact a))) 42)
+(test-call "536870870.0" (lambda (a b c) (- (+ a b) (inexact c))) 536870911 1 42)
 
 ;; Flonum multiplication
-(test-call "1764" (lambda (a) (* (inexact a) (inexact a))) 42)
-(test-call "1764" (lambda (a) (* (inexact a) a)) 42)
-(test-call "22548578304" (lambda (a b c) (* (inexact a) (+ b c))) 42 536870911 1)
-(test-call "1764" (lambda (a) (* a (inexact a))) 42)
-(test-call "22548578304" (lambda (a b c) (* (+ a b) (inexact c))) 536870911 1 42)
+(test-call "1764.0" (lambda (a) (* (inexact a) (inexact a))) 42)
+(test-call "1764.0" (lambda (a) (* (inexact a) a)) 42)
+(test-call "22548578304.0" (lambda (a b c) (* (inexact a) (+ b c))) 42 536870911 1)
+(test-call "1764.0" (lambda (a) (* a (inexact a))) 42)
+(test-call "22548578304.0" (lambda (a b c) (* (+ a b) (inexact c))) 536870911 1 42)
 
 ;; Flonum division
 (test-call "5.25"
            (lambda (a b) (/ (inexact a) (inexact b)))
            42 8)
 (test-call "0.5" (lambda (a b) (/ (inexact a) b)) 1 2)
-(test-call "1"
+(test-call "1.0"
            (lambda (a b) (/ (inexact (+ a b)) (+ a b)))
            536870911 1)
 (test-call "0.5" (lambda (a b) (/ a (inexact b))) 1 2)
@@ -57,22 +57,22 @@
            (lambda (a b c) (/ (+ a b) (inexact c)))
            536870911 1 5)
 
-(test-call "1" (lambda (a) (inexact a)) 1)
-(test-call "536870912" (lambda (a b) (inexact (+ a b))) 536870911 1)
-(test-call "Infinity" (lambda (a b) (/ (inexact a) (inexact b))) 1 0)
+(test-call "1.0" (lambda (a) (inexact a)) 1)
+(test-call "536870912.0" (lambda (a b) (inexact (+ a b))) 536870911 1)
+(test-call "+inf.0" (lambda (a b) (/ (inexact a) (inexact b))) 1 0)
 (test-call "0.5" (lambda (a b) (inexact (/ a b))) 1 2)
 
 ;; Square root and trigonometry
-(test-call "2" (lambda (a) (sqrt a)) 4)
-(test-call "0" (lambda (a) (sin a)) 0)
-(test-call "1" (lambda (a) (cos a)) 0)
-(test-call "0" (lambda (a) (tan a)) 0)
-(test-call "0" (lambda (a) (asin a)) 0)
-(test-call "0" (lambda (a) (acos a)) 1)
-(test-call "0" (lambda (a) (atan a)) 0)
-(test-call "0" (lambda (a b) (atan a b)) 0 1)
+(test-call "2.0" (lambda (a) (sqrt a)) 4)
+(test-call "0.0" (lambda (a) (sin a)) 0)
+(test-call "1.0" (lambda (a) (cos a)) 0)
+(test-call "0.0" (lambda (a) (tan a)) 0)
+(test-call "0.0" (lambda (a) (asin a)) 0)
+(test-call "0.0" (lambda (a) (acos a)) 1)
+(test-call "0.0" (lambda (a) (atan a)) 0)
+(test-call "0.0" (lambda (a b) (atan a b)) 0 1)
 
-(test-call "true" (lambda (a b) (= a (inexact a))) 23 23)
-(test-call "true" (lambda (a b c) (<= a (inexact (/ b c)))) 23 235 10)
+(test-call "#t" (lambda (a b) (= a (inexact a))) 23 23)
+(test-call "#t" (lambda (a b c) (<= a (inexact (/ b c)))) 23 235 10)
 
 (test-end* "test-flonums")

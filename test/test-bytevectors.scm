@@ -135,12 +135,12 @@
              (let ((f64 (bytevector-ieee-double-native-ref bv 0)))
                (sqrt (abs f64))))
            #vu8(184 30 133 235 81 88 69 64))
-(test-call "42"
+(test-call "42.0"
            (lambda (bv)
              (let ((f64 (bytevector-ieee-double-native-ref bv 0)))
                (floor f64)))
            #vu8(184 30 133 235 81 88 69 64))
-(test-call "43"
+(test-call "43.0"
            (lambda (bv)
              (let ((f64 (bytevector-ieee-double-native-ref bv 0)))
                (ceiling f64)))

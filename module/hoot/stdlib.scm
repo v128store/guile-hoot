@@ -539,9 +539,9 @@
            (result i32))
 
      ;; FIXME: These are very much temporary.
-     (func $write-stdout (import "rt" "write_stdout") (param (ref string)))
-     (func $write-stderr (import "rt" "write_stderr") (param (ref string)))
-     (func $read-stdin (import "rt" "read_stdin") (result (ref string)))
+     (func $write-stdout (import "io" "write_stdout") (param (ref string)))
+     (func $write-stderr (import "io" "write_stderr") (param (ref string)))
+     (func $read-stdin (import "io" "read_stdin") (result (ref string)))
 
      (func $fsqrt (import "rt" "fsqrt") (param f64) (result f64))
      (func $fsin (import "rt" "fsin") (param f64) (result f64))

@@ -444,8 +444,8 @@
     ("bignum" (~ reflector "bignum_value" x))
     ("complex"
      (make-hoot-complex reflector x
-                        (wasm->guile reflector (~ reflector "complex_real" x))
-                        (wasm->guile reflector (~ reflector "complex_imag" x))))
+                        (~ reflector "complex_real" x)
+                        (~ reflector "complex_imag" x)))
     ("fraction"
      (make-hoot-fraction reflector x
                          (wasm->guile reflector (~ reflector "fraction_num" x))

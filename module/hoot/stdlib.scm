@@ -3376,11 +3376,111 @@
                                    (ref.cast $bignum (local.get $x))))))))
 
      (func $abs (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$abs")) (unreachable))
+           ,(arith-cond
+             '((call $fixnum? (local.get $x))
+               (if (result (ref eq))
+                   (call $negative-integer? (local.get $x))
+                   (then (call $mul (local.get $x) (call $i32->fixnum (i32.const -1))))
+                   (else (local.get $x))))
+             '((ref.test $bignum (local.get $x))
+               (if (result (ref eq))
+                   (call $negative-integer? (local.get $x))
+                   (then (call $mul (local.get $x) (call $i32->fixnum (i32.const -1))))
+                   (else (local.get $x))))
+             ;; FIXME: not actually tested yet, as the compiler typically uses $fabs
+             '((ref.test $flonum (local.get $x))
+               (struct.new $flonum
+                           (i32.const 0)
+                           (f64.abs (call $flonum->f64 (ref.cast $flonum (local.get $x))))))
+             '((ref.test $fraction (local.get $x))
+               (if (result (ref eq))
+                   (call $negative-integer?
+                         (struct.get $fraction $num
+                                     (ref.cast $fraction (local.get $x))))
+                   (then (call $mul (local.get $x) (call $i32->fixnum (i32.const -1))))
+                   (else (local.get $x))))))
+
+     (func $remz (param $m (ref eq)) (param $n (ref eq))
+           (result (ref eq))
+           ,(arith-cond
+             `((call $fixnum? (local.get $m))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $n))
+                   (call $i32->fixnum
+                         (i32.rem_s
+                          (call $fixnum->i32
+                                (ref.cast i31 (local.get $m)))
+                          (call $fixnum->i32
+                                (ref.cast i31 (local.get $n))))))
+                 '((ref.test $bignum (local.get $n))
+                   (call $bignum-rem*
+                         (ref.cast $bignum
+                                   (call $i32->bignum
+                                         (call $fixnum->i32
+                                               (ref.cast i31
+                                                         (local.get $m)))))
+                         (ref.cast $bignum (local.get $n))))))
+             `((ref.test $bignum (local.get $m))
+               ,(arith-cond
+                 '((call $fixnum? (local.get $n))
+                   (call $bignum-rem*
+                         (ref.cast $bignum (local.get $m))
+                         (ref.cast $bignum
+                                   (call $i32->bignum
+                                         (call $fixnum->i32
+                                               (ref.cast i31
+                                                         (local.get $n)))))))
+                 '((ref.test $bignum (local.get $n))
+                   (call $bignum-rem*
+                         (ref.cast $bignum (local.get $m))
+                         (ref.cast $bignum (local.get $n))))))))
+
+     ;; floor of $M/$N, with $M, $N in Z and $N > 0 and both integers
+     ;; normalized: (m - m mod n)/n, where m mod n = (% (+ (% m n) n) n)
+     (func $fracfloor (param $m (ref eq)) (param $n (ref eq)) (result (ref eq))
+           (call $div
+                 (call $sub
+                       (local.get $m)
+                       (call $remz
+                             (call $add
+                                   (call $remz
+                                         (local.get $m)
+                                         (local.get $n))
+                                   (local.get $n))
+                             (local.get $n)))
+                 (local.get $n)))
+
      (func $floor (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$floor")) (unreachable))
+           ,(arith-cond
+             '((call $fixnum? (local.get $x))
+               (local.get $x))
+             '((ref.test $bignum (local.get $x))
+               (local.get $x))
+             '((ref.test $flonum (local.get $x))
+               (struct.new $flonum
+                           (i32.const 0)
+                           (f64.floor (call $flonum->f64 (ref.cast $flonum (local.get $x))))))
+             '((ref.test $fraction (local.get $x))
+               (call $fracfloor
+                     (struct.get $fraction $num
+                                 (ref.cast $fraction (local.get $x)))
+                     (struct.get $fraction $denom
+                                 (ref.cast $fraction (local.get $x)))))))
+
      (func $ceiling (param $x (ref eq)) (result (ref eq))
-           (call $die0 (string.const "$ceiling")) (unreachable))
+           ,(arith-cond
+             '((call $fixnum? (local.get $x))
+               (local.get $x))
+             '((ref.test $bignum (local.get $x))
+               (local.get $x))
+             '((ref.test $flonum (local.get $x))
+               (struct.new $flonum
+                           (i32.const 0)
+                           (f64.ceil (call $flonum->f64 (ref.cast $flonum (local.get $x))))))
+             '((ref.test $fraction (local.get $x))
+               (call $add
+                 (call $floor (local.get $x))
+                 (call $i32->fixnum (i32.const 1))))))
 
      (func $sqrt (param $x (ref eq)) (result (ref $flonum))
            ,(call-fmath '$fsqrt '(local.get $x)))

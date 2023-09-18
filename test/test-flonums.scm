@@ -75,4 +75,13 @@
 (test-call "#t" (lambda (a b) (= a (inexact a))) 23 23)
 (test-call "#t" (lambda (a b c) (<= a (inexact (/ b c)))) 23 235 10)
 
+;;; abs, floor and ceiling
+(test-call "0.5" (lambda (a b) (abs (inexact (/ a b)))) 1 2)
+(test-call "0.5" (lambda (a b) (abs (inexact (/ a b)))) -1 2)
+(test-call "0.0" (lambda (a b) (floor (inexact (/ a b)))) 1 2)
+(test-call "-1.0" (lambda (a b) (floor (inexact (/ a b)))) -1 2)
+(test-call "1.0" (lambda (a b) (ceiling (inexact (/ a b)))) 1 2)
+;; FIXME: this should check for negative zero directly; see issue #87.
+(test-call "0.0" (lambda (a b) (abs (ceiling (inexact (/ a b))))) -1 2)
+
 (test-end* "test-flonums")

@@ -275,8 +275,8 @@
                       (let lp ((i 0))
                         (if (< i u32len)
                             (cons `(i32.const
-                                    ,(bytevector-s32-native-ref u32v i))
-                                  (lp (+ i 4)))
+                                    ,(bytevector-s32-native-ref u32v (* i 4)))
+                                  (lp (1+ i)))
                             '())))
                   (array.new_fixed $raw-bitvector
                                    ,(ash (+ 31 (bitvector-length x)) -5))

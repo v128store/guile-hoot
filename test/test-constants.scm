@@ -47,7 +47,7 @@
 (test-compilation #* "#*")
 (test-compilation #*101 "#*101")
 (test-compilation #*100000 "#*100000")
-(test-compilation #*0100000 "#*0100000")
+(test-compilation #*000000000000000000000000000000001 "#*000000000000000000000000000000001")
 (test-compilation "foo" "\"foo\"")
 (test-compilation (lambda () 42) "#<procedure>")
 (test-compilation #:foo "#:foo")

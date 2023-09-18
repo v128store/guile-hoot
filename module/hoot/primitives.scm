@@ -41,6 +41,7 @@
                  cons*
                  fluid-ref fluid-set! with-fluid* with-dynamic-state
                  make-variable variable-ref variable-set!
+                 keyword->symbol symbol->keyword
                  exact->inexact
                  inf? nan?
                  error
@@ -287,6 +288,10 @@
    (symbol? . %symbol?)
    (symbol->string . %symbol->string)
    (string->symbol . %string->symbol)
+
+   ;; Keywords
+   (symbol->keyword . %symbol->keyword)
+   (keyword->symbol . %keyword->symbol)
 
    ;; R7RS vectors
    (vector? . %vector?)

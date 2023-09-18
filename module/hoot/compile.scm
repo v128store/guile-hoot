@@ -1406,18 +1406,24 @@
              `(,(local.get x)
                (ref.cast #f $string)
                (call $string->bignum)))
+
             (('string->symbol #f x)
              `(,(local.get x)
                (ref.cast #f $string)
                (call $string->symbol)))
-            (('symbol->keyword #f x)
-             `(,(local.get x)
-               (ref.cast #f $symbol)
-               (call $symbol->keyword)))
             (('symbol->string #f x)
              `(,(local.get x)
                (ref.cast #f $symbol)
                (struct.get $symbol $name)))
+
+            (('symbol->keyword #f x)
+             `(,(local.get x)
+               (ref.cast #f $symbol)
+               (call $symbol->keyword)))
+            (('keyword->symbol #f x)
+             `(,(local.get x)
+               (ref.cast #f $keyword)
+               (struct.get $keyword $name)))
 
             ;; Unboxing and boxing numbers.
             (('scm->f64 #f src)

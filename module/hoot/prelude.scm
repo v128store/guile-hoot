@@ -105,6 +105,8 @@
 (define (logbit? idx k) (%logbit? idx k))
 
 (define (keyword? x) (%keyword? x))
+(define (symbol->keyword sym) (%symbol->keyword sym))
+(define (keyword->symbol kw) (%keyword->symbol kw))
 
 (define (bitvector? x) (%bitvector? x))
 (define (bitvector-length bv)

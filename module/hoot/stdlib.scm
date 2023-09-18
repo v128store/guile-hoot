@@ -2058,6 +2058,29 @@
      (func $bignum->f64 (param $a (ref $bignum)) (result f64)
            (call $bignum-to-f64 (struct.get $bignum $val (local.get $a))))
 
+     (func $scm->f64 (param $a (ref eq)) (result f64)
+           ,(arith-cond 'f64
+             '((call $fixnum? (local.get $a))
+               (call $fixnum->f64 (ref.cast i31 (local.get $a))))
+             '((ref.test $bignum (local.get $a))
+               (call $bignum->f64 (ref.cast $bignum (local.get $a))))
+             '((ref.test $flonum (local.get $a))
+               (struct.get $flonum $val (ref.cast $flonum (local.get $a))))
+             '((ref.test $fraction (local.get $a))
+               (struct.get
+                $flonum $val
+                (ref.cast
+                 $flonum
+                 (call $div
+                       (call $inexact
+                             (struct.get $fraction $num
+                                         (ref.cast $fraction
+                                                   (local.get $a))))
+                       (call $inexact
+                             (struct.get $fraction $num
+                                         (ref.cast $fraction
+                                                   (local.get $a))))))))))
+
      (func $numeric-eqv? (param $a (ref eq)) (param $b (ref eq)) (result i32)
            ,(arith-cond 'i32
              `((call $fixnum? (local.get $a))

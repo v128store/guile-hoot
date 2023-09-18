@@ -1404,19 +1404,19 @@
             ;; Misc.
             (('string->bignum #f x)
              `(,(local.get x)
-               (ref.cast $string)
+               (ref.cast #f $string)
                (call $string->bignum)))
             (('string->symbol #f x)
              `(,(local.get x)
-               (ref.cast $string)
+               (ref.cast #f $string)
                (call $string->symbol)))
             (('symbol->keyword #f x)
              `(,(local.get x)
-               (ref.cast $symbol)
+               (ref.cast #f $symbol)
                (call $symbol->keyword)))
             (('symbol->string #f x)
              `(,(local.get x)
-               (ref.cast $symbol)
+               (ref.cast #f $symbol)
                (struct.get $symbol $name)))
 
             ;; Unboxing and boxing numbers.

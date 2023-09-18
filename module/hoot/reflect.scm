@@ -548,6 +548,7 @@
       ("bignum_lt" . ,<)
       ("bignum_le" . ,<=)
       ("bignum_eq" . ,=)
+      ("flonum_to_string" . ,number->string)
       ("string_upcase" . ,string-upcase)
       ("string_downcase" . ,string-downcase)
       ("make_weak_map" . ,make-weak-key-hash-table)

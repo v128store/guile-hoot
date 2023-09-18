@@ -520,6 +520,10 @@
            (param (ref extern))
            (result f64))
 
+     (func $flonum->string (import "rt" "flonum_to_string")
+           (param f64)
+           (result (ref string)))
+
      (func $string-upcase (import "rt" "string_upcase")
            (param (ref string))
            (result (ref string)))

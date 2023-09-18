@@ -1950,7 +1950,7 @@
           (#('bignum? #f (a))           `(,(local.get a) (ref.test #f $bignum)))
           (#('flonum? #f (a))           `(,(local.get a) (ref.test #f $flonum)))
           (#('compnum? #f (a))          `(,(local.get a) (ref.test #f $complex)))
-          (#('fracnum? #f (a))          `(,(local.get a) (ref.test #f $fracnum)))
+          (#('fracnum? #f (a))          `(,(local.get a) (ref.test #f $fraction)))
           (#('eq? #f (a b))             `(,(local.get a) ,(local.get b) (ref.eq)))
 
           (#('vtable-vtable? #f (vtable))

@@ -378,6 +378,8 @@ class SchemeModule {
 
         bignum_to_f64(n) { return Number(n); },
 
+        flonum_to_string,
+
         string_upcase: Function.call.bind(String.prototype.toUpperCase),
         string_downcase: Function.call.bind(String.prototype.toLowerCase),
 

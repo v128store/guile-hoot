@@ -730,7 +730,7 @@
    ((exact-integer? n)
     (if (zero? n)
         "0"
-        (let* ((mag (abs n))
+        (let* ((mag (if (< n 0) (- n) n))
                (digits
                 (case radix
                   ((2) (let lp ((mag mag) (out '()))
@@ -769,8 +769,28 @@
                                               digit)))
                                         out))))))))
           (list->string (if (negative? n) (cons #\- digits) digits)))))
+   ((exact? n)
+    (string-append (number->string (numerator n) radix)
+                   "/"
+                   (number->string (denominator n) radix)))
+   ((real? n)
+    (unless (eqv? radix 10)
+      (error "expected radix of 10 for number->string on flonum" n))
+    (%inline-wasm
+     '(func (param $n (ref eq))
+            (result (ref eq))
+            (struct.new $string
+                        (i32.const 0)
+                        (call $flonum->string
+                              (struct.get $flonum $val
+                                          (ref.cast $flonum (local.get
+                                                             $n))))))
+     n))
    (else
-    (error "number->string: unimplemented" n))))
+    (string-append (number->string (real-part n) radix)
+                   "/"
+                   (number->string (imag-part n) radix)
+                   "i"))))
 (define (string->number n) (error "unimplemented"))
 
 (define (rationalize x y) (error "unimplemented"))

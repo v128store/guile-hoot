@@ -24,24 +24,26 @@ AM_JS_LOG_FLAGS = $(V8_FEATURES)
 CLEANFILES += $(SCM_TESTS:test/%.scm=%.log)
 
 SCM_TESTS = 					\
-  test/test-wasm-assembler.scm			\
-  test/test-constants.scm			\
-  test/test-ints.scm				\
-  test/test-flonums.scm				\
-  test/test-fractions.scm			\
-  test/test-bitwise.scm				\
-  test/test-strings.scm				\
-  test/test-pairs.scm				\
-  test/test-vectors.scm				\
-  test/test-bytevectors.scm			\
   test/test-assignment.scm			\
-  test/test-procedures.scm			\
   test/test-atomics.scm				\
-  test/test-fluids.scm				\
-  test/test-prompts.scm				\
+  test/test-bitwise.scm				\
+  test/test-bytevectors.scm			\
+  test/test-constants.scm			\
   test/test-exceptions.scm			\
+  test/test-flonums.scm				\
+  test/test-fluids.scm				\
+  test/test-fractions.scm			\
+  test/test-ints.scm				\
+  test/test-number-to-string.scm		\
+  test/test-pairs.scm				\
   test/test-ports.scm				\
-  test/test-vm.scm
+  test/test-procedures.scm			\
+  test/test-prompts.scm				\
+  test/test-strings.scm				\
+  test/test-vectors.scm				\
+  test/test-vm.scm				\
+  test/test-wasm-assembler.scm			\
+  #
 
 JS_TESTS = 					\
   examples/basic-types.js

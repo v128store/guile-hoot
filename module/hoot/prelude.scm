@@ -105,7 +105,40 @@
 (define (logbit? idx k) (%logbit? idx k))
 
 (define (keyword? x) (%keyword? x))
+
 (define (bitvector? x) (%bitvector? x))
+(define (bitvector-length bv)
+  (unless (bitvector? bv) (error "expected bitvector" bv))
+  (%inline-wasm
+   '(func (param $bv (ref eq))
+          (result (ref eq))
+          (i31.new
+           (i32.shl (struct.get $bitvector $len
+                                (ref.cast $bitvector (local.get $bv)))
+                    (i32.const 1))))
+   bv))
+(define (bitvector-ref bv i)
+  (unless (bitvector? bv) (error "expected bitvector" bv))
+  (unless (and (exact-integer? i) (<= 0 i) (< i (bitvector-length bv)))
+    (error "index out of range" i))
+  (%inline-wasm
+   '(func (param $bv (ref eq))
+          (param $i (ref eq))
+          (result (ref eq))
+          (if (ref eq)
+              (i32.and
+               (array.get $raw-bitvector
+                          (struct.get $bitvector $vals
+                                      (ref.cast $bitvector (local.get $bv)))
+                          (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
+                                     (i32.const 6)))
+               (i32.shl (i32.const 1)
+                        (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
+                                   (i32.const 1))))
+              (then (i31.new (i32.const 17)))
+              (else (i31.new (i32.const 1)))))
+   bv i))
+;; bitvector-set!, list->bitvector etc not yet implemented
 
 (define (%generic-cons* head . tail)
   (if (null? tail)

@@ -19,7 +19,7 @@ class Complex {
         this.imag = imag;
     }
     toString() {
-        return `${this.real}+${this.imag}i`;
+        return `${flonum_to_string(this.real)}+${flonum_to_string(this.imag)}i`;
     }
 }
 class Fraction {

@@ -30,7 +30,7 @@
 (test-compilation 1.0 "1.0")
 (test-compilation 1.5 "1.5")
 (test-compilation 1/4 "1/4")
-(test-compilation 4.0+2.0i "4+2i")
+(test-compilation 4.0+2.0i "4.0+2.0i")
 (test-compilation #f "#f")
 (test-compilation '#nil "#nil")
 (test-compilation '() "()")

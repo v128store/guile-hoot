@@ -334,6 +334,19 @@
            (func (export "main") (result i32)
                  (i32.shl (i32.const #b0001) (i32.const 3)))))
 
+(test-vm "i32.shl - out of 32 bit range"
+         0
+         `(module
+           (func (export "main") (result i32)
+                 (i32.shl (i32.const ,(ash -1 31))
+                          (i32.const 2)))))
+
+(test-vm "i32.shl - more than 32 bits"
+         #b1000
+         '(module
+           (func (export "main") (result i32)
+                 (i32.shl (i32.const #b0001) (i32.const 35)))))
+
 (test-vm "i32.shr_s"
          -2
          '(module
@@ -345,6 +358,12 @@
          '(module
            (func (export "main") (result i32)
                  (i32.shr_u (i32.const #b1000) (i32.const 3)))))
+
+(test-vm "i32.shr_u - more than 32 bits"
+         #b0001
+         '(module
+           (func (export "main") (result i32)
+                 (i32.shr_u (i32.const #b1000) (i32.const 35)))))
 
 (test-vm "i32.rotl"
          (s32-overflow #b11000011110000111100001111000011)

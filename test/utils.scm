@@ -37,7 +37,9 @@
 
 (define d8 (or (getenv "D8") "d8"))
 (define srcdir (or (getenv "SRCDIR") (getcwd)))
-(define use-hoot-vm? (equal? (getenv "USE_HOOT_VM") "1"))
+(define test-hosts (string-split (or (getenv "WASM_HOST") "d8,hoot") #\,))
+(define use-d8? (member "d8" test-hosts))
+(define use-hoot-vm? (member "hoot" test-hosts))
 
 (define (scope-file file-name)
   (string-append srcdir "/" file-name))
@@ -73,22 +75,22 @@
     (close-port port)
     (string-trim-both output)))
 
-(define (compile-value/d8 constant)
+(define (compile-value/d8 wasm)
   (call-with-compiled-wasm-file
-   (compile constant)
+   wasm
    (lambda (wasm-file-name)
      (run-d8 (scope-file "test/load-wasm-and-print.js") "--" srcdir wasm-file-name))))
 
-(define (compile-call/d8 form)
-  (let lp ((form form) (files '()) (first? #t))
-    (match form
+(define (compile-call/d8 proc . args)
+  (let lp ((modules (cons proc args)) (files '()) (first? #t))
+    (match modules
       (()
        (apply run-d8 (scope-file "test/test-call.js") "--" srcdir (reverse files)))
-      ((x . form)
+      ((module . rest)
        (call-with-compiled-wasm-file
-        (compile x #:import-abi? (not first?) #:export-abi? first?)
+        module
         (lambda (file)
-          (lp form (cons file files) #f)))))))
+          (lp rest (cons file files) #f)))))))
 
 (define reflect-wasm
   (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
@@ -104,31 +106,55 @@
                        (newline))
                      vals)))))))
 
-(define (compile-value/hoot expr)
-  (call-with-printed-values
-   (lambda ()
-     (compile-value reflect-wasm expr))))
+;; Assembling and then parsing the WASM because resolve-wasm isn't
+;; yet equivalent to the parsed form.
+(define (rebuild wasm)
+  (call-with-input-bytevector (assemble-wasm wasm) parse-wasm))
 
-(define (compile-call/hoot form)
+(define (compile-value/hoot wasm)
   (call-with-printed-values
    (lambda ()
-     (apply compile-call reflect-wasm form))))
+     (hoot-load (hoot-instantiate reflect-wasm (rebuild wasm))))))
+
+(define (compile-call/hoot proc . args)
+  (call-with-printed-values
+   (lambda ()
+     (let* ((proc-module (hoot-instantiate reflect-wasm (rebuild proc)))
+            (proc* (hoot-load proc-module))
+            (reflector (hoot-module-reflector proc-module))
+            (args* (map (lambda (arg)
+                          (hoot-load
+                           (hoot-instantiate reflector (rebuild arg))))
+                        args)))
+       (apply hoot-call proc* args*)))))
+
+(define (compare-results hoot-result d8-result)
+  (cond
+   ((and use-hoot-vm? use-d8?)
+    (unless (equal? hoot-result d8-result)
+      (error "our result differs from d8" hoot-result d8-result))
+    hoot-result)
+   (use-d8? d8-result)
+   (else hoot-result)))
 
 (define (compile-value* expr)
-  (if use-hoot-vm?
-      (compile-value/hoot expr)
-      (compile-value/d8 expr)))
+  (let ((wasm (compile expr)))
+    (compare-results (and use-hoot-vm? (compile-value/hoot wasm))
+                     (and use-d8? (compile-value/d8 wasm)))))
 
-(define (compile-call* form)
-  (if use-hoot-vm?
-      (compile-call/hoot form)
-      (compile-call/d8 form)))
+(define (compile-call* proc . args)
+  (let ((proc* (compile proc))
+        (args* (map (lambda (exp)
+                      (compile exp #:import-abi? #t #:export-abi? #f))
+                    args)))
+    (compare-results (and use-hoot-vm? (apply compile-call/hoot proc* args*))
+                     (and use-d8? (apply compile-call/d8 proc* args*)))))
 
 (define-syntax-rule (test-compilation expr repr)
   (test-equal repr repr (compile-value* 'expr)))
 
 (define-syntax-rule (test-call repr proc arg ...)
-  (test-equal repr repr (compile-call* '(proc arg ...))))
+  (test-equal repr repr (compile-call* 'proc 'arg ...)))
 
 (define-syntax-rule (test-end* name)
   (begin

@@ -69,6 +69,9 @@
             hoot-port?
             hoot-struct?
 
+            hoot-module?
+            hoot-module-reflector
+            hoot-module-instance
             hoot-instantiate
             hoot-load
             hoot-call

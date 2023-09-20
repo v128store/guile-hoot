@@ -3501,9 +3501,13 @@
            ,(call-fmath '$fatan2 '(local.get $x) '(local.get $y)))
 
      (func $u64->bignum (param $i64 i64) (result (ref eq))
-           (call $die0 (string.const "$u64->bignum")) (unreachable))
+           (struct.new $bignum
+                       (i32.const 0)
+                       (call $bignum-from-u64 (local.get $i64))))
      (func $s64->bignum (param $i64 i64) (result (ref eq))
-           (call $die0 (string.const "$s64->bignum")) (unreachable))
+           (struct.new $bignum
+                       (i32.const 0)
+                       (call $bignum-from-i64 (local.get $i64))))
      (func $bignum->u64 (param $x (ref $bignum)) (result i64)
            (local $n (ref extern))
            (local.set $n (struct.get $bignum $val (local.get $x)))
@@ -3570,7 +3574,18 @@
                            (local.get $a))
                      (unreachable))))))
      (func $scm->u64/truncate (param $a (ref eq)) (result i64)
-           (call $die0 (string.const "$scm->u64/truncate")) (unreachable))
+           ,(arith-cond 'i64
+             '((call $fixnum? (local.get $a))
+               (i64.extend_i32_u
+                (call $fixnum->i32 (ref.cast i31 (local.get $a)))))
+             '((ref.test $bignum (local.get $a))
+               (call $bignum-get-u64
+                     (struct.get $bignum $val (ref.cast $bignum (local.get $a)))))
+             '((i32.const 0)
+               (call $die
+                     (string.const "$scm->u64 bad arg")
+                     (local.get $a))
+               (unreachable))))
      (func $s64->scm (param $a i64) (result (ref eq))
            (if (result (ref eq))
                (i32.and (i64.ge_s (local.get $a) (i64.const ,(ash -1 29)))

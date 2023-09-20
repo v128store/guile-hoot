@@ -61,4 +61,28 @@
 
 (test-call "#t" (lambda (a b c) (< a (/ b c))) 0 1 2)
 
+;;; abs, floor and ceiling
+(test-call "1/2" (lambda (a b) (abs (/ a b))) 1 2)
+(test-call "1/2" (lambda (a b) (abs (/ a b))) -1 2)
+(test-call "0" (lambda (a b) (floor (/ a b))) 1 2)
+(test-call "-1" (lambda (a b) (floor (/ a b))) -1 2)
+(test-call "8" (lambda (a b) (floor (/ a b))) 26 3)
+(test-call "-9" (lambda (a b) (floor (/ a b))) -26 3)
+(test-call "178956970" (lambda (a b c) (floor (/ (+ a b) c))) 536870911 1 3)
+(test-call "-178956971" (lambda (a b c) (floor (/ (+ a b) c))) -536870911 -2 3)
+(test-call "0" (lambda (a b) (floor (/ (+ a b) (+ a b b)))) 536870911 1)
+(test-call "0" (lambda (a b) (floor (/ (+ a b) (+ a b b)))) -536870911 -2)
+(test-call "536870912" (lambda (a b c) (floor (/ (* (+ a b) c) c))) 536870911 1 2)
+(test-call "-536870913" (lambda (a b c) (floor (/ (* (+ a b) c) c))) -536870911 -2 2)
+(test-call "1" (lambda (a b) (ceiling (/ a b))) 1 2)
+(test-call "0" (lambda (a b) (ceiling (/ a b))) -1 2)
+(test-call "9" (lambda (a b) (ceiling (/ a b))) 26 3)
+(test-call "-8" (lambda (a b) (ceiling (/ a b))) -26 3)
+(test-call "178956971" (lambda (a b c) (ceiling (/ (+ a b) c))) 536870911 1 3)
+(test-call "-178956971" (lambda (a b c) (ceiling (/ (+ a b) c))) -536870911 -2 3)
+(test-call "1" (lambda (a b) (ceiling (/ (+ a b) (+ a b b)))) 536870911 1)
+(test-call "1" (lambda (a b) (ceiling (/ (+ a b) (+ a b b)))) -536870911 -2)
+(test-call "536870912" (lambda (a b c) (ceiling (/ (* (+ a b) c) c))) 536870911 1 2)
+(test-call "-536870913" (lambda (a b c) (ceiling (/ (* (+ a b) c) c))) -536870911 -2 2)
+
 (test-end* "test-fractions")

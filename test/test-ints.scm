@@ -145,4 +145,16 @@
 (test-call "1" (lambda (x y) (modulo x y)) 10 3)
 (test-call "2" (lambda (x y) (modulo x y)) -10 3)
 
+;;; abs, floor and ceiling
+(test-call "42" (lambda (a) (abs a)) 42)
+(test-call "42" (lambda (a) (abs a)) -42)
+(test-call "536870912" (lambda (a b) (abs (+ a b))) 536870911 1)
+(test-call "536870913" (lambda (a b) (abs (+ a b))) -536870911 -2)
+(test-call "23" (lambda (a) (floor a)) 23)
+(test-call "23" (lambda (a) (ceiling a)) 23)
+(test-call "536870912" (lambda (a b) (floor (+ a b))) 536870911 1)
+(test-call "536870912" (lambda (a b) (ceiling (+ a b))) 536870911 1)
+(test-call "-536870913" (lambda (a b) (floor (+ a b))) -536870911 -2)
+(test-call "-536870913" (lambda (a b) (ceiling (+ a b))) -536870911 -2)
+
 (test-end* "test-ints")

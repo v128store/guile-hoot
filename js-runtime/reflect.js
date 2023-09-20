@@ -310,7 +310,9 @@ class SchemeTrapError extends Error {
 }
 
 function flonum_to_string(f64) {
-    if (Number.isFinite(f64)) {
+    if (Object.is(f64, -0)) {
+        return '-0.0';
+    } else if (Number.isFinite(f64)) {
         let repr = f64 + '';
         return /^-?[0-9]+$/.test(repr) ? repr + '.0' : repr;
     } else if (Number.isNaN(f64)) {

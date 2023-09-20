@@ -81,7 +81,6 @@
 (test-call "0.0" (lambda (a b) (floor (inexact (/ a b)))) 1 2)
 (test-call "-1.0" (lambda (a b) (floor (inexact (/ a b)))) -1 2)
 (test-call "1.0" (lambda (a b) (ceiling (inexact (/ a b)))) 1 2)
-;; FIXME: this should check for negative zero directly; see issue #87.
-(test-call "0.0" (lambda (a b) (abs (ceiling (inexact (/ a b))))) -1 2)
+(test-call "-0.0" (lambda (a b) (ceiling (inexact (/ a b)))) -1 2)
 
 (test-end* "test-flonums")

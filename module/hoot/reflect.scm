@@ -72,6 +72,11 @@
             hoot-module?
             hoot-module-reflector
             hoot-module-instance
+
+            reflector?
+            reflector-instance
+            reflector-abi
+
             hoot-instantiate
             hoot-load
             hoot-call

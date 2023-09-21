@@ -25,7 +25,54 @@
   #:use-module (ice-9 pretty-print)
   #:use-module ((srfi srfi-1) #:select (count))
   #:use-module (wasm types)
-  #:export (dump-wasm))
+  #:export (val-type-repr
+            type-repr
+            type-use-repr
+            dump-wasm))
+
+(define (val-type-repr vt)
+  (match vt
+    (($ <ref-type> #t ht)
+     `(ref null ,ht))
+    (($ <ref-type> #f ht)
+     `(ref ,ht))
+    (_ vt)))
+
+(define (type-repr type)
+  (define (params-repr params)
+    (match params
+      ((($ <param> #f type) ...)
+       `((param ,@(map val-type-repr type))))
+      ((($ <param> id type) . params)
+       (cons `(param ,id ,(val-type-repr type))
+             (params-repr params)))))
+  (define (results-repr results)
+    `(result ,@(map val-type-repr results)))
+  (define (field-repr field)
+    (define (wrap mutable? repr)
+      (if mutable? `(mut ,repr) repr))
+    (match field
+      (($ <field> id mutable? type)
+       (let ((repr (wrap mutable? (val-type-repr type))))
+         (if id
+             `(field ,id ,repr)
+             repr)))))
+  (match type
+    (($ <func-sig> params results)
+     `(func ,@(params-repr params) ,@(results-repr results)))
+    (($ <sub-type> final? supers type)
+     `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
+    (($ <struct-type> fields)
+     `(struct ,@(map field-repr fields)))
+    (($ <array-type> mutable? type)
+     `(array ,(field-repr (make-field #f mutable? type))))))
+
+(define (type-use-repr type)
+  (match type
+    (($ <type-use> idx ($ <type> id type))
+     (type-repr type))
+    (($ <type-use> idx type)
+     `(type ,(or idx "error: invalid type use!")))))
 
 (define* (dump-wasm mod #:key (port (current-output-port))
                     (dump-func-defs? #t))
@@ -44,50 +91,6 @@
                    (format port "  ~a: ~a\n" idx item))
                  items start)
       (newline port)))
-
-  (define (val-type-repr vt)
-    (match vt
-      (($ <ref-type> #t ht)
-       `(ref null ,ht))
-      (($ <ref-type> #f ht)
-       `(ref ,ht))
-      (_ vt)))
-
-  (define (type-repr type)
-    (define (params-repr params)
-      (match params
-        ((($ <param> #f type) ...)
-         `((param ,@(map val-type-repr type))))
-        ((($ <param> id type) . params)
-         (cons `(param ,id ,(val-type-repr type))
-               (params-repr params)))))
-    (define (results-repr results)
-      `(result ,@(map val-type-repr results)))
-    (define (field-repr field)
-      (define (wrap mutable? repr)
-        (if mutable? `(mut ,repr) repr))
-      (match field
-        (($ <field> id mutable? type)
-         (let ((repr (wrap mutable? (val-type-repr type))))
-           (if id
-               `(field ,id ,repr)
-               repr)))))
-    (match type
-      (($ <func-sig> params results)
-       `(func ,@(params-repr params) ,@(results-repr results)))
-      (($ <sub-type> final? supers type)
-       `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
-      (($ <struct-type> fields)
-       `(struct ,@(map field-repr fields)))
-      (($ <array-type> mutable? type)
-       `(array ,(field-repr (make-field #f mutable? type))))))
-
-  (define (type-use-repr type)
-    (match type
-      (($ <type-use> idx ($ <type> id type))
-       (type-repr type))
-      (($ <type-use> idx type)
-       `(type ,(or idx "error: invalid type use!")))))
 
   (define (dump-types types)
     (define (dump-type type idx indent)

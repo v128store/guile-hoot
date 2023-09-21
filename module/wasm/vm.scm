@@ -32,6 +32,7 @@
   #:use-module (wasm types)
   #:export (make-wasm-module
             wasm-module?
+            wasm-module-wasm
             wasm-module-export-ref
 
             make-wasm-global
@@ -61,6 +62,11 @@
 
             wasm-stack?
             wasm-stack-items
+
+            wasm-func?
+            wasm-null?
+            wasm-struct?
+            wasm-array?
 
             make-wasm-instance
             wasm-instance?

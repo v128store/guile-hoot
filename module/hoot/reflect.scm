@@ -90,6 +90,11 @@
   (instance reflector-instance)
   (abi reflector-abi))
 
+(set-record-type-printer! <reflector>
+                          (lambda (r port)
+                            (format port "#<reflector instance: ~a>"
+                                    (reflector-instance r))))
+
 (define-record-type <hoot-module>
   (make-hoot-module reflector instance)
   hoot-module?

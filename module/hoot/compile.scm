@@ -1196,7 +1196,7 @@
                 ,(local.get y)
                 (i64.shl)
                 (call $s64->scm))
-              '((call $rsh))
+              '((call $lsh))
               #:fast-checks `((,(local.get y) (i64.const 32) (i64.gt_u)))))
             (('rsh/immediate y x)
              (compile-fixnum-fast-path

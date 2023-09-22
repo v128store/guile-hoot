@@ -528,6 +528,9 @@
 (define (logsub a b)
   (logand a (lognot b)))
 
+(define (rsh a b)
+  (ash a (- b)))
+
 (define %runtime-imports
   `(("rt" .
      (("bignum_from_i32" . ,identity)
@@ -540,6 +543,8 @@
       ("bignum_add" . ,+)
       ("bignum_sub" . ,-)
       ("bignum_mul" . ,*)
+      ("bignum_lsh" . ,ash)
+      ("bignum_rsh" . ,rsh)
       ("bignum_quo" . ,quotient)
       ("bignum_rem" . ,remainder)
       ("bignum_mod" . ,modulo)

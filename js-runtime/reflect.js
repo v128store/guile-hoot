@@ -342,6 +342,8 @@ class SchemeModule {
         bignum_add(a, b) { return BigInt(a) + BigInt(b) },
         bignum_sub(a, b) { return BigInt(a) - BigInt(b) },
         bignum_mul(a, b) { return BigInt(a) * BigInt(b) },
+        bignum_lsh(a, b) { return BigInt(a) << BigInt(b) },
+        bignum_rsh(a, b) { return BigInt(a) >> BigInt(b) },
         bignum_quo(a, b) { return BigInt(a) / BigInt(b) },
         bignum_rem(a, b) { return BigInt(a) % BigInt(b) },
         bignum_mod(a, b) {

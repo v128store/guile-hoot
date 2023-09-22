@@ -42,7 +42,7 @@
 (test-call "-2" (lambda (x) (ash x 1)) -1)
 (test-call "-1" (lambda (x) (ash x -1)) -1)
 
-(test-call "18446744073709551616" (lambda (x) (ash x 64)) 1)
-(test-call "0" (lambda (x one) (ash (+ x one) -64)) 536870911 1)
+(test-call "18446744073709551616" (lambda (x y) (ash x y)) 1 64)
+(test-call "0" (lambda (x y z) (ash (+ x y) z)) 536870911 1 -64)
 
 (test-end* "test-bitwise")

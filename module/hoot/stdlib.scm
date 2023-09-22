@@ -399,6 +399,18 @@
            (param (ref extern))
            (param i32)
            (result (ref extern)))
+     (func $bignum-lsh (import "rt" "bignum_lsh")
+           (param (ref extern))
+           (param i64)
+           (result (ref extern)))
+     (func $i32-lsh (import "rt" "bignum_lsh")
+           (param i32)
+           (param i64)
+           (result (ref extern)))
+     (func $bignum-rsh (import "rt" "bignum_rsh")
+           (param (ref extern))
+           (param i64)
+           (result (ref extern)))
      (func $bignum-quo (import "rt" "bignum_quo")
            (param (ref extern))
            (param (ref extern))
@@ -3335,10 +3347,40 @@
                (unreachable))))
 
      (func $rsh (param $a (ref eq)) (param $b i64) (result (ref eq))
-           (call $die0 (string.const "$rsh")) (unreachable))
+           ,(arith-cond
+             '((ref.test $bignum (local.get $a))
+               (struct.new $bignum
+                           (i32.const 0)
+                           (call $bignum-rsh
+                                 (struct.get $bignum $val
+                                             (ref.cast $bignum (local.get $a)))
+                                 (local.get $b))))
+             '((i32.const 1)
+               (call $die
+                     (string.const "$rsh bad first arg")
+                     (local.get $a))
+               (unreachable))))
 
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
-           (call $die0 (string.const "$lsh")) (unreachable))
+           ,(arith-cond
+             '((call $fixnum? (local.get $a))
+               (struct.new $bignum
+                           (i32.const 0)
+                           (call $i32-lsh
+                                 (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                 (local.get $b))))
+             '((ref.test $bignum (local.get $a))
+               (struct.new $bignum
+                           (i32.const 0)
+                           (call $bignum-lsh
+                                 (struct.get $bignum $val
+                                             (ref.cast $bignum (local.get $a)))
+                                 (local.get $b))))
+             '((i32.const 1)
+               (call $die
+                     (string.const "$lsh bad first arg")
+                     (local.get $a))
+               (unreachable))))
 
      (func $inexact (param $x (ref eq)) (result (ref $flonum))
            ,(arith-cond '(ref $flonum)

@@ -3349,12 +3349,13 @@
      (func $rsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            ,(arith-cond
              '((ref.test $bignum (local.get $a))
-               (struct.new $bignum
-                           (i32.const 0)
-                           (call $bignum-rsh
-                                 (struct.get $bignum $val
-                                             (ref.cast $bignum (local.get $a)))
-                                 (local.get $b))))
+               (call $normalize-bignum
+                     (struct.new $bignum
+                                 (i32.const 0)
+                                 (call $bignum-rsh
+                                       (struct.get $bignum $val
+                                                   (ref.cast $bignum (local.get $a)))
+                                       (local.get $b)))))
              '((i32.const 1)
                (call $die
                      (string.const "$rsh bad first arg")
@@ -3364,11 +3365,12 @@
      (func $lsh (param $a (ref eq)) (param $b i64) (result (ref eq))
            ,(arith-cond
              '((call $fixnum? (local.get $a))
-               (struct.new $bignum
-                           (i32.const 0)
-                           (call $i32-lsh
-                                 (call $fixnum->i32 (ref.cast i31 (local.get $a)))
-                                 (local.get $b))))
+               (call $normalize-bignum
+                     (struct.new $bignum
+                                 (i32.const 0)
+                                 (call $i32-lsh
+                                       (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                                       (local.get $b)))))
              '((ref.test $bignum (local.get $a))
                (struct.new $bignum
                            (i32.const 0)

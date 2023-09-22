@@ -25,9 +25,57 @@
   #:use-module (ice-9 pretty-print)
   #:use-module ((srfi srfi-1) #:select (count))
   #:use-module (wasm types)
-  #:export (dump-wasm))
+  #:export (val-type-repr
+            type-repr
+            type-use-repr
+            dump-wasm))
 
-(define* (dump-wasm mod #:key (port (current-output-port)))
+(define (val-type-repr vt)
+  (match vt
+    (($ <ref-type> #t ht)
+     `(ref null ,ht))
+    (($ <ref-type> #f ht)
+     `(ref ,ht))
+    (_ vt)))
+
+(define (type-repr type)
+  (define (params-repr params)
+    (match params
+      ((($ <param> #f type) ...)
+       `((param ,@(map val-type-repr type))))
+      ((($ <param> id type) . params)
+       (cons `(param ,id ,(val-type-repr type))
+             (params-repr params)))))
+  (define (results-repr results)
+    `(result ,@(map val-type-repr results)))
+  (define (field-repr field)
+    (define (wrap mutable? repr)
+      (if mutable? `(mut ,repr) repr))
+    (match field
+      (($ <field> id mutable? type)
+       (let ((repr (wrap mutable? (val-type-repr type))))
+         (if id
+             `(field ,id ,repr)
+             repr)))))
+  (match type
+    (($ <func-sig> params results)
+     `(func ,@(params-repr params) ,@(results-repr results)))
+    (($ <sub-type> final? supers type)
+     `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
+    (($ <struct-type> fields)
+     `(struct ,@(map field-repr fields)))
+    (($ <array-type> mutable? type)
+     `(array ,(field-repr (make-field #f mutable? type))))))
+
+(define (type-use-repr type)
+  (match type
+    (($ <type-use> idx ($ <type> id type))
+     (type-repr type))
+    (($ <type-use> idx type)
+     `(type ,(or idx "error: invalid type use!")))))
+
+(define* (dump-wasm mod #:key (port (current-output-port))
+                    (dump-func-defs? #t))
   (define (enumerate f items start)
     (let lp ((items items) (idx start))
       (match items
@@ -43,50 +91,6 @@
                    (format port "  ~a: ~a\n" idx item))
                  items start)
       (newline port)))
-
-  (define (val-type-repr vt)
-    (match vt
-      (($ <ref-type> #t ht)
-       `(ref null ,ht))
-      (($ <ref-type> #f ht)
-       `(ref ,ht))
-      (_ vt)))
-
-  (define (type-repr type)
-    (define (params-repr params)
-      (match params
-        ((($ <param> #f type) ...)
-         `((param ,@(map val-type-repr type))))
-        ((($ <param> id type) . params)
-         (cons `(param ,id ,(val-type-repr type))
-               (params-repr params)))))
-    (define (results-repr results)
-      `(result ,@(map val-type-repr results)))
-    (define (field-repr field)
-      (define (wrap mutable? repr)
-        (if mutable? `(mut ,repr) repr))
-      (match field
-        (($ <field> id mutable? type)
-         (let ((repr (wrap mutable? (val-type-repr type))))
-           (if id
-               `(field ,id ,repr)
-               repr)))))
-    (match type
-      (($ <func-sig> params results)
-       `(func ,@(params-repr params) ,@(results-repr results)))
-      (($ <sub-type> final? supers type)
-       `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
-      (($ <struct-type> fields)
-       `(struct ,@(map field-repr fields)))
-      (($ <array-type> mutable? type)
-       `(array ,(field-repr (make-field #f mutable? type))))))
-
-  (define (type-use-repr type)
-    (match type
-      (($ <type-use> idx ($ <type> id type))
-       (type-repr type))
-      (($ <type-use> idx type)
-       `(type ,(or idx "error: invalid type use!")))))
 
   (define (dump-types types)
     (define (dump-type type idx indent)
@@ -112,7 +116,13 @@
       (newline port)))
 
   (define (dump-imports imports)
-    (dump-items "Imports" imports))
+    (dump-items "Imports"
+                (map (match-lambda
+                       (($ <import> mod name kind _ (? type-use? type-use))
+                        `(import ,mod ,name ,kind ,(type-use-repr type-use)))
+                       (($ <import> mod name kind _ (? type? type))
+                        `(import ,mod ,name ,kind ,(type-repr type))))
+                     imports)))
 
   (define (dump-func-decls funcs imported)
     (dump-items "Function declarations"
@@ -122,10 +132,21 @@
                 imported))
 
   (define (dump-tables tables imported)
-    (dump-items "Tables" tables imported))
+    (dump-items "Tables"
+                (map (match-lambda
+                       (($ <table> id ($ <table-type> ($ <limits> min max) elem-type) init)
+                        `(table ,id ,min ,max ,(val-type-repr elem-type))))
+                     tables)
+                imported))
 
   (define (dump-memories memories imported)
-    (dump-items "Memories" memories))
+    (dump-items "Memories"
+                (map (match-lambda
+                       (($ <memory> id ($ <mem-type> ($ <limits> min max)))
+                        `(memory ,id ,min ,max))
+                       (($ <mem-type> ($ <limits> min max))
+                        `(memory #f ,min ,max)))
+                     memories)))
 
   (define (dump-tags tags)
     (dump-items "Tags" tags))
@@ -134,20 +155,39 @@
     (dump-items "Strings" strings))
 
   (define (dump-globals globals imported)
-    (dump-items "Globals" globals imported))
+    (dump-items "Globals"
+                (map (match-lambda
+                       (($ <global> id ($ <global-type> mutable? type) init)
+                        (let ((t (val-type-repr type)))
+                          `(global ,(if mutable? `(mut ,t) t) ,init))))
+                     globals)
+                imported))
 
   (define (dump-exports exports)
-    (dump-items "Exports" exports))
+    (dump-items "Exports"
+                (map (match-lambda
+                       (($ <export> name kind idx)
+                        `(export ,name ,kind ,idx)))
+                     exports)))
 
   (define (dump-start start)
     (when start
       (format port "Start: #~a\n\n" start)))
 
   (define (dump-elems elems)
-    (dump-items "Elems" elems))
+    (dump-items "Elems"
+                (map (match-lambda
+                       (($ <elem> id mode table type offset inits)
+                        `(elem id ,mode ,table ,(val-type-repr type)
+                               ,offset ,inits)))
+                     elems)))
 
   (define (dump-data datas)
-    (dump-items "Datas" datas))
+    (dump-items "Datas"
+                (map (match-lambda
+                       (($ <data> id mode mem offset init)
+                        `(data ,id ,mode ,mem ,offset ,init)))
+                     datas)))
 
   (define (dump-func-defs funcs imported)
     (unless (null? funcs)
@@ -190,4 +230,5 @@
        (dump-start start)
        (dump-elems elems)
        (dump-data datas)
-       (dump-func-defs funcs imported-funcs)))))
+       (when dump-func-defs?
+         (dump-func-defs funcs imported-funcs))))))

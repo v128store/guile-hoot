@@ -72,6 +72,11 @@
             hoot-module?
             hoot-module-reflector
             hoot-module-instance
+
+            reflector?
+            reflector-instance
+            reflector-abi
+
             hoot-instantiate
             hoot-load
             hoot-call
@@ -89,6 +94,11 @@
   reflector?
   (instance reflector-instance)
   (abi reflector-abi))
+
+(set-record-type-printer! <reflector>
+                          (lambda (r port)
+                            (format port "#<reflector instance: ~a>"
+                                    (reflector-instance r))))
 
 (define-record-type <hoot-module>
   (make-hoot-module reflector instance)

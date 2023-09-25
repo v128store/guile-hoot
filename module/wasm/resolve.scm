@@ -256,10 +256,14 @@
          ((or 'i8 'i16) type)
          (_ (resolve-val-type type))))
 
+     (define (resolve-param param)
+       (match param
+         (($ <param> id type)
+          (make-param id (resolve-val-type type)))))
+
      (define (resolve-type-use x)
        ;; Transform symbolic or anonymous type uses to indexed type
-       ;; uses.  No need to resolve value types for params or results;
-       ;; that's the job for `visit-type`.
+       ;; uses.
        (define (lookup-type-use params results)
          (or (find-type (type-use-matcher params results) types)
              (error "unreachable")))
@@ -272,7 +276,11 @@
                                  (if (and (null? params) (null? results))
                                      def-sig
                                      use-sig))))
-              (or (lookup-type-use params results))))))
+              (match (lookup-type-use params results)
+                (($ <type-use> idx ($ <func-sig> params results))
+                 (let ((params (map resolve-param params))
+                       (results (map resolve-val-type results)))
+                   (make-type-use idx (make-func-sig params results)))))))))
 
      (define (resolve-type-use-as-idx x)
        (match (resolve-type-use x)
@@ -432,10 +440,6 @@
         insts))
 
      (define (visit-type type)
-       (define (resolve-param param)
-         (match param
-           (($ <param> id type)
-            (make-param id (resolve-val-type type)))))
        (define (resolve-field field)
          (match field
            (($ <field> id mutable? type)

@@ -296,6 +296,7 @@
          (match bt
            (#f (make-func-sig '() '()))
            ((? exact-integer? idx) (type-val (list-ref (wasm-types wasm) idx)))
+           (($ <type-use> _ sig) sig)
            (type (make-func-sig '() (list type)))))
        (define (push-block* ctx bt loop?)
          (match bt

@@ -191,15 +191,12 @@
     (list->vector
      (append (filter-map
               (match-lambda
-                (($ <import> _ _ 'func _ ($ <type-use> _ ($ <type> _ sig)))
+                (($ <import> _ _ 'func _ ($ <type-use> _ sig))
                  sig)
                 (_ #f))
               (wasm-imports wasm))
              (map (match-lambda
-                    ;; FIXME: The toolchain should probably only use a
-                    ;; single form.
-                    ((or ($ <func> _ ($ <type-use> _ ($ <type> _ sig)))
-                         ($ <func> _ ($ <type-use> _ (? func-sig? sig))))
+                    (($ <func> _ ($ <type-use> _ sig))
                      sig))
                   (wasm-funcs wasm)))))
   (define memories
@@ -269,7 +266,7 @@
     ;; We need to make a phony func object that represents the
     ;; expected result type of the constant instructions.
     (let* ((sig (make-func-sig '() (list type)))
-           (func (make-func #f (make-type-use #f (make-type #f sig)) '() '())))
+           (func (make-func #f (make-type-use #f sig) '() '())))
       (let loop ((ctx (initial-ctx wasm func))
                  (instrs instrs))
         (match instrs
@@ -294,7 +291,7 @@
                  inits))))
   (define (validate-func func)
     (match func
-      (($ <func> _ ($ <type-use> _ ($ <type> _ type)) _ body)
+      (($ <func> _ ($ <type-use> _ type) _ body)
        (define (lookup-block-type bt)
          (match bt
            (#f (make-func-sig '() '()))

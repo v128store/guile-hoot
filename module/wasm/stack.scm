@@ -139,11 +139,9 @@
           id
           ($ <type-use>
              _
-             ($ <type>
-                _
-                ($ <func-sig>
-                   (($ <param> param-id param-type) ...)
-                   (result-type ...))))
+             ($ <func-sig>
+                (($ <param> param-id param-type) ...)
+                (result-type ...)))
           (($ <local> local-id local-type) ...)
           body)
        (list->vector
@@ -153,7 +151,7 @@
 
 (define (initial-ctx module func)
   (match func
-    (($ <func> _ ($ <type-use> _ ($ <type> _ ($ <func-sig> _ results))))
+    (($ <func> _ ($ <type-use> _ ($ <func-sig> _ results)))
      (make-ctx (make-func-info module func)
                (make-block #f results results #f)
                '()))))
@@ -266,8 +264,7 @@
             ((_ . ($ <func-sig> (($ <param> _ params) ...) results))
              (-> params results))))))
       (($ <type-use> _
-          ($ <type> _
-             ($ <func-sig> (($ <param> _ params) ...) results)))
+          ($ <func-sig> (($ <param> _ params) ...) results))
        (-> params results))
       ((or (? symbol?) ($ <ref-type>))
        (-> '() (list type)))))
@@ -323,8 +320,7 @@
           ((callee)
            (match (lookup-func-type-use ctx callee)
              (($ <type-use> _
-                 ($ <type> _
-                    ($ <func-sig> (($ <param> id type) ...) results)))
+                 ($ <func-sig> (($ <param> id type) ...) results))
               (-> type results))))))
        ('call_indirect
         (match args
@@ -337,8 +333,7 @@
           ((callee)
            (match (lookup-func-type-use ctx callee)
              (($ <type-use> _
-                 ($ <type> _
-                    ($ <func-sig> (($ <param> id type) ...) results)))
+                 ($ <func-sig> (($ <param> id type) ...) results))
               (-> type #f))))))
        ('return_call_indirect
         (match args

@@ -988,7 +988,9 @@
     (parse-vec port parse-table))
 
   (define (parse-memories port)
-    (parse-vec port parse-mem-type))
+    (define (parse-memory port)
+      (make-memory #f (parse-mem-type port)))
+    (parse-vec port parse-memory))
 
   (define (parse-tag port)
     (make-tag #f (parse-type-use port)))

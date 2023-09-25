@@ -1089,7 +1089,7 @@ bytevector, an input port, or a <wasm> record produced by
                   (idx n-memory-imports))
          (match memories
            (() #t)
-           ((($ <mem-type> (and ($ <limits> min) limits)) . rest)
+           ((($ <memory> _ ($ <mem-type> (and ($ <limits> min) limits))) . rest)
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
        ;; Copy data into memory.

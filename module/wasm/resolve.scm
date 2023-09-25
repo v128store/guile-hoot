@@ -289,6 +289,10 @@
          (_ (resolve-type-use-as-idx x))))
 
      (define (resolve-instructions insts locals labels)
+       (define (resolve-i32 x)
+         (if (< x (ash 1 31)) x (- x (ash 1 32))))
+       (define (resolve-i64 x)
+         (if (< x (ash 1 63)) x (- x (ash 1 64))))
        (define (resolve-label label)
          (match label
            ((? exact-integer?) label)
@@ -363,6 +367,8 @@
                          'i64.store8 'i64.store16 'i64.store32))
            mem)
           `(,inst ,(resolve-memarg mem)))
+         (('i32.const x) `(i32.const ,(resolve-i32 x)))
+         (('i64.const x) `(i64.const ,(resolve-i64 x)))
          (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
          (('ref.func f) `(ref.func ,(record-function-used-as-value
                                      (resolve-func f))))

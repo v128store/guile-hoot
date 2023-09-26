@@ -275,7 +275,7 @@
            (validate-instr ctx instr))))))
   (define (validate-global global)
     (match global
-      (($ <global> _ type instrs)
+      (($ <global> _ ($ <global-type> _ type) instrs)
        (validate-const type instrs))))
   (define (validate-data data)
     (match data

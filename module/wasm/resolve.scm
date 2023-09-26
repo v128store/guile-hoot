@@ -436,6 +436,7 @@
          
          ;; Not yet implemented: simd mem ops, atomic mem ops.
 
+         ((? symbol? op) `(,op))
          (inst inst))
         insts))
 

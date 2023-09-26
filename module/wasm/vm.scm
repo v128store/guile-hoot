@@ -1192,7 +1192,8 @@ bytevector, an input port, or a <wasm> record produced by
         (make-wasm-runtime-error instr path* instance stack blocks locals)
         (make-exception-with-message
          (format #f "WASM runtime error: ~a" msg))
-        (make-exception-with-irritants irritants)))))
+        (make-exception-with-irritants irritants))
+       #:continuable? #t)))
   ;; Stack shorthands.
   (define (push x) (stack-push! stack x))
   (define (push-all lst) (stack-push-all! stack lst))

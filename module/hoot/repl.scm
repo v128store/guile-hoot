@@ -77,10 +77,12 @@
 (define (block-type-repr type)
   (match type
     ((? func-sig?)
-     (type-repr type))
+     (match (type-repr type)
+       (('func params+results ...)
+        params+results)))
     ((? ref-type?)
-     (val-type-repr type))
-    (_ type)))
+     `((param ,(val-type-repr type))))
+    (_ `((param ,type)))))
 
 (define (print-location wasm path)
   (define invalid-path '(-1))
@@ -97,7 +99,9 @@
       (display "  ")
       (indent (- level 1))))
   (define (print-block-type type)
-    (format #t " ~s" (block-type-repr type)))
+    (for-each (lambda (x)
+                (format #t " ~s" x))
+              (block-type-repr type)))
   (define (print-instr level instr path)
     (match instr
       (((and op (or 'block 'loop)) _ (or ($ <type-use> _ sig) sig) body)
@@ -152,7 +156,7 @@
   (match path
     (('func idx . path*)
      (match (list-ref (wasm-funcs wasm) (- idx (count-imports 'func)))
-       (($ <func> id ($ <type-use> _ ($ <type> _ sig)) locals body)
+       (($ <func> id ($ <type-use> _ sig) locals body)
         (format #t "(func ~a" idx)
         (print-block-type sig)
         (newline)

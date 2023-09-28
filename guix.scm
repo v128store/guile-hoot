@@ -12,12 +12,14 @@
              (gnu packages gawk)
              (gnu packages glib)
              (gnu packages guile)
+             (gnu packages guile-xyz)
              (gnu packages icu4c)
              (gnu packages llvm)
              (gnu packages ninja)
              (gnu packages pkg-config)
              (gnu packages perl)
              (gnu packages python)
+             (gnu packages texinfo)
              (gnu packages version-control))
 
 (define guile-next-next
@@ -274,7 +276,7 @@
   (arguments
    '(#:make-flags '("GUILE_AUTO_COMPILE=0")))
   (native-inputs
-   (list autoconf automake pkg-config))
+   (list autoconf automake guile-syntax-highlight pkg-config texinfo))
   (inputs
    (list guile-next-next v8))
   (synopsis "WASM compiler for Guile Scheme")

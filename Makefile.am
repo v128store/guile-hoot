@@ -54,6 +54,14 @@ TESTS =						\
   $(JS_TESTS)					\
   $(SCM_TESTS)
 
+info_TEXINFOS = doc/hoot.texi
+doc_hoot_TEXINFOS = doc/hoot.texi 		\
+                    doc/apache-2.0.texi
+
+dvi: # Don't build dvi docs
+html-local:
+	$(GUILE) --no-auto-compile doc/build-html.scm
+
 EXTRA_DIST = 					\
   $(WATS)					\
   $(TESTS)					\
@@ -72,4 +80,6 @@ EXTRA_DIST = 					\
   README.md					\
   test/basic-types.wasm				\
   test/load-wasm-and-print.js			\
-  test/test-call.js
+  test/test-call.js				\
+  doc/build-html.scm				\
+  doc/hoot.css

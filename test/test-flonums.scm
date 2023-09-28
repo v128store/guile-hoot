@@ -75,6 +75,47 @@
 (test-call "#t" (lambda (a b) (= a (inexact a))) 23 23)
 (test-call "#t" (lambda (a b c) (<= a (inexact (/ b c)))) 23 235 10)
 
+;; comparisons with infinities and NaNs
+(test-call "#t" (lambda (a b) (= a b)) +inf.0 +inf.0)
+(test-call "#t" (lambda (a b) (= a b)) -inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (= a b)) +inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (= a b)) +nan.0 +nan.0)
+(test-call "#f" (lambda (a b) (= a b)) +inf.0 1.0)
+(test-call "#f" (lambda (a b) (= a b)) -inf.0 1.0)
+(test-call "#f" (lambda (a b) (= a b)) +nan.0 1.0)
+
+(test-call "#f" (lambda (a b) (< a b)) +inf.0 +inf.0)
+(test-call "#f" (lambda (a b) (< a b)) -inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (< a b)) +inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (< a b)) +nan.0 +nan.0)
+(test-call "#f" (lambda (a b) (< a b)) +inf.0 1.0)
+(test-call "#t" (lambda (a b) (< a b)) -inf.0 1.0)
+(test-call "#f" (lambda (a b) (< a b)) +nan.0 1.0)
+
+(test-call "#f" (lambda (a b) (< a b)) +inf.0 +inf.0)
+(test-call "#f" (lambda (a b) (< a b)) -inf.0 -inf.0)
+(test-call "#t" (lambda (a b) (< a b)) -inf.0 +inf.0)
+(test-call "#f" (lambda (a b) (< a b)) +nan.0 +nan.0)
+(test-call "#t" (lambda (a b) (< a b)) 1.0 +inf.0)
+(test-call "#f" (lambda (a b) (< a b)) 1.0 -inf.0)
+(test-call "#f" (lambda (a b) (< a b)) 1.0 +nan.0)
+
+(test-call "#t" (lambda (a b) (<= a b)) +inf.0 +inf.0)
+(test-call "#t" (lambda (a b) (<= a b)) -inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (<= a b)) +inf.0 -inf.0)
+(test-call "#f" (lambda (a b) (<= a b)) +nan.0 +nan.0)
+(test-call "#f" (lambda (a b) (<= a b)) +inf.0 1.0)
+(test-call "#t" (lambda (a b) (<= a b)) -inf.0 1.0)
+(test-call "#f" (lambda (a b) (<= a b)) +nan.0 1.0)
+
+(test-call "#t" (lambda (a b) (<= a b)) +inf.0 +inf.0)
+(test-call "#t" (lambda (a b) (<= a b)) -inf.0 -inf.0)
+(test-call "#t" (lambda (a b) (<= a b)) -inf.0 +inf.0)
+(test-call "#f" (lambda (a b) (<= a b)) +nan.0 +nan.0)
+(test-call "#t" (lambda (a b) (<= a b)) 1.0 +inf.0)
+(test-call "#f" (lambda (a b) (<= a b)) 1.0 -inf.0)
+(test-call "#f" (lambda (a b) (<= a b)) 1.0 +nan.0)
+
 ;;; abs, floor and ceiling
 (test-call "0.5" (lambda (a b) (abs (inexact (/ a b)))) 1 2)
 (test-call "0.5" (lambda (a b) (abs (inexact (/ a b)))) -1 2)

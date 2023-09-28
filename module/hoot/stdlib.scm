@@ -532,6 +532,13 @@
            (param (ref extern))
            (result f64))
 
+     (func $f64-is-nan (import "rt" "f64_is_nan")
+           (param f64)
+           (result i32))
+     (func $f64-is-infinite (import "rt" "f64_is_infinite")
+           (param f64)
+           (result i32))
+
      (func $flonum->string (import "rt" "flonum_to_string")
            (param f64)
            (result (ref string)))

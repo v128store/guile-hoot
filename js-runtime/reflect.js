@@ -382,6 +382,9 @@ class SchemeModule {
 
         bignum_to_f64(n) { return Number(n); },
 
+        f64_is_nan(n) { return Number.isNaN(n); },
+        f64_is_infinite(n) { return !Number.isFinite(n); },
+
         flonum_to_string,
 
         string_upcase: Function.call.bind(String.prototype.toUpperCase),

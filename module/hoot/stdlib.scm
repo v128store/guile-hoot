@@ -2019,7 +2019,7 @@
                                                      (ref.cast $fraction (local.get $a)))))
                              (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<"))
+                   (call $die0 (string.const "$slow-<="))
                    (unreachable))))
              '((i32.const 1)
                (call $die0 (string.const "$slow-<="))
@@ -2073,7 +2073,7 @@
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<="))
+                   (call $die0 (string.const "$slow-="))
                    (unreachable))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond 'i32
@@ -2151,7 +2151,7 @@
                                                      (ref.cast $fraction (local.get $a)))))
                              (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<"))
+                   (call $die0 (string.const "$slow-="))
                    (unreachable))))
              '((i32.const 1)
                (call $die0 (string.const "$slow-="))

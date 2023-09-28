@@ -106,25 +106,20 @@
                        (newline))
                      vals)))))))
 
-;; Assembling and then parsing the WASM because resolve-wasm isn't
-;; yet equivalent to the parsed form.
-(define (rebuild wasm)
-  (call-with-input-bytevector (assemble-wasm wasm) parse-wasm))
-
 (define (compile-value/hoot wasm)
   (call-with-printed-values
    (lambda ()
-     (hoot-load (hoot-instantiate reflect-wasm (rebuild wasm))))))
+     (hoot-load (hoot-instantiate reflect-wasm wasm)))))
 
 (define (compile-call/hoot proc . args)
   (call-with-printed-values
    (lambda ()
-     (let* ((proc-module (hoot-instantiate reflect-wasm (rebuild proc)))
+     (let* ((proc-module (hoot-instantiate reflect-wasm proc))
             (proc* (hoot-load proc-module))
             (reflector (hoot-module-reflector proc-module))
             (args* (map (lambda (arg)
                           (hoot-load
-                           (hoot-instantiate reflector (rebuild arg))))
+                           (hoot-instantiate reflector arg)))
                         args)))
        (apply hoot-call proc* args*)))))
 

@@ -191,15 +191,12 @@
     (list->vector
      (append (filter-map
               (match-lambda
-                (($ <import> _ _ 'func _ ($ <type-use> _ ($ <type> _ sig)))
+                (($ <import> _ _ 'func _ ($ <type-use> _ sig))
                  sig)
                 (_ #f))
               (wasm-imports wasm))
              (map (match-lambda
-                    ;; FIXME: The toolchain should probably only use a
-                    ;; single form.
-                    ((or ($ <func> _ ($ <type-use> _ ($ <type> _ sig)))
-                         ($ <func> _ ($ <type-use> _ (? func-sig? sig))))
+                    (($ <func> _ ($ <type-use> _ sig))
                      sig))
                   (wasm-funcs wasm)))))
   (define memories
@@ -269,7 +266,7 @@
     ;; We need to make a phony func object that represents the
     ;; expected result type of the constant instructions.
     (let* ((sig (make-func-sig '() (list type)))
-           (func (make-func #f (make-type-use #f (make-type #f sig)) '() '())))
+           (func (make-func #f (make-type-use #f sig) '() '())))
       (let loop ((ctx (initial-ctx wasm func))
                  (instrs instrs))
         (match instrs
@@ -278,7 +275,7 @@
            (validate-instr ctx instr))))))
   (define (validate-global global)
     (match global
-      (($ <global> _ type instrs)
+      (($ <global> _ ($ <global-type> _ type) instrs)
        (validate-const type instrs))))
   (define (validate-data data)
     (match data
@@ -294,11 +291,12 @@
                  inits))))
   (define (validate-func func)
     (match func
-      (($ <func> _ ($ <type-use> _ ($ <type> _ type)) _ body)
+      (($ <func> _ ($ <type-use> _ type) _ body)
        (define (lookup-block-type bt)
          (match bt
            (#f (make-func-sig '() '()))
            ((? exact-integer? idx) (type-val (list-ref (wasm-types wasm) idx)))
+           (($ <type-use> _ sig) sig)
            (type (make-func-sig '() (list type)))))
        (define (push-block* ctx bt loop?)
          (match bt
@@ -1092,7 +1090,7 @@ bytevector, an input port, or a <wasm> record produced by
                   (idx n-memory-imports))
          (match memories
            (() #t)
-           ((($ <mem-type> (and ($ <limits> min) limits)) . rest)
+           ((($ <memory> _ ($ <mem-type> (and ($ <limits> min) limits))) . rest)
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
        ;; Copy data into memory.
@@ -1194,7 +1192,8 @@ bytevector, an input port, or a <wasm> record produced by
         (make-wasm-runtime-error instr path* instance stack blocks locals)
         (make-exception-with-message
          (format #f "WASM runtime error: ~a" msg))
-        (make-exception-with-irritants irritants)))))
+        (make-exception-with-irritants irritants))
+       #:continuable? #t)))
   ;; Stack shorthands.
   (define (push x) (stack-push! stack x))
   (define (push-all lst) (stack-push-all! stack lst))

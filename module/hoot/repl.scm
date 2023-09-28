@@ -21,10 +21,14 @@
 
 (define-module (hoot repl)
   #:use-module (hoot reflect)
+  #:use-module (ice-9 control)
   #:use-module (ice-9 match)
   #:use-module (srfi srfi-1)
+  #:use-module (srfi srfi-9)
   #:use-module (system repl command)
   #:use-module (system repl common)
+  #:use-module (system repl debug)
+  #:use-module (system repl repl)
   #:use-module (wasm dump)
   #:use-module (wasm types)
   #:use-module (wasm vm))
@@ -45,14 +49,19 @@
                   items))
 
 (define (print-stack stack)
-  (print-list (lambda (x) (format #t "~s\n" x))
-              "Value stack"
-              (wasm-stack-items stack)))
+  (match (wasm-stack-items stack)
+    (() (display "Empty stack.\n"))
+    (items
+     (print-list (lambda (x) (format #t "~s\n" x))
+                 "Value stack"
+                 items))))
 
 (define (print-locals locals)
-  (print-list (lambda (x) (format #t "~s\n" x))
-              "Locals"
-              (vector->list locals)))
+  (if (zero? (vector-length locals))
+      (display "No locals.\n")
+      (print-list (lambda (x) (format #t "~s\n" x))
+                  "Locals"
+                  (vector->list locals))))
 
 (define (print-runtime-error e)
   (print-exception (current-output-port) #f
@@ -77,10 +86,12 @@
 (define (block-type-repr type)
   (match type
     ((? func-sig?)
-     (type-repr type))
+     (match (type-repr type)
+       (('func params+results ...)
+        params+results)))
     ((? ref-type?)
-     (val-type-repr type))
-    (_ type)))
+     `((param ,(val-type-repr type))))
+    (_ `((param ,type)))))
 
 (define (print-location wasm path)
   (define invalid-path '(-1))
@@ -97,7 +108,9 @@
       (display "  ")
       (indent (- level 1))))
   (define (print-block-type type)
-    (format #t " ~s" (block-type-repr type)))
+    (for-each (lambda (x)
+                (format #t " ~s" x))
+              (block-type-repr type)))
   (define (print-instr level instr path)
     (match instr
       (((and op (or 'block 'loop)) _ (or ($ <type-use> _ sig) sig) body)
@@ -152,7 +165,7 @@
   (match path
     (('func idx . path*)
      (match (list-ref (wasm-funcs wasm) (- idx (count-imports 'func)))
-       (($ <func> id ($ <type-use> _ ($ <type> _ sig)) locals body)
+       (($ <func> id ($ <type-use> _ sig) locals body)
         (format #t "(func ~a" idx)
         (print-block-type sig)
         (newline)
@@ -226,10 +239,77 @@
       (wasm-instance-module
        (hoot-module-instance mod))))))
 
-(define-meta-command ((wasm-dump wasm) repl exp)
-  "wasm-dump EXP
-Display information about the WASM object EXP."
-  (dump-wasm (->wasm (repl-eval repl exp))
+(define-record-type <wasm-debug>
+  (make-wasm-debug position instruction instance stack blocks locals)
+  wasm-debug?
+  (position wasm-debug-position)
+  (instruction wasm-debug-instruction)
+  (instance wasm-debug-instance)
+  (stack wasm-debug-stack)
+  (blocks wasm-debug-blocks)
+  (locals wasm-debug-locals)
+  (continue? wasm-debug-continue? set-wasm-debug-continue!))
+
+(define current-wasm-debug (make-parameter #f))
+
+(define-syntax-rule (when-debugging body ...)
+  (if (current-wasm-debug)
+      (begin body ...)
+      (error "not in a WASM debugger")))
+
+;; This code is based on error-string in (system repl
+;; exception-handling) and adapted to work with Guile's new exception
+;; objects.
+(define (error-message exn stack)
+  (let ((key (exception-kind exn))
+        (args (exception-args exn)))
+    (call-with-output-string
+      (lambda (port)
+        (let ((frame (and (< 0 (vector-length stack)) (vector-ref stack 0))))
+          (print-exception port frame key args))))))
+
+(define (enter-wasm-debugger exn)
+  (let* ((tag (and (pair? (fluid-ref %stacks))
+                   (cdr (fluid-ref %stacks))))
+         (stack (stack->vector (make-stack #t 3 tag 0 1)))
+         (msg (error-message exn stack))
+         (wasm-debug (make-wasm-debug (wasm-runtime-error-position exn)
+                                      (wasm-runtime-error-instruction exn)
+                                      (wasm-runtime-error-instance exn)
+                                      (wasm-runtime-error-stack exn)
+                                      (wasm-runtime-error-blocks exn)
+                                      (wasm-runtime-error-locals exn))))
+    (parameterize ((current-wasm-debug wasm-debug))
+      (format #t "~a\n" msg)
+      (format #t "Entering WASM debug prompt. ")
+      (format #t "Type `,help wasm' for info or `,q' to continue.\n")
+      (start-repl #:debug (make-debug stack 0 msg))
+      (wasm-debug-continue? wasm-debug))))
+
+(define (wasm-step position instruction instance stack blocks locals)
+  (let ((wasm-debug (make-wasm-debug (reverse position) instruction instance stack
+                                     blocks locals)))
+    (parameterize ((current-wasm-debug wasm-debug))
+      (format #t "Instruction: ~a\n" instruction)
+      (format #t "Location: ~a\n" (reverse position))
+      (start-repl))))
+
+(define (reset-instruction-listener)
+  (current-instruction-listener
+   (lambda (position instr instance stack blocks locals) #t)))
+
+(define (continue)
+  (set-wasm-debug-continue! (current-wasm-debug) #t)
+  (throw 'quit))
+
+(define-meta-command ((wasm-dump wasm) repl #:optional exp)
+  "wasm-dump [WASM]
+Display information about WASM, or the current WASM instance when debugging."
+  (dump-wasm (->wasm
+              (cond
+               (exp (repl-eval repl exp))
+               ((current-wasm-debug) => wasm-debug-instance)
+               (else (error "no WASM object specified"))))
              #:dump-func-defs? #f))
 
 (define-meta-command ((wasm-trace wasm) repl exp)
@@ -265,9 +345,64 @@ Evaluate EXP and count how many times each WASM instruction is evaluated."
            (format #t "\n~a instructions total\n\n" count)
            (for-each (lambda (v) (repl-print repl v)) vals)))))))
 
-(define-meta-command ((wasm-loc wasm) repl wasm path)
-  "wasm-loc WASM PATH
-Highlight the instruction within WASM pointed to by PATH."
-  (let ((wasm (repl-eval repl wasm))
-        (path (repl-eval repl path)))
-    (print-location (->wasm wasm) path)))
+(define-meta-command ((wasm-catch wasm) repl exp)
+  "wasm-catch EXP
+Catch and debug WASM runtime errors that are raised by evaluating EXP."
+  (let ((thunk (repl-prepare-eval-thunk repl exp)))
+    (call/ec
+     (lambda (return)
+       (with-exception-handler (lambda (exn)
+                                 (if (wasm-runtime-error? exn)
+                                     (unless (enter-wasm-debugger exn)
+                                       (reset-instruction-listener)
+                                       (return))
+                                     (raise-exception exn)))
+         (lambda ()
+           (call-with-values (lambda () (%start-stack #t thunk))
+             (lambda vals
+               (reset-instruction-listener)
+               (for-each (lambda (v) (repl-print repl v)) vals)))))))))
+
+(define-meta-command ((wasm-stack wasm) repl)
+  "wasm-stack
+Print the state of the WASM stack in the current context."
+  (when-debugging
+   (print-stack (wasm-debug-stack (current-wasm-debug)))))
+
+(define-meta-command ((wasm-locals wasm) repl)
+  "wasm-locals
+Print the state of the WASM locals in the current context."
+  (when-debugging
+   (print-locals (wasm-debug-locals (current-wasm-debug)))))
+
+(define-meta-command ((wasm-pos wasm) repl)
+  "wasm-pos
+Highlight the instruction where WASM execution has paused."
+  (when-debugging
+   (let ((debug (current-wasm-debug)))
+     (print-location (->wasm (wasm-debug-instance debug)) (wasm-debug-position debug)))))
+
+(define-meta-command ((wasm-eval wasm) repl instr)
+  "wasm-eval INSTR
+Evaluate the WASM instruction INSTR in the current debug context."
+  (when-debugging
+   (let ((execute (@@ (wasm vm) execute)))
+     (match (current-wasm-debug)
+       (($ <wasm-debug> position _ instance stack blocks locals)
+        (execute (repl-eval repl instr) position instance stack blocks locals))))))
+
+(define-meta-command ((wasm-continue wasm) repl)
+  "wasm-continue
+Set WASM execution to continue without interruption until the next error."
+  (when-debugging
+   (reset-instruction-listener)
+   (when (current-wasm-debug)
+     (continue))))
+
+(define-meta-command ((wasm-step wasm) repl)
+  "wasm-step
+Set WASM execution to pause before each instruction."
+  (when-debugging
+   (current-instruction-listener wasm-step)
+   (when (current-wasm-debug)
+     (continue))))

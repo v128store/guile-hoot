@@ -256,10 +256,14 @@
          ((or 'i8 'i16) type)
          (_ (resolve-val-type type))))
 
+     (define (resolve-param param)
+       (match param
+         (($ <param> id type)
+          (make-param id (resolve-val-type type)))))
+
      (define (resolve-type-use x)
        ;; Transform symbolic or anonymous type uses to indexed type
-       ;; uses.  No need to resolve value types for params or results;
-       ;; that's the job for `visit-type`.
+       ;; uses.
        (define (lookup-type-use params results)
          (or (find-type (type-use-matcher params results) types)
              (error "unreachable")))
@@ -272,7 +276,11 @@
                                  (if (and (null? params) (null? results))
                                      def-sig
                                      use-sig))))
-              (or (lookup-type-use params results))))))
+              (match (lookup-type-use params results)
+                (($ <type-use> idx ($ <func-sig> params results))
+                 (let ((params (map resolve-param params))
+                       (results (map resolve-val-type results)))
+                   (make-type-use idx (make-func-sig params results)))))))))
 
      (define (resolve-type-use-as-idx x)
        (match (resolve-type-use x)
@@ -289,6 +297,10 @@
          (_ (resolve-type-use-as-idx x))))
 
      (define (resolve-instructions insts locals labels)
+       (define (resolve-i32 x)
+         (if (< x (ash 1 31)) x (- x (ash 1 32))))
+       (define (resolve-i64 x)
+         (if (< x (ash 1 63)) x (- x (ash 1 64))))
        (define (resolve-label label)
          (match label
            ((? exact-integer?) label)
@@ -363,6 +375,8 @@
                          'i64.store8 'i64.store16 'i64.store32))
            mem)
           `(,inst ,(resolve-memarg mem)))
+         (('i32.const x) `(i32.const ,(resolve-i32 x)))
+         (('i64.const x) `(i64.const ,(resolve-i64 x)))
          (('ref.null ht) `(ref.null ,(resolve-heap-type ht)))
          (('ref.func f) `(ref.func ,(record-function-used-as-value
                                      (resolve-func f))))
@@ -422,14 +436,11 @@
          
          ;; Not yet implemented: simd mem ops, atomic mem ops.
 
+         ((? symbol? op) `(,op))
          (inst inst))
         insts))
 
      (define (visit-type type)
-       (define (resolve-param param)
-         (match param
-           (($ <param> id type)
-            (make-param id (resolve-val-type type)))))
        (define (resolve-field field)
          (match field
            (($ <field> id mutable? type)

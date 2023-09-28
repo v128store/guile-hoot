@@ -26,8 +26,6 @@
   #:use-module (ice-9 binary-ports)
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
-  #:use-module (wasm assemble)
-  #:use-module (wasm parse)
   #:use-module (wasm vm)
   #:export (hoot-object?
             hoot-complex?
@@ -647,24 +645,18 @@
      (let* (($load (wasm-instance-export-ref instance "$load")))
        (hoot-call (wasm->guile reflector (wasm-global-ref $load)))))))
 
-;; Assembling and then parsing the WASM because resolve-wasm isn't
-;; yet equivalent to the parsed form.
-(define (compile* exp import-abi? export-abi?)
-  (call-with-input-bytevector (assemble-wasm
-                               (compile exp
-                                        #:import-abi? import-abi?
-                                        #:export-abi? export-abi?))
-                              parse-wasm))
-
 (define (compile-value reflect-wasm exp)
-  (hoot-load (hoot-instantiate reflect-wasm (compile* exp #f #t))))
+  (hoot-load (hoot-instantiate reflect-wasm (compile exp))))
 
 (define (compile-call reflect-wasm proc-exp . arg-exps)
-  (let* ((proc-module (hoot-instantiate reflect-wasm (compile* proc-exp #f #t)))
+  (let* ((proc-module (hoot-instantiate reflect-wasm (compile proc-exp)))
          (proc (hoot-load proc-module))
          (reflector (hoot-module-reflector proc-module))
          (args (map (lambda (exp)
                       (hoot-load
-                       (hoot-instantiate reflector (compile* exp #t #f))))
+                       (hoot-instantiate reflector
+                                         (compile exp
+                                                  #:import-abi? #t
+                                                  #:export-abi? #f))))
                     arg-exps)))
     (apply hoot-call proc args)))

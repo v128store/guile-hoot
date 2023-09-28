@@ -988,7 +988,9 @@
     (parse-vec port parse-table))
 
   (define (parse-memories port)
-    (parse-vec port parse-mem-type))
+    (define (parse-memory port)
+      (make-memory #f (parse-mem-type port)))
+    (parse-vec port parse-memory))
 
   (define (parse-tag port)
     (make-tag #f (parse-type-use port)))
@@ -1148,7 +1150,7 @@
       (define (resolve-type-use idx)
         (unless (< idx ntypes)
           (error "type index out of bounds"))
-        (make-type-use idx (list-ref flattened-types idx)))
+        (make-type-use idx (type-val (list-ref flattened-types idx))))
       (define (resolve-import-type-use import)
         (match import
           (($ <import> mod name 'func id ($ <type-use> idx #f))

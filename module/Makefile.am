@@ -11,7 +11,6 @@ SOURCES = 					\
   wasm/resolve.scm				\
   wasm/wat.scm					\
   wasm/assemble.scm				\
-  wasm/disassemble.scm				\
   wasm/dump.scm					\
   wasm/link.scm					\
   wasm/parse.scm				\

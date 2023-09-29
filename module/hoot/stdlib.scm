@@ -75,7 +75,7 @@
                       (array.new $raw-scmvector (i31.new (i32.const 13))
                                  (i32.const 47))))))
 
-  (parse-wat
+  (wat->wasm
    `((type $kvarargs
            (func (param $nargs i32)
                  (param $arg0 (ref eq))

@@ -118,7 +118,7 @@
     ((($ <const> _ code) . args)
      (assert-match code ('func . _)
                    "inline-wasm: expected a single (func ...)")
-     (match (parse-wat (list code))
+     (match (wat->wasm (list code))
        ;; We expect a single func and no other definitions (types,
        ;; tables, etc).
        (($ <wasm> () ()

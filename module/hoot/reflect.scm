@@ -564,6 +564,8 @@
       ("bignum_lt" . ,<)
       ("bignum_le" . ,<=)
       ("bignum_eq" . ,=)
+      ("f64_is_nan" . ,nan?)
+      ("f64_is_infinite" . ,inf?)
       ("flonum_to_string" . ,number->string)
       ("string_upcase" . ,string-upcase)
       ("string_downcase" . ,string-downcase)

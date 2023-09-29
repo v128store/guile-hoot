@@ -1867,14 +1867,14 @@
                      'i32
                      '((call $f64-is-nan
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (i32.const 0))
                      '((call $f64-is-infinite
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (f64.lt (f64.const 0)
                                (call $flonum->f64
-                                     (ref.cast $flonum (local.get $a)))))
+                                     (ref.cast $flonum (local.get $b)))))
                      '((i32.const 1)
                        ;; FIXME: convert flonum $B to exact
                        (call $slow-<
@@ -1999,14 +1999,14 @@
                      'i32
                      '((call $f64-is-nan
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (i32.const 0))
                      '((call $f64-is-infinite
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (f64.le (f64.const 0)
                                (call $flonum->f64
-                                     (ref.cast $flonum (local.get $a)))))
+                                     (ref.cast $flonum (local.get $b)))))
                      '((i32.const 1)
                        ;; FIXME: convert flonum $B to exact
                        (call $slow-<=
@@ -2131,14 +2131,14 @@
                      'i32
                      '((call $f64-is-nan
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (i32.const 0))
                      '((call $f64-is-infinite
                              (call $flonum->f64
-                                   (ref.cast $flonum (local.get $a))))
+                                   (ref.cast $flonum (local.get $b))))
                        (f64.eq (f64.const 0)
                                (call $flonum->f64
-                                     (ref.cast $flonum (local.get $a)))))
+                                     (ref.cast $flonum (local.get $b)))))
                      '((i32.const 1)
                        ;; FIXME: convert flonum $B to exact
                        (call $slow-=

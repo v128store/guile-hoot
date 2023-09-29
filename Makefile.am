@@ -35,6 +35,7 @@ SCM_TESTS = 					\
   test/test-fractions.scm			\
   test/test-ints.scm				\
   test/test-number-to-string.scm		\
+  test/test-numeric.scm                         \
   test/test-pairs.scm				\
   test/test-ports.scm				\
   test/test-procedures.scm			\

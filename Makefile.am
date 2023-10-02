@@ -61,6 +61,7 @@ EXTRA_DIST = 					\
   bin/call.scm					\
   bin/compile.scm				\
   bootstrap.sh					\
+  guix.scm					\
   COPYING					\
   examples/hof.gwat				\
   examples/README.md				\

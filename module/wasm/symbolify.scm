@@ -329,9 +329,8 @@
                      ,(visit-ref-type rt1) ,(visit-ref-type rt2)))
 
             ;; Stringref instructions.
-            (('string.const (? integer? str))
-             ;; FIXME: Pull into instr, to break link with string table.
-             `(string.const ,str))
+            (('string.const str)
+             `(string.const ,(if (string? str) str (list-ref strings str))))
             (((and inst (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8
                             'string.new_wtf16
                             'string.encode_utf8 'string.encode_lossy_utf8
@@ -438,7 +437,7 @@
                         (make-tag (tag-name id) (visit-type-use type))))
                       tags)))
        (make-wasm types imports funcs tables memories globals exports start
-                  elems datas tags strings custom)))))
+                  elems datas tags '() custom)))))
 
 (define (symbolify-wasm wasm)
   (symbolify-uses (symbolify-defs wasm)))

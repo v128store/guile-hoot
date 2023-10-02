@@ -689,7 +689,22 @@
 (define (inexact? x) (%inexact? x))
 
 (define (inexact x) (%inexact x))
-(define (exact x) (error "unimplemented"))
+(define (exact x)
+  (cond
+   ((and (real? x)
+         (inexact? x)
+         (finite? x))
+    (%inline-wasm
+     '(func (param $x (ref eq))
+            (result (ref eq))
+            (call $f64->exact (struct.get $flonum $val
+                                          (ref.cast $flonum
+                                                    (local.get $x)))))
+     x))
+   ((exact? x) x)
+   ;; complex numbers are always inexact
+   ((number? x) (error "cannot convert argument to exact number"))
+   (else (error "non-numeric argument"))))
 
 (define (quotient x y) (%quotient x y))
 (define (remainder x y) (%remainder x y))

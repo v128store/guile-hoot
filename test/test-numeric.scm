@@ -73,4 +73,14 @@
 (test-call "#t" (lambda (a b) (= a b) 0.5 1/2))
 (test-call "#t" (lambda (a b) (= a b) 0.5 1/2))
 
+;; exact
+(test-call "1" (lambda (a) (exact a)) 1)
+(test-call "1/2" (lambda (a) (exact a)) 1/2)
+(test-call "0" (lambda (a) (exact a)) 0.0)
+(test-call "0" (lambda (a) (exact a)) -0.0)
+(test-call "1/2" (lambda (a) (exact a)) 0.5)
+(test-call "-1/2" (lambda (a) (exact a)) -0.5)
+(test-call "9999" (lambda (a) (exact a)) 9999.0)
+(test-call "-9999" (lambda (a) (exact a)) -9999.0)
+
 (test-end "test-numeric")

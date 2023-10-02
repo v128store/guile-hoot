@@ -30,10 +30,10 @@
   #:use-module (wasm parse)
   #:use-module (wasm stack)
   #:use-module (wasm types)
-  #:export (make-wasm-module
-            wasm-module?
-            wasm-module-wasm
-            wasm-module-export-ref
+  #:export (validate-wasm
+            load-and-validate-wasm
+            validated-wasm?
+            validated-wasm-ref
 
             make-wasm-global
             wasm-global?
@@ -55,10 +55,8 @@
             wasm-table-set!
             wasm-table-fill!
             wasm-table-copy!
-
-            wasm-position?
-            wasm-position-instructions
-            wasm-position-index
+            wasm-table-init!
+            wasm-table-grow!
 
             wasm-stack?
             wasm-stack-items
@@ -68,7 +66,7 @@
             wasm-struct?
             wasm-array?
 
-            make-wasm-instance
+            instantiate-wasm
             wasm-instance?
             wasm-instance-module
             wasm-instance-export-ref
@@ -154,13 +152,13 @@
 
 
 ;;;
-;;; Modules
+;;; Validation
 ;;;
 
-(define-record-type <wasm-module>
-  (%make-wasm-module wasm)
-  wasm-module?
-  (wasm wasm-module-wasm))
+(define-record-type <validated-wasm>
+  (make-validated-wasm wasm)
+  validated-wasm?
+  (wasm validated-wasm-ref))
 
 (define-exception-type &wasm-error &error
   make-wasm-error
@@ -173,7 +171,7 @@
 
 ;; TODO: Trace instruction position within function to give context to
 ;; validation errors.
-(define (make-wasm-module* wasm)
+(define (validate-wasm wasm)
   (define types
     (list->vector
      (append-map (match-lambda
@@ -391,21 +389,21 @@
   (for-each validate-func (wasm-funcs wasm))
   (for-each validate-data (wasm-datas wasm))
   (for-each validate-elem (wasm-elems wasm))
-  (%make-wasm-module wasm))
+  (make-validated-wasm wasm))
 
-(define (make-wasm-module bin)
-  "Create a new WASM module from the WASM binary BIN.  BIN may be a
-bytevector, an input port, or a <wasm> record produced by
-'resolve-wasm' in the (wasm resolve) module."
-  (make-wasm-module*
+(define (load-and-validate-wasm obj)
+  "Load and validate the WASM module within OBJ.  OBJ may be a <wasm>
+record produced by 'resolve-wasm', a bytevector containing a WASM
+binary, or an input port from which a WASM binary is read."
+  (validate-wasm
    (cond
-    ((wasm? bin) bin)
-    ((bytevector? bin)
-     (call-with-input-bytevector bin parse-wasm))
-    ((port? bin)
-     (parse-wasm bin))
+    ((wasm? obj) obj)
+    ((bytevector? obj)
+     (call-with-input-bytevector obj parse-wasm))
+    ((port? obj)
+     (parse-wasm obj))
     (else
-     (error "not a WASM binary" bin)))))
+     (error "not a WASM object" obj)))))
 
 
 ;;;
@@ -872,8 +870,8 @@ bytevector, an input port, or a <wasm> record produced by
   (hashq-ref *exported-functions* wrap))
 
 (define-record-type <wasm-instance>
-  (%make-wasm-instance module types globals funcs memories tables elems
-                       strings exports)
+  (make-wasm-instance module types globals funcs memories tables elems
+                      strings exports)
   wasm-instance?
   (module wasm-instance-module)
   (types wasm-instance-types)
@@ -902,11 +900,11 @@ bytevector, an input port, or a <wasm> record produced by
      (format #f "WASM instantiation error: ~a" msg))
     (make-exception-with-irritants irritants))))
 
-(define* (make-wasm-instance module #:key (imports '()))
+(define* (instantiate-wasm module #:key (imports '()))
   (define (lookup-import mod name)
     (assoc-ref (or (assoc-ref imports mod) '()) name))
   (match module
-    (($ <wasm-module>
+    (($ <validated-wasm>
         ($ <wasm> types wasm-imports funcs tables memories globals exports
                   start elems datas tags strings custom))
      (define (count-imports kind)
@@ -927,9 +925,9 @@ bytevector, an input port, or a <wasm> record produced by
             (elem-vec (make-vector (length elems)))
             (string-vec (list->vector strings))
             (export-table (make-hash-table))
-            (instance (%make-wasm-instance module type-vec global-vec func-vec
-                                           memory-vec table-vec elem-vec
-                                           string-vec export-table)))
+            (instance (make-wasm-instance module type-vec global-vec func-vec
+                                          memory-vec table-vec elem-vec
+                                          string-vec export-table)))
        (define (type-check vals types)
          (unless (let loop ((vals vals)
                             (types types))

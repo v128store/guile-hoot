@@ -1825,16 +1825,29 @@
                    (f64.lt (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
                            (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
                  `((ref.test $fraction (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-<
-                         (local.get $a)
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (f64.lt (call $flonum->f64
+                                     (ref.cast $flonum (local.get $a)))
+                               (f64.const 0)))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $A to exact
+                       (call $slow-<
+                             (local.get $a)
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $b))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $b)))))))))
                  '((i32.const 1)
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
@@ -1851,16 +1864,29 @@
                                (struct.get $fraction $denom
                                            (ref.cast $fraction (local.get $a))))))
                  `((ref.test $flonum (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-<
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))
-                         (local.get $b)))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (f64.lt (f64.const 0)
+                               (call $flonum->f64
+                                     (ref.cast $flonum (local.get $b)))))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $B to exact
+                       (call $slow-<
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $a))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $a)))))
+                             (local.get $b)))))
                  '((i32.const 1)
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
@@ -1931,16 +1957,29 @@
                    (f64.le (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
                            (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
                  `((ref.test $fraction (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-<=
-                         (local.get $a)
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (f64.lt (call $flonum->f64
+                                     (ref.cast $flonum (local.get $a)))
+                               (f64.const 0)))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $A to exact
+                       (call $slow-<=
+                             (local.get $a)
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $b))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $b)))))))))
                  '((i32.const 1)
                    (call $die0 (string.const "$slow-<="))
                    (unreachable))))
@@ -1957,18 +1996,31 @@
                                (struct.get $fraction $denom
                                            (ref.cast $fraction (local.get $a))))))
                  `((ref.test $flonum (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-<=
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))
-                         (local.get $b)))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (f64.le (f64.const 0)
+                               (call $flonum->f64
+                                     (ref.cast $flonum (local.get $b)))))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $B to exact
+                       (call $slow-<=
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $a))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $a)))))
+                             (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<"))
+                   (call $die0 (string.const "$slow-<="))
                    (unreachable))))
              '((i32.const 1)
                (call $die0 (string.const "$slow-<="))
@@ -2022,7 +2074,7 @@
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<="))
+                   (call $die0 (string.const "$slow-="))
                    (unreachable))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond 'i32
@@ -2037,16 +2089,29 @@
                    (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
                            (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
                  `((ref.test $fraction (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-=
-                         (local.get $a)
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $a))))
+                       (f64.eq (call $flonum->f64
+                                     (ref.cast $flonum (local.get $a)))
+                               (f64.const 0)))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $A to exact
+                       (call $slow-=
+                             (local.get $a)
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $b))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $b)))))))))
                  '((i32.const 1)
                    (call $die0 (string.const "$slow-="))
                    (unreachable))))
@@ -2063,18 +2128,31 @@
                                (struct.get $fraction $denom
                                            (ref.cast $fraction (local.get $a))))))
                  `((ref.test $flonum (local.get $b))
-                   ;; FIXME: convert flonum to exact
-                   (call $slow-=
-                         (call $div
-                               (call $inexact
-                                     (struct.get $fraction $num
-                                                 (ref.cast $fraction (local.get $b))))
-                               (call $inexact
-                                     (struct.get $fraction $denom
-                                                 (ref.cast $fraction (local.get $b)))))
-                         (local.get $b)))
+                   ,(arith-cond
+                     'i32
+                     '((call $f64-is-nan
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (i32.const 0))
+                     '((call $f64-is-infinite
+                             (call $flonum->f64
+                                   (ref.cast $flonum (local.get $b))))
+                       (f64.eq (f64.const 0)
+                               (call $flonum->f64
+                                     (ref.cast $flonum (local.get $b)))))
+                     '((i32.const 1)
+                       ;; FIXME: convert flonum $B to exact
+                       (call $slow-=
+                             (call $div
+                                   (call $inexact
+                                         (struct.get $fraction $num
+                                                     (ref.cast $fraction (local.get $a))))
+                                   (call $inexact
+                                         (struct.get $fraction $denom
+                                                     (ref.cast $fraction (local.get $a)))))
+                             (local.get $b)))))
                  '((i32.const 1)
-                   (call $die0 (string.const "$slow-<"))
+                   (call $die0 (string.const "$slow-="))
                    (unreachable))))
              '((i32.const 1)
                (call $die0 (string.const "$slow-="))

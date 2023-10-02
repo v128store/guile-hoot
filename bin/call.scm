@@ -49,11 +49,7 @@
      (lambda () (delete-file wasm-file-name)))))
 
 (define (run-d8 . args)
-  (let* ((args (cons* d8
-                      "--experimental-wasm-gc"
-                      "--experimental-wasm-stringref"
-                      "--experimental-wasm-return-call"
-                      args))
+  (let* ((args (cons* d8 "--experimental-wasm-stringref" args))
          (pid (spawn d8 args)))
     (exit (status:exit-val (cdr (waitpid pid))))))
 

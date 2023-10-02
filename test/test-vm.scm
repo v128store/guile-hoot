@@ -60,10 +60,7 @@
      (lambda () (delete-file wasm-file-name)))))
 
 (define (run-d8 read args)
-  (let* ((args (cons* "--experimental-wasm-gc"
-                      "--experimental-wasm-stringref"
-                      "--experimental-wasm-return-call"
-                      args))
+  (let* ((args (cons* "--experimental-wasm-stringref" args))
          (port (apply open-pipe* OPEN_READ d8 args))
          (result (string-trim-both (get-string-all port))))
     (if (zero? (close-pipe port))

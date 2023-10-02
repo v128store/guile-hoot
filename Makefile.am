@@ -1,4 +1,4 @@
-V8_FEATURES=--experimental-wasm-gc --experimental-wasm-stringref --experimental-wasm-return-call
+V8_FEATURES=--experimental-wasm-stringref
 
 SUBDIRS = module
 WASMOBJECTS = $(WATS:%.wat=%.wasm)

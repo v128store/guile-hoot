@@ -14,3 +14,5 @@ Makefile.in
 /configure
 /pre-inst-env
 /js-test
+/doc/hoot.info
+/doc/hoot.html/

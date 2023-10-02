@@ -1,0 +1,1644 @@
+\input texinfo    @c -*- texinfo -*-
+@c %**start of header
+@setfilename hoot.info
+@settitle Guile Hoot
+@documentencoding UTF-8
+@documentlanguage en
+@syncodeindex pg cp
+@c %**end of header
+
+@dircategory The Algorithmic Language Scheme
+@direntry
+* Hoot: (hoot).   Scheme to WASM compiler backend for Guile and WASM toolchain.
+@end direntry
+
+@finalout
+@titlepage
+@title Guile Hoot
+@author David Thompson (@email{dave@@spritely.institute})
+@author The Spritely Institute
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top Guile Hoot
+
+This is the manual for Guile Hoot, a Scheme to WebAssembly (henceforth
+referred to as WASM) compiler backend for
+@url{https://gnu.org/software/guile,GNU Guile} and complete WASM
+toolchain.
+
+Both this manual and Guile Hoot itself are released under Apache v2.
+See @ref{License} for more information.
+@end ifnottex
+
+@menu
+* Introduction::                  What's the deal with WASM, anyway?
+* Compiling to WASM::             Using the compiler and development tools.
+* Toolchain reference::           General purpose WASM tools.
+* Contributing::                  Lend a hand!
+* License::                       Copying, distributing, and using this text.
+* Index::
+@end menu
+
+@node Introduction
+@chapter Introduction
+
+Guile Hoot is a Scheme to WASM compiler backend for Guile. It is also
+a general purpose WASM toolchain with an assembler, binary parser, WAT
+parser, linker, and interpreter.
+
+@menu
+* Status::                        What works.  What doesn't.
+* Installation::                  Setting up Hoot.
+* Tutorial::                      Compiling your first Scheme program to WASM.
+@end menu
+
+@node Status
+@section Status
+
+Hoot is still in an early phase of active development and its API
+should be considered unstable and subject to change in future
+releases.  Hoot currently supports the R7RS-small Scheme
+specification, more or less, along with a small set of Guile-specific
+functionality such as @ref{Prompts,,,Guile Reference}.  Future
+releases will add support for more standard Scheme and Guile-specific
+features.
+
+To compile Scheme to WASM, Hoot takes advantage of newly accepted WASM
+proposals that are, as of writing, just beginning to emerge as usable
+features of production web browsers and other WASM runtimes.  The most
+important of these new features are tail calls and GC reference types.
+The @code{return_call} family of instructions has made the
+implementation of Scheme's tail recursive procedure call semantics
+relatively straightforward.  GC reference type instructions allow for
+heap allocated objects (and immediates via the @code{i31} type) that
+are managed by the WASM runtime.  This allows Hoot to take advantage
+of production garbage collectors already present in web browsers,
+obviating the need to implement and ship our own which would be both
+inferior to what's already in Firefox, Chrome, etc. and a major source
+of binary bloat.  As of writing, support for these new WASM features
+is transitioning from being gated by experimental feature flags to
+being generally available in all major web browsers.
+
+There's an additional WASM proposal that Hoot has been built on that
+has, unfortunately, not found its way into the core WASM
+specification: stringref.  To work around this, the compiler lowers
+stringref instructions to another form.  We really like stringref and
+hope that the proposal will reach acceptance in the future.
+
+Hoot's usability in the browser is a work-in-progress.  The
+@file{reflect.js} library is provided to allow JavaScript to call
+Scheme procedures and inspect Scheme values.  However, a foreign
+function interface to call JavaScript functions from Scheme is not yet
+available.
+
+@node Installation
+@section Installation
+
+The @emph{easiest} way to get up and running with Hoot is by using the
+@url{https://guix.gnu.org,GNU Guix} package manager for which we
+provide a @file{guix.scm} file ready for use with @command{guix
+shell}:
+
+@example
+cd guile-hoot/
+guix shell
+@end example
+
+@command{guix shell} will download/compile all required dependencies
+and start an interactive shell that is ready to use for building Hoot.
+
+To use Hoot without Guix requires building Guile from source.  Hoot is
+currently undergoing a lot of development and requires a bleeding-edge
+Guile built against the @code{main} branch.  Eventually Hoot will just
+require a stable release of Guile.
+
+With a sufficiently fresh Guile, via Guix or otherwise, the build can
+begin.  If you are building from a Git checkout rather than an
+official release tarball, the first step is to bootstrap the build
+system:
+
+@example
+./bootstrap.sh
+@end example
+
+Release tarballs have a pre-bootstrapped build system and do not
+require the above step.
+
+Now, build Hoot:
+
+@example
+./configure
+make
+@end example
+
+If you'd like to install Hoot onto your system, run:
+
+@example
+sudo make install
+@end example
+
+The GNU build system defaults to @file{/usr/local} as the installation
+prefix.  This can be changed by re-running the configure script:
+
+@example
+./configure --prefix=/some/where/else
+sudo make install
+@end example
+
+To try out Hoot without installing it, use the @file{pre-inst-env}
+wrapper to launch Guile in the context of the Hoot build directory:
+
+@example
+./pre-inst-env guile
+@end example
+
+If you installed Guile to your system, simply run @command{guile}.
+
+If everything went well, you will be greeted with a Guile REPL prompt.
+Regardless of installation status, to verify that Guile can find the
+Hoot modules, run:
+
+@lisp
+scheme@@(guile-user)> ,use (hoot compile)
+@end lisp
+
+If there is no error then congratulations!  Your setup is correct.
+Proceed to the tutorial for a crash course in how to use Hoot, or see
+later chapters for an API reference.
+
+@node Tutorial
+@section Tutorial
+
+Let's compile some simple Scheme programs and learn how to work with
+their compiled WASM forms.
+
+As we all know, the answer to everything is simply 42.  So, we should
+make sure that we can compile 42 to WASM.  To do so, import the
+@code{(hoot compile)} module and call the @code{compile} procedure.
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,use (hoot compile)
+scheme@(guile-user)> (define the-answer (compile 42))
+@end verbatim
+@end lisp
+
+The result is a WASM module.  There is a lot of stuff within, but
+we're not going to focus that right now.  We should load and run the
+module to verify that it outputs 42 like we expect.  We can do so from
+the comfort of our REPL because Hoot includes a WASM interpreter.
+There's no need to use a web browser or other WASM runtime to try out
+small programs.
+
+In order to extract Scheme values from a WASM module, we actually need
+a second WASM module known as @file{reflect.wasm}.  This is a special
+binary that comes with Hoot that allows for a WASM host (Guile, a web
+browser, etc.) to make sense of and manipulate Scheme values. To load
+that binary from disk we will use the @code{(wasm parse)} module.
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,use (wasm parse)
+scheme@(guile-user)> (define reflector
+                       (call-with-input-file "js-runtime/reflect.wasm"
+                         parse-wasm))
+@end verbatim
+@end lisp
+
+The file name @file{js-runtime/reflect.wasm} assumes you are currently
+located in the Hoot build directory.  Adjust as necessary for your
+context.
+
+Now that the reflection module has been loaded, we can load
+@code{the-answer} into the WASM interpreter to produce a WASM
+@emph{instance}:
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,use (hoot reflect)
+scheme@(guile-user)> (define instance (hoot-instantiate reflector the-answer))
+@end verbatim
+@end lisp
+
+All that's left to do now is execute the program with
+@code{hoot-load}:
+
+@lisp
+@verbatim
+scheme@(guile-user)> (hoot-load instance)
+$5 = 42
+@end verbatim
+@end lisp
+
+Ta-da!  Feels kind of funny to compile a Scheme program to WASM only
+to load it back into Scheme, but it's a quick and easy way to test
+things out.
+
+For cases when you simply want to compile an expression and see the
+result immediately, there is a faster method. Just use the
+@code{compile-value} procedure instead:
+
+@lisp
+@verbatim
+scheme@(guile-user)> (compile-value reflector '(list 1 2 3))
+$6 = #<hoot (1 2 3)>
+@end verbatim
+@end lisp
+
+With @code{compile-value}, the compiled WASM module is thrown away,
+which is just fine for testing throwaway code.
+
+Lists are cool and 42 is ultimately the answer to everything, but it
+would be a shame if we didn't talk about compiling something a little
+more complicated.  Let's compile a simple, tail-recursive procedure!
+How about good ol' factorial?
+
+@lisp
+@verbatim
+scheme@(guile-user)> (define hoot-factorial
+                       (compile-value reflect-wasm
+                                      '(let ()
+                                         (define (factorial x result)
+                                           (if (= x 1)
+                                               result
+                                               (factorial (- x 1)
+                                                          (* result x))))
+                                         factorial)))
+@end verbatim
+@end lisp
+
+The value of @code{hoot-factorial} is not a regular procedure, but a
+reference to the ``foreign'' procedure within a WASM instance.  To
+make a Hoot procedure call, we can use @code{hoot-call}.
+
+@lisp
+@verbatim
+scheme@(guile-user)> (hoot-call hoot-factorial 5 1)
+$7 = 120
+@end verbatim
+@end lisp
+
+The Hoot reflection in Guile is great for testing things out, but what
+we really want is to get our programs running in web browser.  The
+rest of this tutorial will require a web server to host the necessary
+files.  How to run a web server is out-of-scope for this tutorial.
+
+We've compiled a couple of things to WASM now, but the resulting
+modules have stayed within the confines of the Guile process.  To make
+something that can be loaded by a web browser, we need to use the
+assembler to create a WASM binary:
+
+@lisp
+@verbatim
+scheme@(guile-user)> (define hello (compile "Hello, world!"))
+scheme@(guile-user)> ,use (wasm assemble)
+scheme@(guile-user)> (define bin (assemble-wasm hello))
+@end verbatim
+@end lisp
+
+Then we can write the binary to disk:
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,use (ice-9 binary-ports)
+scheme@(guile-user)> (call-with-output-file "hello.wasm"
+                       (lambda (port)
+                         (put-bytevector port bin)))
+@end verbatim
+@end lisp
+
+Upload @file{hello.wasm} to a web server.
+
+For Scheme reflection in JavaScript, Hoot provides the
+@code{js-runtime/reflect.js} library.  Upload that to the web server,
+too.
+
+To run @file{hello.wasm}, we need a little JavaScript glue code:
+
+@example
+@verbatim
+async function load() {
+  const mod = await SchemeModule.fetch_and_instantiate("hello.wasm", {});
+  const reflect = await mod.reflect();
+  const proc = new Procedure(reflect, mod.get_export("$load").value);
+  const [message] = proc.call();
+  console.log(message);
+}
+
+window.addEventListener("load", load);
+@end verbatim
+@end example
+
+Finally, we need a minimal web page to bring it all together:
+
+@example
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript" src="reflect.js"></script>
+    <script type="text/javascript" src="hello.js"></script>
+  </head>
+  <body>
+    Guile is a hoot!
+  </body>
+</html>
+@end example
+
+Adjust the @code{src} attributes according to where the files are
+located on your web server.
+
+Open this page in your web browser, and if it is new enough to have
+WASM GC and tail calls enabled, you should see the text ``Hello,
+world!'' printed in the developer console.
+
+We hope this tutorial has helped you get started with Hoot!
+
+@node Compiling to WASM
+@chapter Compiling to WASM
+
+@menu
+* Compilation::                   Compiling a Hoot module.
+* Reflection::                    Using Hoot modules from the host environment.
+* Development::                   Developer tools.
+@end menu
+
+@node Compilation
+@section Compilation
+
+The @code{(hoot compile)} module provides the interface to the WASM
+compiler backend.  In Guile's compiler tower, Scheme code goes through
+several transformations before being compiled to VM bytecode.  Scheme
+is lowered to @ref{Tree-IL,,,Guile Reference}, which is then lowered
+to @ref{Continuation Passing Style,,,Guile Reference}(CPS), and then
+finally to @ref{Bytecode,,,Guile Reference}.  Hoot adds an additional
+backend that compiles CPS to WASM.
+
+Currently, Hoot does not use Guile's module system and instead peforms
+whole program compilation using a prelude that provides R7RS-small
+features (and also some Guile ones, like prompts.)
+
+When compiling to the WASM target, a special form called
+@code{%inline-wasm} is available for when it is necessary or
+convenient to implement a section of code in WAT rather than Scheme.
+For example, here's how @code{port?} is implemented:
+
+@lisp
+(define (port? x)
+  (%inline-wasm '(func (param $obj (ref eq))
+                       (result (ref eq))
+                       (if (ref eq)
+                           (ref.test $port (local.get $obj))
+                           (then (ref.i31 (i32.const 17)))
+                           (else (ref.i31 (i32.const 1)))))
+                x))
+@end lisp
+
+An inline WASM form specifies a single function using WAT expressions
+whose parameters and result types are all @code{(ref eq)}, as well as
+the Scheme variables that map to the parameters.  The compiler then
+transforms and splices the function body into the procedure.
+
+@deffn {Procedure} compile exp [#:import-abi? #f] [#:export-abi? #t] @
+                   [#:from (current-language)] @
+                   [#:env (default-hoot-environment)] @
+                   [#:optimization-level (default-optimization-level)] @
+                   [#:warning-level (default-warning-level)] @
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+
+Compile the Scheme expression @var{exp} to WASM and return a WASM
+module.  When @var{import-abi?} is @code{#t}, the WASM module will be
+built such that it needs to import its ABI from another module.  When
+@var{export-abi?} is @code{#t}, the WASM module will be built such
+that it exports its ABI functions.  A typical use of these flags is to
+export the ABI from one ``main'' module and then import that ABI into
+any additional modules that are being used.
+
+@xref{Compiling Scheme Code,,,Guile Reference} for more information
+about invoking Guile's compiler.
+@end deffn
+
+@deffn {Procedure} read-and-compile port [#:import-abi? #f] [#:export-abi? #t] @
+                   [#:from (current-language)] @
+                   [#:env (default-hoot-environment)] @
+                   [#:optimization-level (default-optimization-level)] @
+                   [#:warning-level (default-warning-level)] @
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+
+Like @code{compile}, but read the Scheme expression from @var{port}.
+@end deffn
+
+@deffn {Procedure} compile-file input-file [#:import-abi? #f] @
+                   [#:export-abi? #t] @
+                   [#:from (current-language)] @
+                   [#:env (default-hoot-environment)] @
+                   [#:optimization-level (default-optimization-level)] @
+                   [#:warning-level (default-warning-level)] @
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+
+Like @code{compile}, but read the Scheme expression from
+@var{input-file}.
+@end deffn
+
+@node Reflection
+@section Reflection
+
+The @code{(hoot reflect)} module provides an interface for inspecting
+and manipulating Scheme values that live within WASM modules.
+
+@deffn {Procedure} hoot-instantiate reflector scheme-wasm
+Instantiate and return a new Hoot module using the compiled Scheme
+WASM module @var{scheme-wasm} and the reflection module
+@var{reflector}.
+@end deffn
+
+@deffn {Procedure} hoot-load module
+Invoke the load thunk of @var{module} and return the reflected
+result values.
+@end deffn
+
+@deffn {Procedure} hoot-call proc args ...
+Invoke the reflected Hoot procedure @var{proc} with the arguments
+@var{args} and return the results.
+@end deffn
+
+@deffn {Procedure} compile-value reflector exp
+Compile @var{exp} and return the result using the reflection module
+@var{reflector}.
+@end deffn
+
+@deffn {Procedure} compile-call reflector proc-exp arg-exps ...
+Compile @var{proc-exp} and all @var{arg-exps}, call the resulting proc
+with the resulting procs, and return the results using the reflection
+module @var{reflector}.
+@end deffn
+
+@deffn {Procedure} hoot-module? obj
+Return @code{#t} if @var{obj} is a Hoot module.
+@end deffn
+
+@deffn {Procedure} hoot-module-reflector module
+Return the reflection module for @var{module}.
+@end deffn
+
+@deffn {Procedure} hoot-module-instance module
+Return the WASM instance for @var{module}.
+@end deffn
+
+@deffn {Procedure} reflector? obj
+Return @code{#t} if @var{obj} is a reflector.
+@end deffn
+
+@deffn {Procedure} reflector-instance reflector
+Return the WASM instance of @var{reflector}.
+@end deffn
+
+@deffn {Procedure} reflector-abi reflector
+Return the association list of ABI imports for @var{reflector}.
+@end deffn
+
+@deffn {Procedure} hoot-object? obj
+Return @code{#t} if @var{obj} is a Hoot object.
+@end deffn
+
+@deffn {Procedure} hoot-complex? obj
+Return @code{#t} if @var{obj} is a Hoot complex number.
+@end deffn
+
+@deffn {Procedure} hoot-complex-real complex
+Return the real part of @var{complex}.
+@end deffn
+
+@deffn {Procedure} hoot-complex-imag complex
+Return the imaginary part of @var{complex}.
+@end deffn
+
+@deffn {Procedure} hoot-fraction? obj
+Return @code{#t} if @var{obj} is a Hoot fraction.
+@end deffn
+
+@deffn {Procedure} hoot-fraction-num fraction
+Return the numerator of @var{fraction}
+@end deffn
+
+@deffn {Procedure} hoot-fraction-denom fraction
+Return the denominator of @var{fraction}.
+@end deffn
+
+@deffn {Procedure} hoot-pair? obj
+Return @code{#t} if @var{obj} is a Hoot pair.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-pair? obj
+Return @code{#t} if @var{obj} is a mutable Hoot pair.
+@end deffn
+
+@deffn {Procedure} hoot-pair-car pair
+Return the first element of @var{pair}.
+@end deffn
+
+@deffn {Procedure} hoot-pair-cdr pair
+Return the second element of @var{pair}.
+@end deffn
+
+@deffn {Procedure} hoot-vector? obj
+Return @code{#t} if @var{obj} is a Hoot vector.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-vector? obj
+Return @code{#t} if @var{obj} is a mutable Hoot vector.
+@end deffn
+
+@deffn {Procedure} hoot-vector-length vec
+Return the length of @var{vec}.
+@end deffn
+
+@deffn {Procedure} hoot-vector-ref vec i
+Return the @var{i}th element of @var{vec}.
+@end deffn
+
+@deffn {Procedure} hoot-bytevector? obj
+Return @code{#t} if @var{obj} is a Hoot bytevector.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-bytevector? obj
+Return @code{#t} if @var{obj} is a mutable Hoot bytevector.
+@end deffn
+
+@deffn {Procedure} hoot-bytevector-length bv
+Return the length of @var{bv}.
+@end deffn
+
+@deffn {Procedure} hoot-bytevector-ref bv i
+Return the @var{i}th byte of @var{bv}.
+@end deffn
+
+@deffn {Procedure} hoot-bitvector? obj
+Return @code{#t} if @var{obj} is a Hoot bitvector.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-bitvector? obj
+Return @code{#t} if @var{obj} is a mutable Hoot bitvector.
+@end deffn
+
+@deffn {Procedure} hoot-bitvector-length bv
+Return the length of @var{bv}.
+@end deffn
+
+@deffn {Procedure} hoot-bitvector-ref bv i
+Return the @var{i}th bit of @var{bv}.
+@end deffn
+
+@deffn {Procedure} hoot-symbol? obj
+Return @code{#t} if @var{obj} is a Hoot symbol.
+@end deffn
+
+@deffn {Procedure} hoot-symbol-name sym
+Return the string name of @var{sym}.
+@end deffn
+
+@deffn {Procedure} hoot-keyword? obj
+Return @code{#t} if @var{obj} is a Hoot keyword.
+@end deffn
+
+@deffn {Procedure} hoot-keyword-name keyword
+Return the name string of @var{keyword}.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-string? obj
+Return @code{#t} if @var{obj} is a mutable Hoot string.
+@end deffn
+
+@deffn {Procedure} mutable-hoot-string->string str
+Return the underlying string for @var{str}.
+@end deffn
+
+@deffn {Procedure} hoot-procedure? obj
+Return @code{#t} if @var{obj} is a Hoot procedure.
+@end deffn
+
+@deffn {Procedure} hoot-variable? obj
+Return @code{#t} if @var{obj} is a Hoot variable.
+@end deffn
+
+@deffn {Procedure} hoot-atomic-box? obj
+Return @code{#t} if @var{obj} is a Hoot atomic box.
+@end deffn
+
+@deffn {Procedure} hoot-hash-table? obj
+Return @code{#t} if @var{obj} is a Hoot hash table.
+@end deffn
+
+@deffn {Procedure} hoot-weak-table? obj
+Return @code{#t} if @var{obj} is a Hoot weak table.
+@end deffn
+
+@deffn {Procedure} hoot-fluid? obj
+Return @code{#t} if @var{obj} is a Hoot fluid.
+@end deffn
+
+@deffn {Procedure} hoot-dynamic-state? obj
+Return @code{#t} if @var{obj} is a Hoot dynamic state.
+@end deffn
+
+@deffn {Procedure} hoot-syntax? obj
+Return @code{#t} if @var{obj} is a Hoot syntax object.
+@end deffn
+
+@deffn {Procedure} hoot-port? obj
+Return @code{#t} if @var{obj} is a Hoot port.
+@end deffn
+
+@deffn {Procedure} hoot-struct? obj
+Return @code{#t} if @var{obj} is a Hoot struct.
+@end deffn
+
+@node Development
+@section Development
+
+The @code{(hoot repl)} module provides a set of REPL commands to
+assist with inspecting and debugging WASM modules.
+
+@lisp
+scheme@@(guile-user)> ,use (hoot repl)
+@end lisp
+
+To see a list of all the WASM commands from the comfort of the REPL, run:
+
+@lisp
+scheme@@(guile-user)> ,help wasm
+@end lisp
+
+@deffn {REPL Command} wasm-trace exp
+Evaluate @var{exp} with verbose WASM tracing enabled.
+@end deffn
+
+@deffn {REPL Command} wasm-freq exp
+Evaluate @var{exp} and print out a table showing how many times each
+kind of WASM instruction was executed.
+@end deffn
+
+@deffn {REPL Command} wasm-catch exp
+Catch and debug WASM runtime errors that are raised by evaluating
+@var{exp}.
+@end deffn
+
+The following commands are usable only in the context of a WASM debug
+REPL:
+
+@deffn {REPL Command} wasm-stack
+Print the state of the WASM stack.
+@end deffn
+
+@deffn {REPL Command} wasm-locals
+Print the state of the WASM function locals.
+@end deffn
+
+@deffn {REPL Command} wasm-pos
+Print the current function disassembly and highlight the instruction
+where WASM execution has paused.
+@end deffn
+
+@deffn {REPL Command} wasm-eval instr
+Evaluate the WASM instruction @var{instr} in the current debug
+context.  Use this when attempting to fix the state of the WASM stack
+or locals before attempting to resume with @code{,wasm-continue}.
+@end deffn
+
+The following commands behave differently depending on if they are run
+within a WASM debug REPL or not.
+
+@deffn {REPL Command} wasm-dump [wasm]
+Display information about @var{wasm}, or the current WASM instance
+when debugging.
+@end deffn
+
+@deffn {REPL Command} wasm-continue
+When in a debugger, exit and resume WASM execution.  In the event that
+this is run after trapping a runtime error, your warranty is void and
+all bets are off!  While it may be dangerous, this does allow one to
+manually fix the WASM interpreter state manually with
+@code{,wasm-eval} and attempt to proceed, which can come in handy
+sometimes.
+
+When not in a debugger, set the WASM execution mode to continue
+without interruption.  In other words, deactive the instruction
+stepper if it is active.
+@end deffn
+
+@deffn {REPL Command} wasm-step
+When in a debugger, resume WASM execution but pause before the next
+instruction is evaluated.
+
+When not in a debugger, set WASM execution to pause before each
+instruction is evaluated.
+@end deffn
+
+@node Toolchain reference
+@chapter Toolchain reference
+
+@menu
+* Data types::                    Core WASM module data types.
+* GWAT::                          Guile-flavored WebAssembly Text format.
+* Resolver::                      Lower human-readable identifiers to index values.
+* Linker::                        Add a standard library to a WASM module.
+* Assembler::                     Create WASM binaries.
+* Binary Parser::                 Parse WASM binaries.
+* Printer::                       Print the contents of a WASM module.
+* Interpreter::                   Execute WASM within Guile.
+@end menu
+
+@node Data types
+@section Data types
+
+The @code{(wasm types)} module contains all the core data types that
+comprise a WASM module.
+
+@subsection Modules
+
+@deffn {Procedure} wasm? obj
+Return @code{#t} if @var{obj} is a WASM module.
+@end deffn
+
+@deffn {Procedure} wasm-types wasm
+Return the list of types in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-imports wasm
+Return the list of imports in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-funcs wasm
+Return the list of functions in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-tables wasm
+Return the list of tables in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-memories wasm
+Return the list of memories in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-globals wasm
+Return the list of globals in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-exports wasm
+Return the list of exports in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-elems wasm
+Return the list of element segments in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-datas wasm
+Return the list of data segments in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-tags wasm
+Return the list of tags in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-strings wasm
+Return the list of strings in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-custom wasm
+Return the list of custom segments in @var{wasm}.
+@end deffn
+
+@deffn {Procedure} wasm-start wasm
+Return the start function index for @var{wasm}.
+@end deffn
+
+
+@subsection Type descriptors
+
+@deffn {Procedure} type? obj
+Return @code{#t} if @var{obj} is a type.
+@end deffn
+
+@deffn {Procedure} type-id type
+Return the symbolic ID of @var{type}.
+@end deffn
+
+@deffn {Procedure} type-val type
+Return the type descriptor of @var{type}.
+@end deffn
+
+
+@deffn {Procedure} ref-type? obj
+Return @code{#t} if @var{obj} is a reference type.
+@end deffn
+
+@deffn {Procedure} ref-type-nullable? ref-type
+Return @var{#t} if @var{ref-type} is nullable.
+@end deffn
+
+@deffn {Procedure} ref-type-heap-type ref-type
+Return the heap type of @var{ref-type}.
+@end deffn
+
+
+@deffn {Procedure} sub-type? obj
+Return @code{#t} if @var{obj} is a sub type.
+@end deffn
+
+@deffn {Procedure} sub-type-final? sub-type
+Return @code{#t} if @var{sub-type} is marked as final.
+@end deffn
+
+@deffn {Procedure} sub-type-supers sub-type
+Return super types of @var{sub-type}.
+@end deffn
+
+@deffn {Procedure} sub-type-type sub-type
+Return the concrete type descriptor of @var{sub-type}.
+@end deffn
+
+
+@deffn {Procedure} array-type? obj
+Return @code{#t} if @var{obj} is an array type.
+@end deffn
+
+@deffn {Procedure} array-type-mutable? array-type
+Return @code{#t} if @var{array-type} is mutable.
+@end deffn
+
+@deffn {Procedure} array-type-type array-type
+Retun the element type descriptor of @var{array-type}.
+@end deffn
+
+
+@deffn {Procedure} struct-type? obj
+Return @code{#t} if @var{obj} is a struct type.
+@end deffn
+
+@deffn {Procedure} struct-type-fields struct-type
+Return the field descriptors of @var{struct-type}.
+@end deffn
+
+
+@deffn {Procedure} field? obj
+Return @code{#t} if @var{obj} is a struct field.
+@end deffn
+
+@deffn {Procedure} field-id field
+Return the symbolic ID of @var{field}.
+@end deffn
+
+@deffn {Procedure} field-mutable? field
+Return @code{#t} if @var{field} is mutable.
+@end deffn
+
+@deffn {Procedure} field-type field
+Return the type descriptor of @var{field}.
+@end deffn
+
+
+@deffn {Procedure} rec-group? obj
+Return @code{#t} if @var{obj} is a recursive type group.
+@end deffn
+
+@deffn {Procedure} rec-group-types rec-group
+Return the types within @var{rec-group}.
+@end deffn
+
+
+@subsection Globals
+
+@deffn {Procedure} global? obj
+Return @code{#t} if @var{obj} is a global.
+@end deffn
+
+@deffn {Procedure} global-id global
+Return the symbloc ID of @var{global}.
+@end deffn
+
+@deffn {Procedure} global-type global
+Return the type of @var{global}.
+@end deffn
+
+@deffn {Procedure} global-init global
+Return the initialization instructions of @var{global}.
+@end deffn
+
+
+@deffn {Procedure} global-type? obj
+Return @code{#t} if @var{obj} is a global type.
+@end deffn
+
+@deffn {Procedure} global-type-mutable? global-type
+Return @code{#t} if @var{global-type} is mutable.
+@end deffn
+
+@deffn {Procedure} global-type-type global-type
+Return the type descriptor of @var{global-type}.
+@end deffn
+
+
+@subsection Functions
+
+@deffn {Procedure} func? obj
+Return @code{#t} if @var{obj} is a function.
+@end deffn
+
+@deffn {Procedure} func-id func
+Return the symbolic ID of @var{func}.
+@end deffn
+
+@deffn {Procedure} func-type func
+Return the signature of @var{func}.
+@end deffn
+
+@deffn {Procedure} func-locals func
+Return the locals of @var{func}.
+@end deffn
+
+@deffn {Procedure} func-body func
+Return the body instructions of @var{func}.
+@end deffn
+
+
+@deffn {Procedure} func-sig? obj
+Return @code{#t} if @var{obj} is a function signature.
+@end deffn
+
+@deffn {Procedure} func-sig-params func
+Return the param types of @var{func}.
+@end deffn
+
+@deffn {Procedure} func-sig-results func
+Return the result types of @var{func}.
+@end deffn
+
+
+@deffn {Procedure} param? obj
+Return @code{#t} if @var{obj} is a param.
+@end deffn
+
+@deffn {Procedure} param-id param
+Return the symbolic ID of @var{param}.
+@end deffn
+
+@deffn {Procedure} param-type param
+Return the type descriptor of @var{param}.
+@end deffn
+
+
+@deffn {Procedure} local? obj
+Return @code{#t} if @var{obj} is a function local.
+@end deffn
+
+@deffn {Procedure} local-id local
+Return the symbolic ID of @var{local}.
+@end deffn
+
+@deffn {Procedure} local-type local
+Return the type descriptor of @var{local}.
+@end deffn
+
+
+@deffn {Procedure} type-use? obj
+Return @code{#t} if @var{obj} is a type use.
+@end deffn
+
+@deffn {Procedure} type-use-idx type-use
+Return the type index of @var{type-use}.
+@end deffn
+
+@deffn {Procedure} type-use-sig type-use
+Return the function signature of @var{type-use}.
+@end deffn
+
+
+@subsection Imports/exports
+
+@deffn {Procedure} import? obj
+Return @code{#t} if @var{obj} is an import.
+@end deffn
+
+@deffn {Procedure} import-mod import
+Return the module name string of @var{import}.
+@end deffn
+
+@deffn {Procedure} import-name import
+Return the name string of @var{import}.
+@end deffn
+
+@deffn {Procedure} import-kind import
+Return the kind of @var{import}, one of @code{func}, @code{global},
+@code{memory}, or @code{table}.
+@end deffn
+
+@deffn {Procedure} import-id import
+Return the symbolic ID of @var{import}.
+@end deffn
+
+@deffn {Procedure} import-type import
+Return the type descriptor of @var{import}.
+@end deffn
+
+
+@deffn {Procedure} export? obj
+Return @code{#t} if @var{obj} is an export.
+@end deffn
+
+@deffn {Procedure} export-name export
+Return the name string of @var{export}.
+@end deffn
+
+@deffn {Procedure} export-kind export
+Return the kind of @var{export}, one of @code{func}, @code{global},
+@code{memory}, or @code{table}.
+@end deffn
+
+@deffn {Procedure} export-idx export
+Return the index of @var{export}.
+@end deffn
+
+@subsection Limits
+
+@deffn {Procedure} limits? obj
+Return @code{#t} if @var{obj} is a limits.
+@end deffn
+
+@deffn {Procedure} limits-min limits
+Return the minimum value of @var{limits}.
+@end deffn
+
+@deffn {Procedure} limits-max limits
+Return the maximum value of @var{limits} or @code{#f} if there is no
+maximum.
+@end deffn
+
+
+@subsection Linear memory
+
+@deffn {Procedure} memory? obj
+Return @code{#t} if @var{obj} is a memory.
+@end deffn
+
+@deffn {Procedure} memory-id memory
+Return the symbolic ID of @var{memory}.
+@end deffn
+
+@deffn {Procedure} memory-type memory
+Return the type of @var{memory}.
+@end deffn
+
+
+@deffn {Procedure} mem-arg? obj
+Return @code{#t} if @var{obj} is a memory argument.
+@end deffn
+
+@deffn {Procedure} mem-arg-id mem-arg
+Return the symbolic ID of @var{mem-arg}.
+@end deffn
+
+@deffn {Procedure} mem-arg-offset mem-arg
+Return the offset of @var{mem-arg}.
+@end deffn
+
+@deffn {Procedure} mem-arg-align mem-arg
+Return the alignment of @var{mem-arg}.
+@end deffn
+
+
+@deffn {Procedure} mem-type? obj
+Return @code{#t} if @var{obj} is a memory type.
+@end deffn
+
+@deffn {Procedure} mem-type-limits mem-type
+Return the limits of @var{mem-type}.
+@end deffn
+
+
+@deffn {Procedure} data? obj
+Return @code{#t} if @var{obj} is a data segment.
+@end deffn
+
+@deffn {Procedure} data-id data
+Return the symbolic ID of @var{data}.
+@end deffn
+
+@deffn {Procedure} data-mode data
+Return the mode of @var{data}.
+@end deffn
+
+@deffn {Procedure} data-mem data
+Return the memory associated with @var{data}.
+@end deffn
+
+@deffn {Procedure} data-offset data
+Return the offset of @var{data}.
+@end deffn
+
+@deffn {Procedure} data-init data
+Return a bytevector containing the initialization data of @var{data}.
+@end deffn
+
+
+@subsection Tables
+
+@deffn {Procedure} table? obj
+Return @code{#t} if @var{obj} is a reference table.
+@end deffn
+
+@deffn {Procedure} table-id table
+Return the symbolic ID of @var{table}.
+@end deffn
+
+@deffn {Procedure} table-type table
+Return the type of @var{table}.
+@end deffn
+
+@deffn {Procedure} table-init table
+Return the initial data of @var{table}.
+@end deffn
+
+
+@deffn {Procedure} table-type? obj
+Return @code{#t} if @var{obj} is a table type.
+@end deffn
+
+@deffn {Procedure} table-type-limits table-type
+Return the limts of @var{table-type}.
+@end deffn
+
+@deffn {Procedure} table-type-elem-type table-type
+Return the element type of @var{table-type}.
+@end deffn
+
+
+@deffn {Procedure} elem? obj
+Return @code{#t} if @var{obj} is an element segment.
+@end deffn
+
+@deffn {Procedure} elem-id elem
+Return the symoblic ID of @var{elem}.
+@end deffn
+
+@deffn {Procedure} elem-mode elem
+Return the mode of @var{elem}.
+@end deffn
+
+@deffn {Procedure} elem-table elem
+Return the table associated with @var{elem}.
+@end deffn
+
+@deffn {Procedure} elem-type elem
+Return the type of @var{elem}.
+@end deffn
+
+@deffn {Procedure} elem-offset elem
+Return the offset of @var{elem}.
+@end deffn
+
+@deffn {Procedure} elem-inits elem
+Return the initializer instructions of @var{elem}.
+@end deffn
+
+
+@subsection Other
+
+@deffn {Procedure} tag? obj
+Return @code{#t} if @var{obj} is a tag.
+@end deffn
+
+@deffn {Procedure} tag-id tag
+Return the symbolic ID of @var{tag}.
+@end deffn
+
+@deffn {Procedure} tag-type tag
+Return the type of @var{tag}.
+@end deffn
+
+
+@deffn {Procedure} custom? obj
+Return @code{#t} if @var{obj} is a custom segment.
+@end deffn
+
+@deffn {Procedure} custom-name custom
+Return the name of @var{custom}.
+@end deffn
+
+@deffn {Procedure} custom-bytes custom
+Return the bytes of @var{custom}.
+@end deffn
+
+@node GWAT
+@section GWAT
+
+The @code{(wasm wat)} module provides a parser for a variant of
+WebAssembly Text (WAT) format.  Since the WAT uses an s-expression
+syntax that resembles but is distinct from Scheme syntax, Hoot opts to
+represent WAT code as Scheme expressions.  This allows for embedding
+WAT directly into Scheme code and programmatically generating WAT code
+via quasiquote templating or other means.  We call this variant GWAT
+where the ``G'' stands for ``Guile'', of course.
+
+The GWAT form has some additional expressive power such as allowing
+string constants, bytevectors for data segments, and i32/i64 constants
+in either the signed or unsigned range.
+
+WAT has two variants: unfolded and folded.  In the unfolded form,
+instruction sequences are linear, as they would be in the resulting
+binary:
+
+@lisp
+'(module
+  (func (export "add") (param $a i32) (param $b i32) (result i32)
+        (local.get $a)
+        (local.get $b)
+        (i32.add)))
+@end lisp
+
+The folded form allows instructions to be nested within each other:
+
+@lisp
+'(module
+  (func (export "add") (param $a i32) (param $b i32) (result i32)
+        (i32.add (local.get $a)
+                 (local.get $b))))
+@end lisp
+
+This form looks more like Scheme procedure calls and is generally
+easier to write and reason about.
+
+@deffn {Procedure} wat->wasm expr
+Parse @var{expr}, a WASM module expressed as WAT code, and return a
+WASM module.
+
+@lisp
+(parse-wat
+ '(module
+   (func (export "add") (param $a i32) (param $b i32) (result i32)
+         (i32.add (local.get $a)
+                  (local.get $b)))))
+@end lisp
+
+The return WASM module preserves named references, among other things,
+and is thus unsuitable as input to the assembler or interpreter.  To
+lower the module into a usable form for the assembler, see
+@code{resolve-wasm} in @ref{Resolver}.
+
+@end deffn
+
+@deffn {Procedure} wasm->wat wasm
+Disassemble @var{wasm} and return its symbolic WAT form.
+@end deffn
+
+@node Resolver
+@section Resolver
+
+The @code{(wasm resolve)} module provides the @code{(resolve-wasm)}
+procedure which lowers WASM modules into a form that can be used by
+the assembler or interpreter.  The resolver replaces named references
+with their respective integer index values, fills out the type table,
+and adjusts i32 and i64 constants into their canonical form.
+
+@deffn {Procedure} resolve-wasm mod
+Lower the WASM module @var{mod} into a form that can be assembled or
+interpreted.  Returns a new WASM module and does not modify @var{mod}.
+@end deffn
+
+@node Linker
+@section Linker
+
+The @code{(wasm link)} module provides a means for extending a WASM
+module with the standard library that it needs at runtime.  Hoot uses
+the linker to add the Scheme runtime to the compiled form of user
+code.
+
+@deffn {Procedure} add-stdlib wasm stdlib
+Return a new WASM module that is the combination of the WASM module
+@var{wasm} with the WASM module @var{stdlib}.
+@end deffn
+
+@node Assembler
+@section Assembler
+
+The @code{(wasm assemble)} module is used to lower WASM modules into
+the WASM binary format.
+
+@deffn {Procedure} assemble-wasm wasm
+Return a bytevector containing the assembled binary form of the WASM
+module @var{wasm}.
+@end deffn
+
+@node Binary Parser
+@section Binary Parser
+
+The @code{(wasm parse)} module parses the WASM binary format.
+
+@deffn {Procedure} parse-wasm port
+Parse the WASM binary data from @var{port} and return a WASM module.
+@end deffn
+
+@node Printer
+@section Printer
+
+The @code{(wasm dump)} module provides the @code{dump-wasm} procedure
+for generating a detailed print-out of a WASM module's contents.  See
+also @ref{Development} for the @code{wasm-dump} REPL command.
+
+@deffn {Procedure} dump-wasm mod [#:port] [#:dump-func-defs? #t]
+Write a detailed inventory of the WASM module @var{mod} to @var{port}
+or the current output port if @var{port} is not specified.  If
+@var{dump-func-defs?} is @code{#t}, which is the default, all function
+definitions are printed, including the instructions in the body of
+each.  Depending on the size of the module, this may be an
+overwhelming amount of data, thus it is made optional.
+@end deffn
+
+@node Interpreter
+@section Interpreter
+
+The @code{(wasm vm)} module provides a virtual machine for
+interpreting WASM functions.  To use the interpreter, a WASM module is
+first validated for type safety (among other things) and then
+instantiated, at which point exported functions become callable from
+Scheme.
+
+The interpreter only accepts validated WASM.  The @code{validate-wasm}
+procedure validates and wraps a WASM module to indicate successful
+validation:
+
+@lisp
+(use-modules (wasm vm) (wasm resolve))
+
+(define validated-wasm
+  (validate-wasm
+   (wat->wasm
+    '(module
+      (func (export "main") (result i32)
+            (i32.const 42))))))
+@end lisp
+
+When starting with a WASM binary, the convenient
+@code{load-and-validate-wasm} procedure parses the binary and then
+performs validation:
+
+@lisp
+(call-with-input-file "hello.wasm" load-and-validate-wasm)
+@end lisp
+
+Once the WASM module has been validated, the runtime data needed for
+interpretation can be created by instantiating the module:
+
+@lisp
+(define instance (instantiate-wasm validated-wasm))
+@end lisp
+
+Exported WASM functions then become usable as Scheme procedures:
+
+@lisp
+(define wasm-main (wasm-instance-export-ref instance "main"))
+(wasm-main) ;; => 42
+@end lisp
+
+WASM functions are statically typed, which means that calls from
+Scheme to WASM require runtime type checking for each call.
+
+@subsection Validation
+
+@deffn {Procedure} validate-wasm wasm
+Validate the WASM module @var{wasm} and return a validated WASM
+object.
+@end deffn
+
+@deffn {Procedure} load-and-validate-wasm obj
+Load and validate the WASM module within @var{obj} then return a
+validated WASM object.  @var{obj} may be a @code{<wasm>} record as
+produced by @code{resolve-wasm}(@pxref{Resolver}), a bytevector
+containing a WASM binary, or an input port from which to read a WASM
+binary.
+@end deffn
+
+@deffn {Procedure} validate-wasm? obj
+Return @code{#t} if @var{obj} is a validated WASM object.
+@end deffn
+
+@deffn {Procedure} validated-wasm-ref validated-wasm
+Unbox and return the WASM module within @var{validated-wasm}.
+@end deffn
+
+@subsection Instantiation
+
+@deffn {Procedure} instantiate-wasm wasm [#:imports '()]
+Return a new WASM instance for the validated WASM module @var{wasm}.
+
+@var{imports} is a nested association list of imported functions,
+globals, memories, and tables.  WASM imports are identified by a
+module name and an object name.  Consider the following WASM module
+that computes 2D polar coordinates and prints them to a log:
+
+@lisp
+(use-modules (wasm resolve) (wasm vm) (wasm wat))
+
+(define the-module
+  (resolve-wasm
+   (wat->wasm
+    '(module
+      (func $logf64 (import "debug" "logf64") (param f64))
+      (func $cos (import "math" "cos") (param f64) (result f64))
+      (func $sin (import "math" "sin") (param f64) (result f64))
+      (func (export "polar") (param $r f64) (param $theta f64)
+            (call $logf64 (f64.mul (local.get $r)
+                                   (call $cos (local.get $theta))))
+            (call $logf64 (f64.mul (local.get $r)
+                                   (call $sin (local.get $theta)))))))))
+@end lisp
+
+This module requires three imported functions from two modules.  Thus
+the module instantiation code would look like this:
+
+@lisp
+(define (logf64 x)
+  (format #t "f64: ~a\n" x))
+
+(define the-instance
+  (instantiate-wasm (validate-wasm the-module)
+                    #:imports `(("debug" . (("logf64" . ,logf64)))
+                                ("math" . (("cos" . ,cos)
+                                           ("sin" . ,sin))))))
+@end lisp
+
+@end deffn
+
+@subsection Globals
+
+@deffn {Procedure} make-wasm-global value mutable?
+Return a new WASM global containing @var{value}.  When @var{mutable?}
+is @code{#f}, the value cannot be modified later.
+@end deffn
+
+@deffn {Procedure} wasm-global? obj
+Return @code{#t} if @var{obj} is a WASM global.
+@end deffn
+
+@deffn {Procedure} wasm-global-ref global
+Return the current value within @var{global}.
+@end deffn
+
+@deffn {Procedure} wasm-global-set! global val
+Set the value within @var{global} to @var{val}.  An exception is
+raised if @var{global} is immutable.
+@end deffn
+
+@deffn {Procedure} wasm-global-mutable? global
+Return @code{#t} if @var{global} is mutable.
+@end deffn
+
+@subsection Memories
+
+@deffn {Procedure} make-wasm-memory size [#:limits (make-limits 1 #f)]
+Return a new WASM linear memory containing @var{size} 64KiB pages.
+@var{limits} determines the lower and upper bounds of how many pages
+this memory can store.  The default limits are a minimum of 1 page and
+no maximum page limit.  @xref{Data types} for more information on
+limit objects.
+@end deffn
+
+@deffn {Procedure} wasm-memory? obj
+Return @code{#t} if @var{obj} is a WASM memory.
+@end deffn
+
+@deffn {Procedure} wasm-memory-bytes memory
+Return the current bytevector representing the pages of @var{memory}.
+@end deffn
+
+@deffn {Procedure} wasm-memory-size memory
+Return the size of @var{memory} in 64KiB pages.
+@end deffn
+
+@deffn {Procedure} wasm-memory-limits memory
+Return the limits of @var{memory}
+@end deffn
+
+@deffn {Procedure} wasm-memory-grow! memory n
+Increase the size of @var{memory} by @var{n} pages.  An exception is
+raised if growing by @var{n} exceeds the limits of @var{memory}.
+@end deffn
+
+@subsection Tables
+
+@deffn {Procedure} make-wasm-table size [#:limits (make-limits 1 #f)]
+Return a new WASM reference table containing @var{size} element slots.
+@var{limits} determines the lower and upper bounds of how many
+elements this table can store.  The default limits are a minimum of 1
+element and no maximum element limit.  @xref{Data types} for more
+information on limit objects.
+@end deffn
+
+@deffn {Procedure} wasm-table?
+Return @code{#t} if @var{obj} is a WASM table.
+@end deffn
+
+@deffn {Procedure} wasm-table-size table
+Return the size of @var{table}.
+@end deffn
+
+@deffn {Procedure} wasm-table-ref table i
+Return the reference at the @var{i}th index in @var{table}.
+@end deffn
+
+@deffn {Procedure} wasm-table-set! table i x
+Set the @var{i}th element of @var{table} to @var{x}, a WASM reference
+type.
+@end deffn
+
+@deffn {Procedure} wasm-table-fill! table start fill length
+Fill the elements of @var{table} from @var{start} to @var{start} +
+@var{length}, exclusive, with the value @var{fill}.
+@end deffn
+
+@deffn {Procedure} wasm-table-copy! table at elems start length
+Copy the block of elements from vector @var{elems}, from @var{start}
+to @var{start} + @var{length}, exclusive, to @var{table}, starting at
+@var{at}.
+@end deffn
+
+@deffn {Procedure} wasm-table-grow! table n init
+Increase the size of @var{table} by @var{n} elements.  An exception is
+raised if growing by @var{n} exceeds the limits of @var{table}.
+@end deffn
+
+@subsection Observation
+
+Every WASM instruction evaluated by interpreter can be observed via
+the @code{current-instruction-listener} parameter.  Use this hook to
+instrument WASM modules.
+
+The following instruction listener would print every instruction's
+name on a separate line:
+
+@lisp
+(define (log-instr instr path instance stack blocks locals)
+  (display (car instr))
+  (newline))
+
+(parameterize ((current-instruction-listener log-instr))
+  ...)
+@end lisp
+
+@defvar {Variable} current-instruction-listener
+The current instruction observation hook which is invoked
+@emph{before} each instruction evaluation.  Must be a procedure that
+accepts the following arguments:
+
+@enumerate
+@item @strong{Instruction:}
+The symbolic WASM instruction to be evaluated.
+@item @strong{Path:}
+The symbolic location of the instruction within the WASM module.
+@item @strong{Instance:}
+The instance that is evaluating the instruction.
+@item @strong{Stack:}
+The WASM value stack.
+@item @strong{Blocks:}
+The WASM block stack, which is just a list of prompt tags.
+@item @strong{Locals:}
+The WASM function locals.
+@end enumerate
+
+@end defvar
+
+The WASM value stack is a special data type with the following API:
+
+@deffn {Procedure} wasm-stack? obj
+Return @code{#t} if @var{obj} is a WASM value stack.
+@end deffn
+
+@deffn {Procedure} wasm-stack-items stack
+Return the values on @var{stack} as a list.
+@end deffn
+
+@node Contributing
+@chapter Contributing
+
+Found a bug?  Let us know!  Made an improvement?  Show us!  Issues can
+be filed and pull requests can be submitted on
+@url{https://gitlab.com/spritely/guile-hoot,GitLab}.
+
+@node License
+@chapter License
+
+@emph{(C) 2023 David Thompson}
+
+@emph{Both Guile Hoot and this manual are released under the terms of
+the following license:}
+
+@include apache-2.0.texi
+
+@node Index
+@unnumbered Index
+
+@printindex fn
+
+@bye

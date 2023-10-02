@@ -605,8 +605,8 @@
         ("debug_str_scm" . ,(lambda (x y)
                               (format #t "debug: ~s: ~s\n" x y)))))))
   (define (instantiate wasm imports)
-    (make-wasm-instance (make-wasm-module wasm)
-                        #:imports (append imports debug-imports)))
+    (instantiate-wasm (validate-wasm wasm)
+                      #:imports (append imports debug-imports)))
   ;; You can either pass an existing reflector and import its ABI, or
   ;; pass a parsed reflection WASM module and create a new reflector.
   (if (reflector? reflector)

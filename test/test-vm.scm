@@ -53,7 +53,7 @@
 (define (call-with-wasm-file wasm f)
   (let* ((wasm-port (mkstemp "/tmp/tmp-wasm-XXXXXX"))
          (wasm-file-name (port-filename wasm-port)))
-    (put-bytevector wasm-port wasm)
+    (put-bytevector wasm-port (assemble-wasm wasm))
     (close-port wasm-port)
     (unwind-protect
      (lambda () (f wasm-file-name))
@@ -77,11 +77,10 @@
                     (map (lambda (arg) (format #f "~a" arg)) args))))))
 
 (define (run-wasm-in-vm wasm func args imports)
-  (let* ((module (make-wasm-module wasm))
-         (instance (make-wasm-instance module #:imports imports)))
+  (let ((instance (instantiate-wasm (validate-wasm wasm) #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
-(define (wat->wasm* wat) (assemble-wasm (resolve-wasm (wat->wasm wat))))
+(define (wat->wasm* wat) (resolve-wasm (wat->wasm wat)))
 
 (define (eval-wat wat func args imports d8? d8-read)
   (let* ((wasm (wat->wasm* wat))
@@ -1924,11 +1923,11 @@
                         (i32.add (call $square (local.get $x)) (i32.const 1)))))
          (wasm-a (wat->wasm* wat-a))
          (wasm-b (wat->wasm* wat-b))
-         (inst-a (make-wasm-instance (make-wasm-module wasm-a)))
+         (inst-a (instantiate-wasm (validate-wasm wasm-a)))
          (square (wasm-instance-export-ref inst-a "square"))
-         (inst-b (make-wasm-instance (make-wasm-module wasm-b)
-                                     #:imports `(("wasm" .
-                                                  (("square" . ,square)))))))
+         (inst-b (instantiate-wasm (validate-wasm wasm-b)
+                                   #:imports `(("wasm" .
+                                                (("square" . ,square)))))))
     ((wasm-instance-export-ref inst-b "main") 4)))
 
 (when (and (batch-mode?)

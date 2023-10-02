@@ -20,6 +20,8 @@
 ;;; Code:
 
 (use-modules (wasm assemble)
+             (wasm resolve)
+             (wasm wat)
              (wasm parse)
              (ice-9 binary-ports)
              (srfi srfi-64))
@@ -31,7 +33,7 @@
 
 (define-syntax-rule (test-wat->wasm expected wat)
   (begin
-    (test-equal expected (wat->wasm 'wat))
+    (test-equal expected (assemble-wasm (resolve-wasm (wat->wasm 'wat))))
     (test-equal expected
                 (assemble-wasm (call-with-input-bytevector expected parse-wasm)))))
 
@@ -126,15 +128,15 @@
  (module (type $foo (struct (field $a (mut i32)) (field $b (mut i32))))))
 
 (test-wat->wasm
- #vu8(0 97 115 109 1 0 0 0 1 9 1 79 1 80 0 95 1 127 1)
+ #vu8(0 97 115 109 1 0 0 0 1 7 1 78 1 95 1 127 1)
  (module
   (rec
    (type $heap-object
          (struct (field $hash (mut i32)))))))
 
 (test-wat->wasm
- #vu8(0 97 115 109 1 0 0 0 1 19 1 79 2 80 0 95 1 127 1 80 1 0 95 2 127 1
-        107 111 0)
+ #vu8(0 97 115 109 1 0 0 0 1 17 1 78 2 95 1 127 1 80 1 0 95 2 127 1
+        100 111 0)
  (module
   (rec
    (type $heap-object
@@ -146,8 +148,8 @@
                (field $val (ref extern))))))))
 
 (test-wat->wasm
- #vu8(0 97 115 109 1 0 0 0 1 35 1 79 3 80 0 95 1 127 1 80 1 0 95 3 127 1
-        107 109 1 107 109 1 80 1 1 95 3 127 1 107 109 1 107 109 1)
+ #vu8(0 97 115 109 1 0 0 0 1 33 1 78 3 95 1 127 1 80 1 0 95 3 127 1
+        100 109 1 100 109 1 80 1 1 95 3 127 1 100 109 1 100 109 1)
  (module
   (rec
    (type $heap-object
@@ -182,14 +184,16 @@
 (test-wat->wasm
  #vu8(0 97 115 109 1 0 0 0 1 5 1 96 0 1 127 3 2 1 0 10 14 1 12 0 65 0 4
         127 65 1 5 65 2 11 11)
- '(module
-   (func (result i32)
-         (if i32
-             (i32.const 0)
-             (then (i32.const 1))
-             (else (i32.const 2))))))
+ (module
+  (func (result i32)
+        (if i32
+            (i32.const 0)
+            (then (i32.const 1))
+            (else (i32.const 2))))))
 
-(when (and (batch-mode?) (not (test-passed?)))
+(when (and (batch-mode?)
+           (or (not (zero? (test-runner-fail-count (test-runner-get))))
+               (not (zero? (test-runner-xpass-count (test-runner-get))))))
   (exit 1))
 
 (test-end "test-wasm-assembler")

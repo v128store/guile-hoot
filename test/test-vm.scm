@@ -24,6 +24,8 @@
              (ice-9 popen)
              (ice-9 textual-ports)
              (srfi srfi-64)
+             (wasm wat)
+             (wasm resolve)
              (wasm assemble)
              (wasm vm))
 
@@ -82,8 +84,10 @@
          (instance (make-wasm-instance module #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
+(define (wat->wasm* wat) (assemble-wasm (resolve-wasm (wat->wasm wat))))
+
 (define (eval-wat wat func args imports d8? d8-read)
-  (let* ((wasm (wat->wasm wat))
+  (let* ((wasm (wat->wasm* wat))
          (our-result (run-wasm-in-vm wasm func args imports)))
     (when d8?
       (let ((d8-result (run-wasm-in-d8 wasm func d8-read args)))
@@ -101,7 +105,7 @@
     (eval-wat wat func args imports d8? d8-read)))
 
 (define (eval-wat/error wat func args imports d8? d8-read)
-  (let ((wasm (wat->wasm wat)))
+  (let ((wasm (wat->wasm* wat)))
     (define (handle-error e)
       (if d8?
           (with-exception-handler (lambda (e) #t)
@@ -127,7 +131,7 @@
 
 ;; For temporarily testing something that doesn't work in our VM yet.
 (define (eval-d8 wat func read args)
-  (run-wasm-in-d8 (wat->wasm wat) func read args))
+  (run-wasm-in-d8 (wat->wasm* wat) func read args))
 
 (define* (test-d8 name expected wat #:key (func "main") (args '()) (read read))
   (test-equal name
@@ -1664,7 +1668,7 @@
          '(module
            (type $foo (struct (field $bar (ref eq))))
            (func (export "main") (result i32)
-                 (ref.test $foo (struct.new $foo (i31.new (i32.const 42)))))))
+                 (ref.test $foo (struct.new $foo (ref.i31 (i32.const 42)))))))
 
 (test-vm "ref.test false"
          0
@@ -1686,7 +1690,7 @@
          42
          '(module
            (func (export "main") (result i32)
-                 (i31.new (i32.const 42))
+                 (ref.i31 (i32.const 42))
                  (ref.cast i31)
                  (i31.get_s))))
 
@@ -1706,46 +1710,6 @@
                        (ref.cast i31)
                        (i31.get_s))))
 
-(test-vm "br_on_null true"
-         42
-         '(module
-           (func (export "main") (result i32)
-                 (block $foo (result i32)
-                        (i32.const 42)
-                        (ref.null i31)
-                        (br_on_null $foo)
-                        (unreachable)))))
-
-(test-vm "br_on_null false"
-         42
-         '(module
-           (func (export "main") (result i32)
-                 (block $foo (result i32)
-                        (i32.const 42)
-                        (i31.new (i32.const 42))
-                        (br_on_null $foo)
-                        (drop)))))
-
-(test-vm "br_on_non_null true"
-         42
-         '(module
-           (func (export "main") (result i32)
-                 (block $foo (result (ref i31))
-                        (i31.new (i32.const 42))
-                        (br_on_non_null $foo)
-                        (unreachable))
-                 (i31.get_s))))
-
-(test-vm "br_on_non_null false"
-         42
-         '(module
-           (func (export "main") (result i32)
-                 (block $foo (result (ref i31))
-                        (ref.null i31)
-                        (br_on_non_null $foo)
-                        (i31.new (i32.const 42)))
-                 (i31.get_s))))
-
 (test-vm "external reference passthrough"
          '(opaque to wasm)
          '(module
@@ -1758,13 +1722,13 @@
          -42
          '(module
            (func (export "main") (result i32)
-                 (i31.get_s (i31.new (i32.const -42))))))
+                 (i31.get_s (ref.i31 (i32.const -42))))))
 
 (test-vm "i31.get_u"
          2147483606
          '(module
            (func (export "main") (result i32)
-                 (i31.get_u (i31.new (i32.const -42))))))
+                 (i31.get_u (ref.i31 (i32.const -42))))))
 
 (test-vm "struct.get"
          5.0
@@ -1806,8 +1770,9 @@
          42
          '(module
            (type $heap-object
-                 (struct
-                  (field $hash (mut i32))))
+                 (sub
+                  (struct
+                   (field $hash (mut i32)))))
            (type $pair
                  (sub $heap-object
                       (struct
@@ -1816,8 +1781,8 @@
                        (field $cdr (mut (ref eq))))))
            (func (export "main") (result i32) (local $a (ref $pair))
                  (local.set $a (struct.new $pair (i32.const 1)
-                                           (i31.new (i32.const 21))
-                                           (i31.new (i32.const 21))))
+                                           (ref.i31 (i32.const 21))
+                                           (ref.i31 (i32.const 21))))
                  (i32.add (i31.get_s (ref.cast i31 (struct.get $pair $car (local.get $a))))
                           (i31.get_s (ref.cast i31 (struct.get $pair $cdr (local.get $a))))))))
 
@@ -1960,8 +1925,8 @@
                   (func $square (import "wasm" "square") (param i32) (result i32))
                   (func (export "main") (param $x i32) (result i32)
                         (i32.add (call $square (local.get $x)) (i32.const 1)))))
-         (wasm-a (wat->wasm wat-a))
-         (wasm-b (wat->wasm wat-b))
+         (wasm-a (wat->wasm* wat-a))
+         (wasm-b (wat->wasm* wat-b))
          (inst-a (make-wasm-instance (make-wasm-module wasm-a)))
          (square (wasm-instance-export-ref inst-a "square"))
          (inst-b (make-wasm-instance (make-wasm-module wasm-b)

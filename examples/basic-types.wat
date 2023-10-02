@@ -9,8 +9,9 @@
 
   (rec
     (type $heap-object
-      (struct
-        (field $hash (mut i32))))
+      (sub
+        (struct
+          (field $hash (mut i32)))))
 
     (type $extern-ref
       (sub $heap-object
@@ -235,11 +236,11 @@
         (field $tail (ref $raw-scmvector)))))
 
   ;; $arg0, $arg1, $arg2: function parameters
-  (global $arg3 (mut (ref eq)) (i31.new (i32.const 0)))
-  (global $arg4 (mut (ref eq)) (i31.new (i32.const 0)))
-  (global $arg5 (mut (ref eq)) (i31.new (i32.const 0)))
-  (global $arg6 (mut (ref eq)) (i31.new (i32.const 0)))
-  (global $arg7 (mut (ref eq)) (i31.new (i32.const 0)))
+  (global $arg3 (mut (ref eq)) (ref.i31 (i32.const 0)))
+  (global $arg4 (mut (ref eq)) (ref.i31 (i32.const 0)))
+  (global $arg5 (mut (ref eq)) (ref.i31 (i32.const 0)))
+  (global $arg6 (mut (ref eq)) (ref.i31 (i32.const 0)))
+  (global $arg7 (mut (ref eq)) (ref.i31 (i32.const 0)))
   ;; FIXME: Probably we should have non-nullable types here but binaryen
   ;; doesn't support it.
   (table $argv 0 (ref null eq))
@@ -285,13 +286,13 @@
     (call $%make-vtable
           (local.get $vt)
           ;; field 0: flags: fixnum
-          (i31.new (i32.shl (local.get $flags) (i32.const 1)))
+          (ref.i31 (i32.shl (local.get $flags) (i32.const 1)))
           ;; field 1: nfields: fixnum
-          (i31.new (i32.shl (local.get $nfields) (i32.const 1)))                
+          (ref.i31 (i32.shl (local.get $nfields) (i32.const 1)))
           ;; field 2: name: #f
-          (i31.new (i32.const 1))
+          (ref.i31 (i32.const 1))
           ;; field 3: print: #f
-          (i31.new (i32.const 1))))
+          (ref.i31 (i32.const 1))))
 
   (global $root-vtable (mut (ref null $vtable)) (ref.null $vtable))
   
@@ -467,22 +468,22 @@
       (br_if $Lbignum (i64.gt_u (i64.add (i64.const 536870912)
                                          (local.get $tmp))
                                 (i64.const 1073741824)))
-      (br 1 (i31.new (i32.wrap_i64 (local.get $tmp)))))
+      (br 1 (ref.i31 (i32.wrap_i64 (local.get $tmp)))))
     (struct.new $bignum (i32.const 0) (local.get $v)))
   (func $scm-false (export "scm_false") (result (ref i31))
-    (i31.new (i32.const 1)))
+    (ref.i31 (i32.const 1)))
   (func $scm-nil (export "scm_nil") (result (ref i31))
-    (i31.new (i32.const 5)))
+    (ref.i31 (i32.const 5)))
   (func $scm-null (export "scm_null") (result (ref i31))
-    (i31.new (i32.const 13)))
+    (ref.i31 (i32.const 13)))
   (func $scm-true (export "scm_true") (result (ref i31))
-    (i31.new (i32.const 17)))
+    (ref.i31 (i32.const 17)))
   (func $scm-unspecified (export "scm_unspecified") (result (ref i31))
-    (i31.new (i32.const 33)))
+    (ref.i31 (i32.const 33)))
   (func $scm-eof (export "scm_eof") (result (ref i31))
-    (i31.new (i32.const 41)))
+    (ref.i31 (i32.const 41)))
   (func $scm-from-char (export "scm_from_char") (param $ch i32) (result (ref i31))
-    (i31.new (i32.and (i32.const 3)
+    (ref.i31 (i32.and (i32.const 3)
                       (i32.shl (local.get $ch) (i32.const 2)))))
   (func $scm-from-fraction (export "scm_from_fraction") (param (ref eq) (ref eq)) (result (ref $fraction))
     ;; FIXME: check types.
@@ -627,7 +628,7 @@
   (func $%make-hash-table (result (ref $hash-table))
     (struct.new $hash-table (i32.const 0) (i32.const 0)
                 (array.new $raw-scmvector
-                           (i31.new (i32.const 13)) (i32.const 47))))
+                           (ref.i31 (i32.const 13)) (i32.const 47))))
   (func $%hashq-lookup (param $tab (ref $hash-table)) (param $k (ref eq))
         (result (ref null $pair))
     (local $idx i32)
@@ -737,9 +738,9 @@
                 (i32.add (local.get $pos) (local.get $count)))
     (return_call_ref $kvarargs
                      (i32.const 1) ;; nargs
-                     (i31.new (local.get $count))
-                     (i31.new (i32.const 0)) ;; filler
-                     (i31.new (i32.const 0)) ;; filler
+                     (ref.i31 (local.get $count))
+                     (ref.i31 (i32.const 0)) ;; filler
+                     (ref.i31 (i32.const 0)) ;; filler
                      (call $pop-return)))
   (func $string-input-port-seek (param $nargs i32)
         (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -802,51 +803,51 @@
                 (struct.new $string-input-port-stream
                             (local.get $wtf8)
                             (i32.const 0))
-                (i31.new (i32.const 1)) ;; file_name
+                (ref.i31 (i32.const 1)) ;; file_name
                 ;; position: (cons 0 0)
                 (struct.new $mutable-pair (i32.const 0)
-                            (i31.new (i32.const 0)) (i31.new (i32.const 0)))
-                (i31.new (i32.const 1)) ;; read buf: #f
-                (i31.new (i32.const 1)) ;; write buf: #f
-                (i31.new (i32.const 1)) ;; write buf aux: #f
+                            (ref.i31 (i32.const 0)) (ref.i31 (i32.const 0)))
+                (ref.i31 (i32.const 1)) ;; read buf: #f
+                (ref.i31 (i32.const 1)) ;; write buf: #f
+                (ref.i31 (i32.const 1)) ;; write buf aux: #f
                 (i32.const 0) ;; read-buffering
                 (i32.const 0) ;; refcount
                 (i32.const 0) ;; rw_random ?
-                (i31.new (i32.const 13)) ;; properties: ()
+                (ref.i31 (i32.const 13)) ;; properties: ()
                 ))
 
   (func $main (param $nargs i32)
         (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     ;; Fixnum: 1.
-    (local.set $arg0 (i31.new (i32.const 2)))
+    (local.set $arg0 (ref.i31 (i32.const 2)))
     ;; Char: 1.
-    (local.set $arg1 (i31.new (i32.const 7)))
+    (local.set $arg1 (ref.i31 (i32.const 7)))
     ;; False.
-    (local.set $arg2 (i31.new (i32.const 1)))
+    (local.set $arg2 (ref.i31 (i32.const 1)))
     ;; Null.
-    (global.set $arg3 (i31.new (i32.const 13)))
+    (global.set $arg3 (ref.i31 (i32.const 13)))
     ;; True.
-    (global.set $arg4 (i31.new (i32.const 17)))
+    (global.set $arg4 (ref.i31 (i32.const 17)))
     ;; Unspecified.
-    (global.set $arg5 (i31.new (i32.const 33)))
+    (global.set $arg5 (ref.i31 (i32.const 33)))
     ;; EOF.
-    (global.set $arg6 (i31.new (i32.const 41)))
+    (global.set $arg6 (ref.i31 (i32.const 41)))
     ;; '(1 . 2)
     (global.set $arg7
                 (struct.new $pair (i32.const 0)
-                            (i31.new (i32.const 2)) (i31.new (i32.const 4))))
+                            (ref.i31 (i32.const 2)) (ref.i31 (i32.const 4))))
     ;; (cons 1 2)
     (table.set $argv (i32.const 0)
                (struct.new $mutable-pair (i32.const 0)
-                           (i31.new (i32.const 2)) (i31.new (i32.const 4))))
+                           (ref.i31 (i32.const 2)) (ref.i31 (i32.const 4))))
     ;; #(#f #f #f)
     (table.set $argv (i32.const 1)
                (struct.new $vector (i32.const 0)
-                           (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
+                           (array.new $raw-scmvector (ref.i31 (i32.const 1)) (i32.const 3))))
     ;; (vector #f #f #f)
     (table.set $argv (i32.const 2)
                (struct.new $mutable-vector (i32.const 0)
-                           (array.new $raw-scmvector (i31.new (i32.const 1)) (i32.const 3))))
+                           (array.new $raw-scmvector (ref.i31 (i32.const 1)) (i32.const 3))))
     ;; #vu8(0 0 0 0 0)
     (table.set $argv (i32.const 3)
                (struct.new $bytevector (i32.const 0)
@@ -885,10 +886,10 @@
                      (call $string-to-symbol (string.const "my-symbol"))))
     ;; (make-variable #f)
     (table.set $argv (i32.const 12)
-               (struct.new $variable (i32.const 17) (i31.new (i32.const 1))))
+               (struct.new $variable (i32.const 17) (ref.i31 (i32.const 1))))
     ;; (make-atomic-box #f)
     (table.set $argv (i32.const 13)
-               (struct.new $atomic-box (i32.const 18) (i31.new (i32.const 1))))
+               (struct.new $atomic-box (i32.const 18) (ref.i31 (i32.const 1))))
     ;; (make-hash-table)
     (table.set $argv (i32.const 14)
                (call $%make-hash-table))
@@ -904,7 +905,7 @@
                            (i32.const 1)
                            ;; one field
                            (i32.const 1))
-                     (i31.new (i32.const 1))))
+                     (ref.i31 (i32.const 1))))
     ;; 42.69
     (table.set $argv (i32.const 17)
                (struct.new $flonum (i32.const 0) (f64.const 42.69)))
@@ -920,11 +921,11 @@
     ;; 14/23
     (table.set $argv (i32.const 20)
                (struct.new $fraction (i32.const 0)
-                           (i31.new (i32.const 28))
-                           (i31.new (i32.const 46))))
+                           (ref.i31 (i32.const 28))
+                           (ref.i31 (i32.const 46))))
     ;; (make-fluid #f)
     (table.set $argv (i32.const 21)
-               (struct.new $fluid (i32.const 0) (i31.new (i32.const 1))))
+               (struct.new $fluid (i32.const 0) (ref.i31 (i32.const 1))))
     ;; (current-dynamic-state)
     (table.set $argv (i32.const 22)
                (struct.new $dynamic-state (i32.const 0)
@@ -932,12 +933,12 @@
     ;; (datum->syntax #f '() #:source #f)
     (table.set $argv (i32.const 23)
                (struct.new $syntax (i32.const 0)
-                           (i31.new (i32.const 13)) ;; datum: ()
+                           (ref.i31 (i32.const 13)) ;; datum: ()
                            (struct.new $pair (i32.const 0)
-                                       (i31.new (i32.const 13))
-                                       (i31.new (i32.const 13))) ;; wrap: empty-wrap: (())
-                           (i31.new (i32.const 1)) ;; module: #f
-                           (i31.new (i32.const 1)) ;; source: #f
+                                       (ref.i31 (i32.const 13))
+                                       (ref.i31 (i32.const 13))) ;; wrap: empty-wrap: (())
+                           (ref.i31 (i32.const 1)) ;; module: #f
+                           (ref.i31 (i32.const 1)) ;; source: #f
                            ))
     ;; (current-input-port)
     (table.set $argv (i32.const 24)
@@ -997,9 +998,9 @@
     (local $arg1 (ref eq))
     (local $arg2 (ref eq))
     (local $i i32)
-    (local.set $arg0 (i31.new (i32.const 0)))
-    (local.set $arg1 (i31.new (i32.const 0)))
-    (local.set $arg2 (i31.new (i32.const 0)))
+    (local.set $arg0 (ref.i31 (i32.const 0)))
+    (local.set $arg1 (ref.i31 (i32.const 0)))
+    (local.set $arg2 (ref.i31 (i32.const 0)))
     (block $nargs0
       (block $nargs1
         (block $nargs2

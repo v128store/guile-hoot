@@ -37,7 +37,7 @@
         (base32 "1jm7janpfbibgqnwycr0g5jpf6lzghyccdibpmy5fbp63s2z726f")))))))
 
 (define gn
-  (let ((commit "1de45d1a11cc9f8cb5c75a031386151e1c384847")
+  (let ((commit "991530ce394efb58fcd848195469022fa17ae126")
         (revision "1"))
     (package
       (name "gn")
@@ -50,7 +50,7 @@
                (commit commit)))
          (file-name (git-file-name name version))
          (sha256
-          (base32 "12bcpmgxyb3i6qvr7ipw9dfhvbj5dllg8r2gm9ahkgh4zlf40jfk"))))
+          (base32 "1zpbaspb2mncbsabps8n1iwzc67nhr79ndc9dnqxx1w1qfvaldg2"))))
       (build-system gnu-build-system)
       (arguments
        (list #:tests? #f
@@ -105,28 +105,28 @@
 ;; Based on the dependencies listed in the DEPS file in the v8 repo.
 (define-chromium-origin depot-tools
   "chromium/tools/depot_tools"
-  "e5277508c83c3dd1596504daf64b6ea8fe7d2dd1"
-  "18bbb9dgjxvmab9v7rl9cnh4prig69n3c68kb4c1a332ll5m7k7s")
+  "4c1d6d90bc4326377ce670b74735029db9acde6a"
+  "1ydr05wdc52brzvpmj5gyyxf18fqiw7yfw691ia1c49b48a77y1p")
 
 (define-chromium-origin buildtools
   "chromium/src/buildtools"
-  "1cc82962cb50a35f6008b25a165782c568edac27"
-  "1lvacf9rfqjwx8h5dqz0w8y1vl4d66ws5v887a93dhrlhp7li1s6")
+  "ece39eb658cb3e839b5b63d5e311d72252047969"
+  "190kb66r1pcl7m2ha89irv06ls17y3fw0jfz3bdgfrvbbsrgx71m")
 
 (define-chromium-origin chromium-build
   "chromium/src/build"
-  "143d726c8ef21c30bc50ec4436a4d10aca156f4c"
-  "17a255dpgxm3b0qgjkbylgbb75qsfhnp4c1ik7fw85ifr89mm2d1")
+  "1f9a9ca7591f832a64ca2433efaf3d6f4ea4c0ec"
+  "0950v5an04c223ld4l5pfw5wlrmmwcdgghr6nnq9acyb1g7585vh")
 
 (define-chromium-origin icu
   "chromium/deps/icu"
-  "e8c3bc9ea97d4423ad0515e5f1c064f486dae8b1"
-  "0h6lw8gv6yfashza969y6g3m3cbg3wm7g7hqf3z65rcqdvms5xa8")
+  "985b9a6f70e13f3db741fed121e4dcc3046ad494"
+  "13rzzajqc4q1w4v9w7jx8bsmcbklngv7sa2lk2vcf22lvigkpnp9")
 
 (define-chromium-origin zlib
   "chromium/src/third_party/zlib"
-  "7eff33bc00be3e2ddb55a94991689fad9dcbe85d"
-  "01qssvqgls1plyfpr4775fkrm0jmsjw8ywqr8cf6mi2aw804m84i")
+  "3f0af7f1d5ca6bb9d247f40b861346627c3032a1"
+  "0m4spq3670mkjsm9yl3ysz63zd1gqjd2dyzxd3l35nb03y1pr2jk")
 
 (define-chromium-origin googletest
   "external/github.com/google/googletest"
@@ -135,8 +135,8 @@
 
 (define-chromium-origin trace-event
   "chromium/src/base/trace_event/common"
-  "147f65333c38ddd1ebf554e89965c243c8ce50b3"
-  "0vhm9894gjfwn5jsbcql8f6di5w3hzh7rd1j5fysg72lcwj14jas")
+  "29ac73db520575590c3aceb0a6f1f58dda8934f6"
+  "1c25i8gyz3z36gp192g3cshaj6rd6yxi6m7j8mhw7spaarprzq12")
 
 (define-chromium-origin jinja2
   "chromium/src/third_party/jinja2"
@@ -150,8 +150,8 @@
 
 (define-chromium-origin abseil-cpp
   "chromium/src/third_party/abseil-cpp"
-  "ae5ee2a38fc234109fb54e3845e6b427667406b8"
-  "1f4qmcqj9s9hz4i2kpxfnq6lg4dq2l9v5r1bbpfavsfialg0i7j0")
+  "7207ed23d56aa19796ffd08b8203f7af7f3b5f29"
+  "1db5mh7j0im0wkn3hppq8zipr35lyx97h88xcj1n9kfkm1rwhd2l")
 
 ;; V8 uses the gold linker, so we need to wrap it in order for the
 ;; Guix runpath magic to work.
@@ -161,7 +161,7 @@
                    #:linker "ld.gold"))
 
 (define v8
-  (let ((commit "b04b184405b8f1989f15844105cfacf0500817a8")
+  (let ((commit "155ea5ca7e6e04c6126cbc6e52183c3f24ba697e")
         (revision "1"))
     (package
       (name "v8")
@@ -174,7 +174,7 @@
                (commit commit)))
          (file-name (git-file-name name version))
          (sha256
-          (base32 "1zvp8kzpbsg6x7lwgc0xyx6vd5dswkjp5f0g0wlahfp5f8ia6bcn"))))
+          (base32 "1sw8sb48cajamkzn86q0i4r0dvv10pxn15s4r79q0jsmzq7z4sag"))))
       (build-system gnu-build-system)
       (arguments
        (list #:tests? #f

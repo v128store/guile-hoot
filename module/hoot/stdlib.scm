@@ -62,7 +62,7 @@
   (define maybe-init-i31-zero
     (if import-abi?
         '()
-        '((i31.new (i32.const 0)))))
+        '((ref.i31 (i32.const 0)))))
   (define maybe-init-i32-zero
     (if import-abi?
         '()
@@ -72,7 +72,7 @@
         '()
         '((struct.new $hash-table (i32.const 0)
                       (i32.const 0)
-                      (array.new $raw-scmvector (i31.new (i32.const 13))
+                      (array.new $raw-scmvector (ref.i31 (i32.const 13))
                                  (i32.const 47))))))
 
   (wat->wasm
@@ -88,8 +88,9 @@
 
      (rec
       (type $heap-object
-            (struct
-             (field $hash (mut i32))))
+            (sub
+             (struct
+              (field $hash (mut i32)))))
 
       (type $extern-ref
             (sub $heap-object
@@ -275,7 +276,7 @@
                (field $fluid (ref $fluid))
                (field $convert (ref $proc)))))
 
-      (type $dyn (struct))
+      (type $dyn (sub (struct)))
       (type $dynwind
             (sub $dyn
               (struct
@@ -328,8 +329,8 @@
            (struct.new $simple-exception (i32.const 0)
                        (array.new_fixed $raw-scmvector 4
                                         (local.get $key)
-                                        (i31.new (i32.const 1))
-                                        (i31.new (i32.const 1))
+                                        (ref.i31 (i32.const 1))
+                                        (ref.i31 (i32.const 1))
                                         (local.get $args))))
      (func $make-throw/value-exn
            (param $key (ref $symbol))
@@ -349,7 +350,7 @@
                             (i32.const 2)
                             (global.get $raise-exception)
                             (local.get $exn)
-                            (i31.new (i32.const 1))
+                            (ref.i31 (i32.const 1))
                             (struct.get $proc $func (global.get $raise-exception))))
 
      (func $bignum-from-i32 (import "rt" "bignum_from_i32")
@@ -586,7 +587,7 @@
            (param (ref string) (ref eq)))
 
      (func $die0 (param $reason (ref string))
-           (call $die (local.get 0) (i31.new (i32.const 1))))
+           (call $die (local.get 0) (ref.i31 (i32.const 1))))
 
      ;; Thomas Wang's integer hasher, from
      ;; http://www.cris.com/~Ttwang/tech/inthash.htm.
@@ -694,7 +695,7 @@
            ;; Grow as in $grow-raw-stack.
            (if (i32.eq
                 (table.grow $scm-stack
-                            (i31.new (i32.const 0))
+                            (ref.i31 (i32.const 0))
                             (i32.or (i32.shr_u (table.size $scm-stack)
                                                (i32.const 1))
                                     (i32.sub (global.get $scm-sp)
@@ -752,7 +753,7 @@
            (param $npositional i32)
            (result (ref eq))
            (local $ret (ref eq))
-           (local.set $ret (i31.new (i32.const 13))) ;; null
+           (local.set $ret (ref.i31 (i32.const 13))) ;; null
            (block
             $done
             (block
@@ -868,7 +869,7 @@
      (func $make-hash-table (result (ref $hash-table))
            (struct.new $hash-table (i32.const 0) (i32.const 0)
                        (array.new $raw-scmvector
-                                  (i31.new (i32.const 13)) (i32.const 47))))
+                                  (ref.i31 (i32.const 13)) (i32.const 47))))
 
      (func $hashq-lookup (param $tab (ref $hash-table)) (param $k (ref eq))
            (result (ref null $pair))
@@ -952,7 +953,7 @@
      (func $hashq-set! (param $tab (ref $hash-table)) (param $k (ref eq))
            (param $v (ref eq))
            (call $hashq-update (local.get $tab) (local.get $k)
-                 (local.get $v) (i31.new (i32.const 0)))
+                 (local.get $v) (ref.i31 (i32.const 0)))
            (drop))
 
      (func $push-dyn (param $dyn (ref $dyn))
@@ -1043,7 +1044,7 @@
                         (struct.get
                          $dynfluid $val
                          (ref.cast $dynfluid (local.get $dyn)))))
-                      (else (return (i31.new (i32.const 1)))))))
+                      (else (return (ref.i31 (i32.const 1)))))))
                (else (return_call $fluid-ref (local.get $fluid))))
            (unreachable))
 
@@ -1139,8 +1140,8 @@
                                     (i32.const 1)
                                     (struct.get $dynwind $wind
                                                 (local.get $dynwind))
-                                    (i31.new (i32.const 0))
-                                    (i31.new (i32.const 0))
+                                    (ref.i31 (i32.const 0))
+                                    (ref.i31 (i32.const 0))
                                     (struct.get
                                      $proc $func
                                      (struct.get $dynwind $wind
@@ -1312,7 +1313,7 @@
            (local.set $len (i32.sub (global.get $scm-sp) (local.get $base-sp)))
            (local.set $v
                       (array.new $raw-scmvector
-                                 (i31.new (i32.const 1))
+                                 (ref.i31 (i32.const 1))
                                  (local.get $len)))
            (loop $lp
              (if (i32.lt_u (local.get $i) (local.get $len))
@@ -1381,7 +1382,7 @@
            (result (ref eq))
            (if (result (ref eq))
                (struct.get_u $dynprompt $unwind-only? (local.get $prompt))
-               (then (i31.new (i32.const 1)))
+               (then (ref.i31 (i32.const 1)))
                (else
                 (struct.new
                  $cont
@@ -1527,8 +1528,8 @@
                                    (i32.const 1)
                                    (struct.get $dynwind $unwind
                                                (local.get $dynwind))
-                                   (i31.new (i32.const 0))
-                                   (i31.new (i32.const 0))
+                                   (ref.i31 (i32.const 0))
+                                   (ref.i31 (i32.const 0))
                                    (struct.get
                                     $proc $func
                                     (struct.get $dynwind $unwind
@@ -1742,7 +1743,7 @@
                 (else (local.set $nargs (i32.const 3)))))
               (else (local.set $nargs (i32.const 2)))))
             (else (local.set $nargs (i32.const 1))))
-           (if (i32.eqz (ref.eq (local.get $args) (i31.new (i32.const 13))))
+           (if (i32.eqz (ref.eq (local.get $args) (ref.i31 (i32.const 13))))
                (then (return_call $apply-to-non-list (local.get $args))))
            (return_call_ref $kvarargs
                             (local.get $nargs)
@@ -2105,7 +2106,7 @@
            (struct.get $flonum $val (local.get $a)))
 
      (func $i32->fixnum (param $a i32) (result (ref i31))
-           (i31.new (i32.shl (local.get $a) (i32.const 1))))
+           (ref.i31 (i32.shl (local.get $a) (i32.const 1))))
 
      (func $i32->bignum (param $a i32) (result (ref eq))
            (struct.new $bignum
@@ -2221,7 +2222,7 @@
                                             (local.get $a64))
                                   (i64.le_s (local.get $a64)
                                             (i64.const #x1FFFFFFF)))
-                         (then (i31.new
+                         (then (ref.i31
                                 (i32.shl
                                  (i32.wrap_i64 (local.get $a64))
                                  (i32.const 1))))
@@ -2231,7 +2232,7 @@
      (func $normalize-fraction (param $a (ref $fraction)) (result (ref eq))
            (if (call $numeric-eqv?
                      (struct.get $fraction $denom (local.get $a))
-                     (i31.new (i32.const 0)))
+                     (ref.i31 (i32.const 0)))
                (then (call $die
                            (string.const "division-by-zero")
                            (local.get $a))))
@@ -2248,7 +2249,7 @@
            (if (ref eq)
                (call $numeric-eqv?
                      (struct.get $fraction $denom (local.get $a))
-                     (i31.new (i32.const #b10)))
+                     (ref.i31 (i32.const #b10)))
                (then (struct.get $fraction $num (local.get $a)))
                (else (local.get $a))))
 
@@ -2338,7 +2339,7 @@
                (i32.or (i32.eqz (local.get $d))
                        (i32.eq (local.get $d)
                                (i32.const #b111)))
-               (then (i31.new (local.get $c)))
+               (then (ref.i31 (local.get $c)))
                (else (call $i32->bignum (i32.shr_s (local.get $c) (i32.const 1))))))
      (func $fixnum-sub (param $a i32) (param $b i32) (result (ref eq))
            (local $c i32)
@@ -2349,7 +2350,7 @@
                (i32.or (i32.eqz (local.get $d))
                        (i32.eq (local.get $d)
                                (i32.const #b111)))
-               (then (i31.new (local.get $c)))
+               (then (ref.i31 (local.get $c)))
                (else (call $i32->bignum (i32.shr_s (local.get $c) (i32.const 1))))))
      (func $fixnum-mul (param $a32 i32) (param $b32 i32) (result (ref eq))
            (local $a i64)
@@ -2366,7 +2367,7 @@
                ;; [2^30-1, 2^30].
                (i32.and (i64.ge_s (local.get $c) (i64.const #x-40000000))
                         (i64.le_s (local.get $c) (i64.const #x03FFFFFFF)))
-               (then (i31.new (i32.wrap_i64 (local.get $c))))
+               (then (ref.i31 (i32.wrap_i64 (local.get $c))))
                (else
                 (call $normalize-bignum
                       (struct.new $bignum
@@ -3044,7 +3045,7 @@
                    (i31.get_s (ref.cast i31 (local.get $b))) (i32.const 1) (i32.shr_s)
                    (i32.div_s)
                    (i32.const 1) (i32.shl)
-                   (i31.new))
+                   (ref.i31))
                  '((ref.test $bignum (local.get $b))
                    (return (call $normalize-bignum
                                  (call $bignum-quo*
@@ -3680,7 +3681,7 @@
            (if (result (ref eq))
                (i32.and (i64.ge_s (local.get $a) (i64.const ,(ash -1 29)))
                         (i64.lt_s (local.get $a) (i64.const ,(ash 1 29))))
-               (then (i31.new
+               (then (ref.i31
                       (i32.shl (i32.wrap_i64 (local.get $a))
                                (i32.const 1))))
                (else (return_call $s64->bignum (local.get $a)))))
@@ -3707,8 +3708,8 @@
            (return_call_ref $kvarargs
                             (i32.const 1)
                             (local.get $prev)
-                            (i31.new (i32.const 1))
-                            (i31.new (i32.const 1))
+                            (ref.i31 (i32.const 1))
+                            (ref.i31 (i32.const 1))
                             (table.get $ret-stack (global.get $ret-sp))))
      (func $parameter (param $nargs i32) (param $arg0 (ref eq))
            (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -3723,8 +3724,8 @@
                                  (call $fluid-ref
                                        (struct.get $parameter $fluid
                                                    (local.get $parameter)))
-                                 (i31.new (i32.const 1))
-                                 (i31.new (i32.const 1))
+                                 (ref.i31 (i32.const 1))
+                                 (ref.i31 (i32.const 1))
                                  (table.get $ret-stack (global.get $ret-sp)))))
            (if (i32.ne (local.get $nargs) (i32.const 2))
                (then
@@ -3746,7 +3747,7 @@
                             (struct.get $parameter $convert
                                         (local.get $parameter))
                             (local.get $arg1)
-                            (i31.new (i32.const 1))
+                            (ref.i31 (i32.const 1))
                             (struct.get $proc $func
                                         (struct.get $parameter $convert
                                                     (local.get $parameter)))))

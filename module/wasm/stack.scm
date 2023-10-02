@@ -207,7 +207,7 @@
 
 (define (lookup-func-sig ctx def)
   (match (lookup-type ctx def)
-    (($ <sub-type> _ (and sig ($ <func-sig>))) sig)
+    (($ <sub-type> _ _ (and sig ($ <func-sig>))) sig)
     ((and sig ($ <func-sig>)) sig)
     (x (error "unexpected type" def x))))
 
@@ -224,7 +224,7 @@
 
 (define (lookup-array-type ctx def)
   (match (lookup-type ctx def)
-    (($ <sub-type> _ ($ <array-type> mutable? type)) type)
+    (($ <sub-type> _ _ ($ <array-type> mutable? type)) type)
     (($ <array-type> mutable? type) type)))
 
 (define (lookup-return-type ctx)
@@ -513,6 +513,8 @@
           ((ht)
            (-> '() (list (make-ref-type #t ht))))))
        ((or 'ref.is_null 'ref.test)
+        ;; FIXME: ref.is_null only valid on ref types
+        ;; FIXME: ref.test only valid if tested type matches top
         (-> (list (peek ctx)) '(i32)))
        ('ref.eq
         (-> (list (make-ref-type #t 'eq) (make-ref-type #t 'eq)) '(i32)))
@@ -529,29 +531,12 @@
                (list (make-ref-type #f ht))))))
        ('ref.cast
         (match args
-          ((_ ht)
+          ((($ <ref-type> nullable? ht))
            (match (peek ctx)
-             ((and top ($ <ref-type> nullable? ht*))
-              (-> (list top) (list (make-ref-type #f ht))))))))
-       ('br_on_null
-        (match args
-          ((target)
-           (let ((types (branch-arg-types target)))
-             (match (peek ctx)
-               ((and top ($ <ref-type> nullable? ht))
-                (-> (append types (list top))
-                    (append types (list (make-ref-type #f ht))))))))))
-       ('br_on_non_null
-        (match args
-          ((target)
-           (let ((top (peek ctx)))
-             (match (branch-arg-types target)
-               ((types* ... _)
-                (-> (append types* (list top))
-                    types*)))))))
+             ((and top ($ <ref-type> nullable?* ht*))
+              ;; FIXME: assert that (nullable?,ht) <= (nullable?*,ht*)
+              (-> (list top) (list (make-ref-type nullable? ht))))))))
        ((or 'br_on_cast 'br_on_cast_fail)
-        ;; FIXME: The rest of the Hoot wasm toolchain needs to switch
-        ;; to the two-type form of br_on_cast / br_on_cast_fail
         (match args
           ((target rt1 rt2)
            (let ((types (branch-arg-types target)))
@@ -626,10 +611,14 @@
            (-> '(i32) (list (make-ref-type #f ht))))))
        ((or 'array.new_data 'array.new_elem)
         (match args
-          ((ht)
+          ((ht idx)
            (-> '(i32 i32) (list (make-ref-type #f ht))))))
+       ((or 'array.init_data 'array.init_elem)
+        (match args
+          ((ht idx)
+           (-> (list (make-ref-type #t ht) 'i32 'i32 'i32) '()))))
 
-       ('i31.new
+       ('ref.i31
         (-> '(i32) (list (make-ref-type #f 'i31))))
        ((or 'i31.get_s 'i31.get_u)
         (-> (list (make-ref-type #f 'i31)) '(i32)))

@@ -114,7 +114,7 @@
   (%inline-wasm
    '(func (param $bv (ref eq))
           (result (ref eq))
-          (i31.new
+          (ref.i31
            (i32.shl (struct.get $bitvector $len
                                 (ref.cast $bitvector (local.get $bv)))
                     (i32.const 1))))
@@ -137,8 +137,8 @@
                (i32.shl (i32.const 1)
                         (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
                                    (i32.const 1))))
-              (then (i31.new (i32.const 17)))
-              (else (i31.new (i32.const 1)))))
+              (then (ref.i31 (i32.const 17)))
+              (else (ref.i31 (i32.const 1)))))
    bv i))
 ;; bitvector-set!, list->bitvector etc not yet implemented
 
@@ -207,8 +207,8 @@
                 '(func (param $x (ref eq)) (result (ref eq))
                        (if (ref eq)
                            (ref.test $parameter (local.get $x))
-                           (then (i31.new (i32.const 17)))
-                           (else (i31.new (i32.const 1)))))
+                           (then (ref.i31 (i32.const 17)))
+                           (else (ref.i31 (i32.const 1)))))
                 x))
              (define (parameter-fluid x)
                (%inline-wasm
@@ -266,19 +266,19 @@
   (define (scm-sp)
     (%inline-wasm
      '(func (result (ref eq))
-            (i31.new (i32.shl (global.get $scm-sp) (i32.const 1))))))
+            (ref.i31 (i32.shl (global.get $scm-sp) (i32.const 1))))))
   (define (raw-sp)
     (%inline-wasm
      '(func (result (ref eq))
-            (i31.new (i32.shl (global.get $raw-sp) (i32.const 1))))))
+            (ref.i31 (i32.shl (global.get $raw-sp) (i32.const 1))))))
   (define (ret-sp)
     (%inline-wasm
      '(func (result (ref eq))
-            (i31.new (i32.shl (global.get $ret-sp) (i32.const 1))))))
+            (ref.i31 (i32.shl (global.get $ret-sp) (i32.const 1))))))
   (define (dyn-sp)
     (%inline-wasm
      '(func (result (ref eq))
-            (i31.new (i32.shl (global.get $dyn-sp) (i32.const 1))))))
+            (ref.i31 (i32.shl (global.get $dyn-sp) (i32.const 1))))))
   (define (scm-ref n)
     (%inline-wasm
      '(func (param $n (ref eq))
@@ -292,7 +292,7 @@
     (%inline-wasm
      '(func (param $n (ref eq))
             (result (ref eq))
-            (i31.new
+            (ref.i31
              (i32.shl
               (i32.load8_s $raw-stack
                            (i32.shr_s (i31.get_s (ref.cast i31 (local.get $n)))
@@ -969,7 +969,7 @@
             (param $private-data (ref eq))
             (result (ref eq))
             (struct.new $port (i32.const 0)
-                        (i31.new (i32.const 17))
+                        (ref.i31 (i32.const 17))
                         (local.get $read)
                         (local.get $write)
                         (local.get $input-waiting?)
@@ -980,8 +980,8 @@
                         (local.get $file-name)
                         (struct.new $mutable-pair
                                     (i32.const 0)
-                                    (i31.new (i32.const 0))
-                                    (i31.new (i32.const 0)))
+                                    (ref.i31 (i32.const 0))
+                                    (ref.i31 (i32.const 0)))
                         (local.get $read-buf)
                         (local.get $write-buf)
                         (local.get $read-buffering)
@@ -1189,8 +1189,8 @@
                        (result (ref eq))
                        (if (ref eq)
                            (ref.test $port (local.get $obj))
-                           (then (i31.new (i32.const 17)))
-                           (else (i31.new (i32.const 1)))))
+                           (then (ref.i31 (i32.const 17)))
+                           (else (ref.i31 (i32.const 1)))))
                 x))
 (define (input-port? x) (and (port? x) (%port-read x) #t))
 (define (output-port? x) (and (port? x) (%port-write x) #t))
@@ -1442,7 +1442,7 @@
                        (param $cur (ref eq))
                        (param $end (ref eq))
                        (result (ref eq))
-                       (i31.new
+                       (ref.i31
                         (stringview_iter.next
                          (string.as_iter
                           (string.new_lossy_utf8_array
@@ -1482,7 +1482,7 @@
                        (param $cur (ref eq))
                        (param $end (ref eq))
                        (result (ref eq))
-                       (i31.new
+                       (ref.i31
                         (stringview_iter.next
                          (string.as_iter
                           (string.new_lossy_utf8_array
@@ -1747,7 +1747,7 @@
        '(func (param $a (ref eq))
               (param $b (ref eq))
               (result (ref eq))
-              (i31.new
+              (ref.i31
                (i32.shl
                 (string.compare
                  (struct.get $string $str (ref.cast $string (local.get $a)))
@@ -1877,7 +1877,7 @@
                            (i31.get_u (ref.cast i31 (local.get $end)))
                            (i32.const 1))
                           (local.get $i0)))
-          (local.set $v0 (array.new $raw-scmvector (i31.new (i32.const 0))
+          (local.set $v0 (array.new $raw-scmvector (ref.i31 (i32.const 0))
                                     (local.get $i1)))
           (array.copy $raw-scmvector $raw-scmvector
                       (local.get $v0) (i32.const 0)

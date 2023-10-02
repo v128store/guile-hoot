@@ -371,13 +371,14 @@
             (finish test consequent '()))
            ((test ... ('then consequent ...) ('else alternate ...))
             (finish test consequent alternate)))))
-      (((and tag (or 'br 'br_if 'br_on_null 'br_on_non_null
-                     'br_on_cast 'br_on_cast_fail
-                     'call 'local.get 'local.set 'local.tee
+      (((and tag (or 'br 'br_if 'call 'local.get 'local.set 'local.tee
                      'global.get 'global.set))
         idx
         . args)
        `(,@args ,tag ,idx))
+      (((and tag (or 'br_on_cast 'br_on_cast_fail)) target rt1 rt2
+        . args)
+       `(,@args ,tag ,target ,rt1 ,rt2))
       (('br_table . args)
        (let lp ((args args) (targets '()))
          (match args
@@ -508,13 +509,18 @@
             (match in
               (((? id-or-idx? id) . in)
                (lp/inst in `(,inst ,id)))))
-           ((or 'br 'br_if 'br_on_null 'br_on_non_null
-                'br_on_cast 'br_on_cast_fail
+           ((or 'br 'br_if
                 'call 'local.get 'local.set 'local.tee 'global.get
                 'global.set)
             (let-values (((idx in) (parse-id-or-idx in)))
               (unless idx (error "missing idx" inst in))
               (lp/inst in `(,inst ,idx))))
+           ((or 'br_on_cast 'br_on_cast_fail)
+            (match in
+              (((? id-or-idx? target) rt1 rt2 . in)
+               (lp/inst
+                in
+                `(,inst ,target ,(parse-ref-type rt1) ,(parse-ref-type rt2))))))
            ('br_table
             (let lp ((in in) (targets '()))
               (match in
@@ -591,9 +597,9 @@
            ((or 'ref.test 'ref.cast)
             (match in
               (('null ht . in)
-               (lp/inst in `(,inst #t ,(parse-heap-type ht))))
+               (lp/inst in `(,inst ,(make-ref-type #t (parse-heap-type ht)))))
               ((ht . in)
-               (lp/inst in `(,inst #f ,(parse-heap-type ht))))))
+               (lp/inst in `(,inst ,(make-ref-type #f (parse-heap-type ht)))))))
            ('string.const
             (match in
               (((? string? str) . in)
@@ -607,10 +613,12 @@
             (match in
               (((? id-or-idx? ti) (? s32? k) . in)
                (lp/inst in `(,inst ,ti ,k)))))
-           ('array.copy
+           ((or 'array.copy
+                'array.new_data 'array.new_elem
+                'array.init_data 'array.init_elem)
             (match in
-              (((? id-or-idx? ti1) (? id-or-idx? ti2) . in)
-               (lp/inst in `(,inst ,ti1 ,ti2)))))
+              (((? id-or-idx? idx1) (? id-or-idx? idx2) . in)
+               (lp/inst in `(,inst ,idx1 ,idx2)))))
            ('return_call
             (match in
               (((? id-or-idx? id) . in)

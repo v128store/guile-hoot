@@ -251,6 +251,9 @@
          (($ <ref-type> nullable? ht)
           (make-ref-type nullable? (resolve-heap-type ht)))))
 
+     (define (resolve-ref-type rt)
+       (resolve-val-type rt))
+
      (define (resolve-storage-type type)
        (match type
          ((or 'i8 'i16) type)
@@ -347,7 +350,7 @@
                            ,(resolve-instructions body locals labels)
                            ,(resolve-label handler))))
          (((and inst (or 'throw 'rethrow)) tag) `(,inst ,(resolve-tag tag)))
-         (((and inst (or 'br 'br_if 'br_on_null 'br_on_non_null)) label)
+         (((and inst (or 'br 'br_if)) label)
           `(,inst ,(resolve-label label)))
          (('br_table targets default)
           `(br_table ,(map resolve-label targets) ,(resolve-label default)))
@@ -382,6 +385,11 @@
                                      (resolve-func f))))
 
          ;; GC instructions.
+         (((and inst (or 'ref.test 'ref.cast)) rt)
+          `(,inst ,(resolve-ref-type rt)))
+         (((and inst (or 'br_on_cast 'br_on_cast_fail)) label rt1 rt2)
+          `(,inst ,(resolve-label label)
+                  ,(resolve-ref-type rt1) ,(resolve-ref-type rt2)))
          (((and inst (or 'struct.get 'struct.get_s 'struct.get_u 'struct.set))
            type field)
           `(,inst ,(resolve-type type) ,(resolve-struct-field type field)))
@@ -393,16 +401,16 @@
           `(array.new_fixed ,(resolve-type type) ,len))
          (((and inst (or 'array.new 'array.new_default)) type)
           `(,inst ,(resolve-type type)))
-         (('array.new_data type data)
-          `(array.new_fixed ,(resolve-type type) ,(resolve-data data)))
-         (('array.new_elem type elem)
-          `(array.new_fixed ,(resolve-type type) ,(resolve-elem elem)))
+         (((and inst (or 'array.new_data 'array.init_data)) type data)
+          `(,inst ,(resolve-type type) ,(resolve-data data)))
+         (((and inst (or 'array.new_elem 'array.init_elem)) type elem)
+          `(,inst ,(resolve-type type) ,(resolve-elem elem)))
          (('array.fill type)
           `(array.fill ,(resolve-type type)))
          (('array.copy dst src)
           `(array.copy ,(resolve-type dst) ,(resolve-type src)))
-         (((and inst (or 'ref.test 'ref.cast)) nullable? ht)
-          `(,inst ,nullable? ,(resolve-heap-type ht)))
+
+         ;; Stringref instructions.
          (('string.const (? string? str))
           `(string.const ,(intern-string str)))
          (((and inst (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8

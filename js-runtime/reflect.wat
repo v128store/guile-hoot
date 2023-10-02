@@ -29,8 +29,9 @@
 
   (rec
     (type $heap-object
-      (struct
-        (field $hash (mut i32))))
+      (sub
+        (struct
+          (field $hash (mut i32)))))
 
     (type $extern-ref
       (sub $heap-object
@@ -215,7 +216,7 @@
           (field $func (ref $kvarargs))
           (field $fluid (ref $fluid))
           (field $convert (ref $proc)))))
-    (type $dyn (struct))
+    (type $dyn (sub (struct)))
     (type $dynwind
       (sub $dyn
         (struct
@@ -271,7 +272,7 @@
     (br_if 0 (i32.le_s (i32.const 0)
                        (table.grow
                         $argv
-                        (i31.new (i32.const 0))
+                        (ref.i31 (i32.const 0))
                         (i32.sub (i32.sub (local.get $nargs) (i32.const 8))
                                  (table.size $argv)))))
     (unreachable))
@@ -405,25 +406,25 @@
   (func $scm-most-positive-fixnum (export "scm_most_positive_fixnum") (result i32)
     (i32.const 536870911)) ;; = 0x1fffffff
   (func $scm-from-fixnum (export "scm_from_fixnum") (param $v i32) (result (ref eq))
-    (i31.new (i32.shl (local.get $v) (i32.const 1))))
+    (ref.i31 (i32.shl (local.get $v) (i32.const 1))))
   (func $scm-from-bignum (export "scm_from_bignum") (param $v (ref extern)) (result (ref eq))
     (struct.new $bignum (i32.const 0) (local.get $v)))
   (func $scm-from-f64 (export "scm_from_f64") (param $v f64) (result (ref $flonum))
     (struct.new $flonum (i32.const 0) (local.get $v)))
   (func $scm-false (export "scm_false") (result (ref i31))
-    (i31.new (i32.const 1)))
+    (ref.i31 (i32.const 1)))
   (func $scm-nil (export "scm_nil") (result (ref i31))
-    (i31.new (i32.const 5)))
+    (ref.i31 (i32.const 5)))
   (func $scm-null (export "scm_null") (result (ref i31))
-    (i31.new (i32.const 13)))
+    (ref.i31 (i32.const 13)))
   (func $scm-true (export "scm_true") (result (ref i31))
-    (i31.new (i32.const 17)))
+    (ref.i31 (i32.const 17)))
   (func $scm-unspecified (export "scm_unspecified") (result (ref i31))
-    (i31.new (i32.const 33)))
+    (ref.i31 (i32.const 33)))
   (func $scm-eof (export "scm_eof") (result (ref i31))
-    (i31.new (i32.const 41)))
+    (ref.i31 (i32.const 41)))
   (func $scm-from-char (export "scm_from_char") (param $ch i32) (result (ref i31))
-    (i31.new (i32.and (i32.const 3)
+    (ref.i31 (i32.and (i32.const 3)
                       (i32.shl (local.get $ch) (i32.const 2)))))
   (func $scm-from-fraction (export "scm_from_fraction") (param (ref eq) (ref eq)) (result (ref $fraction))
     ;; FIXME: check types.
@@ -519,7 +520,7 @@
         (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
     (local $i i32)
     (local $ret (ref $raw-scmvector))
-    (local.set $ret (array.new $raw-scmvector (i31.new (i32.const 1))
+    (local.set $ret (array.new $raw-scmvector (ref.i31 (i32.const 1))
                                (local.get $nargs)))
     (block $nargs0
       (block $nargs1
@@ -577,9 +578,9 @@
     (local $vals (ref $raw-scmvector))
     (local $i i32)
     (local.set $vals (struct.get $vector $vals (local.get $args)))
-    (local.set $arg0 (i31.new (i32.const 0)))
-    (local.set $arg1 (i31.new (i32.const 0)))
-    (local.set $arg2 (i31.new (i32.const 0)))
+    (local.set $arg0 (ref.i31 (i32.const 0)))
+    (local.set $arg1 (ref.i31 (i32.const 0)))
+    (local.set $arg2 (ref.i31 (i32.const 0)))
     (block $nargs0
       (block $nargs1
         (block $nargs2

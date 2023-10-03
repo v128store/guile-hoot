@@ -67,21 +67,19 @@ functionality such as @ref{Prompts,,,Guile Reference}.  Future
 releases will add support for more standard Scheme and Guile-specific
 features.
 
-To compile Scheme to WASM, Hoot takes advantage of newly accepted WASM
-proposals that are, as of writing, just beginning to emerge as usable
-features of production web browsers and other WASM runtimes.  The most
-important of these new features are tail calls and GC reference types.
-The @code{return_call} family of instructions has made the
-implementation of Scheme's tail recursive procedure call semantics
-relatively straightforward.  GC reference type instructions allow for
-heap allocated objects (and immediates via the @code{i31} type) that
-are managed by the WASM runtime.  This allows Hoot to take advantage
-of production garbage collectors already present in web browsers,
-obviating the need to implement and ship our own which would be both
-inferior to what's already in Firefox, Chrome, etc. and a major source
-of binary bloat.  As of writing, support for these new WASM features
-is transitioning from being gated by experimental feature flags to
-being generally available in all major web browsers.
+To compile Scheme to WASM, Hoot takes advantage of several new WASM
+proposals.  The most important of these new features are tail calls
+and GC reference types.  The @code{return_call} family of instructions
+has made the implementation of Scheme's tail recursive procedure call
+semantics relatively straightforward.  GC reference type instructions
+allow for heap allocated objects (and immediates via the @code{i31}
+type) that are managed by the WASM runtime.  This allows Hoot to take
+advantage of production garbage collectors already present in web
+browsers, obviating the need to implement and ship our own which would
+be both inferior to the host's and a major source of binary bloat.  As
+of writing, support for these WASM proposals are transitioning from
+being gated by experimental feature flags to being generally available
+in all major web browsers.
 
 There's an additional WASM proposal that Hoot has been built on that
 has, unfortunately, not found its way into the core WASM

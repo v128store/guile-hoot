@@ -488,9 +488,10 @@ Compile @var{exp} and return the result using the reflection module
 @end deffn
 
 @deffn {Procedure} compile-call reflector proc-exp arg-exps ...
-Compile @var{proc-exp} and all @var{arg-exps}, call the resulting proc
-with the resulting procs, and return the results using the reflection
-module @var{reflector}.
+Compile @var{proc-exp} and all @var{arg-exps}, call the procedure with
+the arguments, then return the results.  The reflection module
+@var{reflector} is used to make the procedure call and query the type
+and contents of the results.
 @end deffn
 
 @deffn {Procedure} hoot-module? obj

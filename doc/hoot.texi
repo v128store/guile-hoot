@@ -202,12 +202,12 @@ scheme@(guile-user)> (define the-answer (compile 42))
 @end verbatim
 @end lisp
 
-The result is a WASM module.  There is a lot of stuff within, but
-we're not going to focus that right now.  We should load and run the
-module to verify that it outputs 42 like we expect.  We can do so from
-the comfort of our REPL because Hoot includes a WASM interpreter.
-There's no need to use a web browser or other WASM runtime to try out
-small programs.
+The result is a WASM module.  There is a lot of stuff inside, but
+we're not going to focus on that right now.  We should load and run
+the module to verify that it outputs 42 like we expect.  We can do so
+from the comfort of our Guile REPL because Hoot includes a WASM
+interpreter.  There's no need to use a web browser or other WASM
+runtime to try out small programs.
 
 In order to extract Scheme values from a WASM module, we actually need
 a second WASM module known as @file{reflect.wasm}.  This is a special
@@ -249,9 +249,9 @@ $5 = 42
 @end verbatim
 @end lisp
 
-Ta-da!  Feels kind of funny to compile a Scheme program to WASM only
-to load it back into Scheme, but it's a quick and easy way to test
-things out.
+Ta-da!  It feels kind of funny to compile a Scheme program to WASM
+only to load it back into Scheme, but it's a quick and easy way to
+test things out.
 
 For cases when you simply want to compile an expression and see the
 result immediately, there is a faster method. Just use the
@@ -297,10 +297,11 @@ $7 = 120
 @end verbatim
 @end lisp
 
-The Hoot reflection in Guile is great for testing things out, but what
-we really want is to get our programs running in a web browser.  The
-rest of this tutorial will require a web server to host the necessary
-files.  How to run a web server is out-of-scope for this tutorial.
+The Hoot reflection in Guile is great for quickly iterating on code,
+but what we really want is to get our programs running in a web
+browser.  The rest of this tutorial will require a web server to host
+the necessary files.  How to run a web server is out-of-scope for this
+tutorial.
 
 We've compiled a couple of things to WASM now, but the resulting
 modules have stayed within the confines of the Guile process.  To make
@@ -366,11 +367,12 @@ Finally, we need a minimal web page to bring it all together:
 Adjust the @code{src} attributes according to where the files are
 located on your web server.
 
-Open this page in your web browser, and if it is new enough to have
+Visit this page in your web browser, and if it is new enough to have
 WASM GC and tail calls enabled, you should see the text ``Hello,
 world!'' printed in the developer console.
 
-We hope this tutorial has helped you get started with Hoot!
+We hope this tutorial has helped you get started with Hoot!  Read on
+for full API documentation.
 
 @node Compiling to WASM
 @chapter Compiling to WASM

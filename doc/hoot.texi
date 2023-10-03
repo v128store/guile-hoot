@@ -168,6 +168,23 @@ If there is no error then congratulations!  Your setup is correct.
 Proceed to the tutorial for a crash course in how to use Hoot, or see
 later chapters for an API reference.
 
+@subsection Running the test suite
+
+This is entirely optional, but if you'd like further verification that
+your build is good (or perhaps you're packaging Hoot for
+distribution), the test suite can be run via @command{make check}.  By
+default, the tests are run against two WASM runtimes: Hoot's own WASM
+interpreter and @url{https://v8.dev/,V8} via the @command{d8} tool.
+
+Getting V8 can be tricky, and will most likely require you to
+@url{https://v8.dev/docs/build,compile it from source.}  It's a pain!
+To skip all of that trouble and just run the tests against the
+built-in interpreter, run:
+
+@example
+make check WASM_HOST=hoot
+@end example
+
 @node Tutorial
 @section Tutorial
 

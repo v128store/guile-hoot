@@ -761,6 +761,16 @@ instruction is evaluated.
 @node Toolchain reference
 @chapter Toolchain reference
 
+Hoot is not just a Scheme to WASM compiler.  It's also a
+self-contained and general purpose WASM toolchain.  Hoot does not use
+binaryen, wabt, emscripten, etc. in order to assemble and disassemble
+WASM.  The entire toolchain is implemented as a set of Scheme modules
+that can be used to automate other WASM targeted build workflows.
+Since everything is implemented in one place, in a single language,
+and because Guile encourages a REPL-driven development workflow, Hoot
+makes a great platform for learning WASM in a hands-on, interactive
+way!
+
 @menu
 * Data types::                    Core WASM module data types.
 * GWAT::                          Guile-flavored WebAssembly Text format.

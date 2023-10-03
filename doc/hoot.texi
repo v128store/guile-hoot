@@ -25,10 +25,9 @@
 @node Top
 @top Guile Hoot
 
-This is the manual for Guile Hoot, a Scheme to WebAssembly (henceforth
-referred to as WASM) compiler backend for
-@url{https://gnu.org/software/guile,GNU Guile} and complete WASM
-toolchain.
+This is the manual for Guile Hoot, a Scheme to WebAssembly compiler
+backend for @url{https://gnu.org/software/guile,GNU Guile} and general
+purpose WASM toolchain.
 
 Both this manual and Guile Hoot itself are released under Apache v2.
 See @ref{License} for more information.
@@ -46,9 +45,48 @@ See @ref{License} for more information.
 @node Introduction
 @chapter Introduction
 
-Guile Hoot is a Scheme to WASM compiler backend for Guile. It is also
-a general purpose WASM toolchain with an assembler, binary parser, WAT
-parser, linker, and interpreter.
+Guile Hoot is a Scheme to WebAssembly (henceforth referred to as
+@emph{WASM}) compiler backend for
+@url{https://gnu.org/software/guile,GNU Guile} and a general purpose
+WASM toolchain.  WASM is an abstract but low-level binary compilation
+target that can run on all major web browsers, and increasingly in
+other, more ``native'' contexts, as well.  For over two decades,
+JavaScript has been @emph{the} official language of the web, and while
+the language has improved a lot over the years, its design leaves much
+to be desired. Thus web developers looked for ways to bring their
+preferred language to the browser to use instead.  In the past, the
+only option available was to @emph{compile that language to
+JavaScript!}  This approach worked in some sense but it was unideal
+because many languages do not map cleanly to JavaScript.  In the case
+of Scheme, for example, the lack of a tail call facility makes
+compiling tail-recursive Scheme code unpleasant.  At long last, thanks
+to WASM, it has become possible to use an alternative language with
+fewer compromises and better performance.  Hoot aims to bring Guile's
+``whole self'' to the web.
+
+Hoot is being developed by the
+@url{https://spritely.institute,Spritely Institute} in collaboration
+with @url{https://www.igalia.com/,Igalia} to advance Spritely's
+mission to build the infrastructure for a completely decentralized
+social Internet.  And for that mission, what better platform to target
+than the web browser?
+@url{https://spritely.institute/goblins/,Goblins}, Spritely's
+distributed object programming environment, is primarily written in
+Guile.  So, to meet users where they are at @emph{and} not use
+JavaScript at the same time, Spritely needs a Guile to WASM compiler!
+
+A secondary goal of Hoot is to advocate for all dynamic programming
+languages' (Python, Ruby, etc.) rightful place on the client-side web.
+The WASM 1.0 specification was not a habitable environment for
+implementing a language that requires a garbage collector.  The WASM
+GC proposal, among others, has made it possible for dynamic languages
+to target WASM in a real way.  However, such advances are not without
+their detractors.  Without the necessary support, a useful proposal
+will never to sail the seas of production.  Implementing and targeting
+emergent and useful WASM proposals helps those proposals find their
+way into the core specification.  A rising tide lifts all boats, as
+they say, and while we may be little schemers, we want our work to
+help advance the WASM standard for all dynamic languages.
 
 @menu
 * Status::                        What works.  What doesn't.

@@ -780,6 +780,9 @@ comprise a WASM module.
 
 @subsection Modules
 
+The WASM module type is the top type, incorporating values of all the
+types that are to follow.
+
 @deffn {Procedure} wasm? obj
 Return @code{#t} if @var{obj} is a WASM module.
 @end deffn
@@ -836,8 +839,93 @@ Return the list of custom segments in @var{wasm}.
 Return the start function index for @var{wasm}.
 @end deffn
 
+@subsection Types
 
-@subsection Type descriptors
+WASM has four numeric types:
+
+@enumerate
+@item @code{i32}:
+32-bit integer (signed or unsigned)
+@item @code{i64}:
+64-bit integer (signed or unsigned)
+@item @code{f32}:
+32-bit single precision IEEE floating point number.
+@item @code{f64}:
+64-bit double precision IEEE floating point number.
+@end enumerate
+
+There is also the @code{v128} vector type, but it is currently
+unsupported.
+
+Then there are a number of reference types that fall into 3
+categories: function, external, and internal.
+
+Function reference types:
+
+@enumerate
+@item @code{func}:
+Function reference.
+@item @code{nofunc}:
+Bottom type for functions.  No function is of type @code{nofunc}.
+@end enumerate
+
+External reference types:
+
+@enumerate
+@item @code{extern}:
+External reference introduced by the host.
+@item @code{noextern}:
+Bottom type for external references.  No external reference is of type
+@code{noextern}.
+@end enumerate
+
+Internal reference types:
+
+@enumerate
+@item @code{any}:
+The top type of all internal reference types.
+@item @code{eq}:
+Structural equivalence type.  Subtype of @code{all}.
+@item @code{i31}:
+Used for immediate references (such as the empty list or fixnums in
+Scheme.)  Subtype of @code{eq}.
+@item @code{array}:
+Super type of all array types. Subtype of @code{eq}.
+@item @code{struct}:
+Super type of all struct types. Subtype of @code{eq}.
+@item @code{none}:
+The bottom type for internal references.  No internal reference is of
+type @code{none}.
+@end enumerate
+
+Of course, modules may specify their own compound types assembled from
+these primitives.
+
+The type hierarchy looks like this:
+
+@verbatim
+              ╭─────╮                         ╭───────╮     ╭─────────╮
+   .╌╌╌╌╌╌╌╌╌ │ any │ ╌╌╌╌╌╌╌╌╌╌╌╌.           │ func  │     │ extern  │
+   ┆          ╰─────╯             ┆           ╰───────╯     ╰─────────╯
+   ↓             ↓                ↓               ↓              ↓
+ ╭─────╮      ╭─────╮        ╭─────────╮    ╭───────────╮  ╭───────────╮
+ │ i31 │      │ eq  │        │ struct  │    │ all funcs │  │ noextern  │
+ ╰─────╯      ╰─────╯        ╰─────────╯    ╰───────────╯  ╰───────────╯
+                 ↓                ↓               ↓
+          ╭─────────────╮  ╭─────────────╮   ╭─────────╮
+          │ all arrays  │  │ all structs │   │ nofunc  │
+          ╰─────────────╯  ╰─────────────╯   ╰─────────╯
+                 ↓
+              ╭─────╮
+              │ any │
+              ╰─────╯
+@end verbatim
+
+
+A collection of type descriptor objects form a type table that
+describes all non-primitive types used within a module.  Type objects
+associate an identifier with a function signature or reference type
+descriptor.
 
 @deffn {Procedure} type? obj
 Return @code{#t} if @var{obj} is a type.
@@ -849,6 +937,40 @@ Return the symbolic ID of @var{type}.
 
 @deffn {Procedure} type-val type
 Return the type descriptor of @var{type}.
+@end deffn
+
+Types may also be nested within recursive type groups that allow for
+circular and self references to the types within the group.  Types
+@emph{not} within a group can be thought of as belonging to a group of
+one.
+
+@deffn {Procedure} rec-group? obj
+Return @code{#t} if @var{obj} is a recursive type group.
+@end deffn
+
+@deffn {Procedure} rec-group-types rec-group
+Return the types within @var{rec-group}.
+@end deffn
+
+Note that while each WASM module contains a full inventory of its
+types, structurally identical type groups across WASM modules are
+canonicalized at runtime and are considered to be identical
+(@code{eq?} in Scheme terms.)  This allows for passing references
+between modules.
+
+Type uses refer to function signatures and are used for specifying the
+type of a @code{block}, @code{loop}, or @code{if} expression.
+
+@deffn {Procedure} type-use? obj
+Return @code{#t} if @var{obj} is a type use.
+@end deffn
+
+@deffn {Procedure} type-use-idx type-use
+Return the type index of @var{type-use}.
+@end deffn
+
+@deffn {Procedure} type-use-sig type-use
+Return the function signature of @var{type-use}.
 @end deffn
 
 
@@ -864,6 +986,7 @@ Return @var{#t} if @var{ref-type} is nullable.
 Return the heap type of @var{ref-type}.
 @end deffn
 
+As mentioned above, reference types support structural subtyping.
 
 @deffn {Procedure} sub-type? obj
 Return @code{#t} if @var{obj} is a sub type.
@@ -881,6 +1004,7 @@ Return super types of @var{sub-type}.
 Return the concrete type descriptor of @var{sub-type}.
 @end deffn
 
+Compound types take the form of arrays and structs.
 
 @deffn {Procedure} array-type? obj
 Return @code{#t} if @var{obj} is an array type.
@@ -894,7 +1018,6 @@ Return @code{#t} if @var{array-type} is mutable.
 Retun the element type descriptor of @var{array-type}.
 @end deffn
 
-
 @deffn {Procedure} struct-type? obj
 Return @code{#t} if @var{obj} is a struct type.
 @end deffn
@@ -903,6 +1026,7 @@ Return @code{#t} if @var{obj} is a struct type.
 Return the field descriptors of @var{struct-type}.
 @end deffn
 
+Struct types are composed of several fields.
 
 @deffn {Procedure} field? obj
 Return @code{#t} if @var{obj} is a struct field.
@@ -920,17 +1044,12 @@ Return @code{#t} if @var{field} is mutable.
 Return the type descriptor of @var{field}.
 @end deffn
 
-
-@deffn {Procedure} rec-group? obj
-Return @code{#t} if @var{obj} is a recursive type group.
-@end deffn
-
-@deffn {Procedure} rec-group-types rec-group
-Return the types within @var{rec-group}.
-@end deffn
-
+Both arrays and struct fields allow for packed data using the special
+@code{i8} and @code{i16} data types.
 
 @subsection Globals
+
+WASM supports both mutable and immutable global variables.
 
 @deffn {Procedure} global? obj
 Return @code{#t} if @var{obj} is a global.
@@ -945,9 +1064,9 @@ Return the type of @var{global}.
 @end deffn
 
 @deffn {Procedure} global-init global
-Return the initialization instructions of @var{global}.
+Return the initialization instructions of @var{global}.  Only constant
+instructions are allowed.
 @end deffn
-
 
 @deffn {Procedure} global-type? obj
 Return @code{#t} if @var{obj} is a global type.
@@ -960,7 +1079,6 @@ Return @code{#t} if @var{global-type} is mutable.
 @deffn {Procedure} global-type-type global-type
 Return the type descriptor of @var{global-type}.
 @end deffn
-
 
 @subsection Functions
 
@@ -984,19 +1102,22 @@ Return the locals of @var{func}.
 Return the body instructions of @var{func}.
 @end deffn
 
+The type of a function is its signature.  Notably, WASM supports
+multiple return values, just like Scheme.
 
 @deffn {Procedure} func-sig? obj
 Return @code{#t} if @var{obj} is a function signature.
 @end deffn
 
 @deffn {Procedure} func-sig-params func
-Return the param types of @var{func}.
+Return the parameters of @var{func}.
 @end deffn
 
 @deffn {Procedure} func-sig-results func
 Return the result types of @var{func}.
 @end deffn
 
+Function parameters pair a local identifier with its type.
 
 @deffn {Procedure} param? obj
 Return @code{#t} if @var{obj} is a param.
@@ -1010,6 +1131,8 @@ Return the symbolic ID of @var{param}.
 Return the type descriptor of @var{param}.
 @end deffn
 
+Locals provide additional mutable variables scoped to the body of a
+function.
 
 @deffn {Procedure} local? obj
 Return @code{#t} if @var{obj} is a function local.
@@ -1023,21 +1146,13 @@ Return the symbolic ID of @var{local}.
 Return the type descriptor of @var{local}.
 @end deffn
 
-
-@deffn {Procedure} type-use? obj
-Return @code{#t} if @var{obj} is a type use.
-@end deffn
-
-@deffn {Procedure} type-use-idx type-use
-Return the type index of @var{type-use}.
-@end deffn
-
-@deffn {Procedure} type-use-sig type-use
-Return the function signature of @var{type-use}.
-@end deffn
-
-
 @subsection Imports/exports
+
+Functions, globals, memories, and tables can be imported from the host
+or another WASM module.  They are organized into a two layer
+hierarchy.  An import module groups many imports under an umbrella
+name, and then the individual item names distinguish imported data
+within a module.
 
 @deffn {Procedure} import? obj
 Return @code{#t} if @var{obj} is an import.
@@ -1052,7 +1167,7 @@ Return the name string of @var{import}.
 @end deffn
 
 @deffn {Procedure} import-kind import
-Return the kind of @var{import}, one of @code{func}, @code{global},
+Return the kind of @var{import}.  Either @code{func}, @code{global},
 @code{memory}, or @code{table}.
 @end deffn
 
@@ -1064,6 +1179,8 @@ Return the symbolic ID of @var{import}.
 Return the type descriptor of @var{import}.
 @end deffn
 
+Likewise, functions, globals, memories, and tables can be exported
+from a module to be used by the host or by other modules.
 
 @deffn {Procedure} export? obj
 Return @code{#t} if @var{obj} is an export.
@@ -1074,7 +1191,7 @@ Return the name string of @var{export}.
 @end deffn
 
 @deffn {Procedure} export-kind export
-Return the kind of @var{export}, one of @code{func}, @code{global},
+Return the kind of @var{export}.  Either @code{func}, @code{global},
 @code{memory}, or @code{table}.
 @end deffn
 
@@ -1082,23 +1199,13 @@ Return the kind of @var{export}, one of @code{func}, @code{global},
 Return the index of @var{export}.
 @end deffn
 
-@subsection Limits
-
-@deffn {Procedure} limits? obj
-Return @code{#t} if @var{obj} is a limits.
-@end deffn
-
-@deffn {Procedure} limits-min limits
-Return the minimum value of @var{limits}.
-@end deffn
-
-@deffn {Procedure} limits-max limits
-Return the maximum value of @var{limits} or @code{#f} if there is no
-maximum.
-@end deffn
-
-
 @subsection Linear memory
+
+Memory objects specify linear chunks of bytes that a module can write
+to/read from at runtime.  The size of a memory is specified in terms
+of 64KiB pages.  While many memory objects coud be included in a
+module, the WASM specification currently only allows the use of a
+single memory at index 0.
 
 @deffn {Procedure} memory? obj
 Return @code{#t} if @var{obj} is a memory.
@@ -1108,10 +1215,22 @@ Return @code{#t} if @var{obj} is a memory.
 Return the symbolic ID of @var{memory}.
 @end deffn
 
+The type of a memory currently just specifies the size limitations.
+
 @deffn {Procedure} memory-type memory
 Return the type of @var{memory}.
 @end deffn
 
+@deffn {Procedure} mem-type? obj
+Return @code{#t} if @var{obj} is a memory type.
+@end deffn
+
+@deffn {Procedure} mem-type-limits mem-type
+Return the limits of @var{mem-type}.
+@end deffn
+
+Instructions that manipulate linear memory use the memory argument
+type to point to a specific offset within a memory.
 
 @deffn {Procedure} mem-arg? obj
 Return @code{#t} if @var{obj} is a memory argument.
@@ -1129,15 +1248,18 @@ Return the offset of @var{mem-arg}.
 Return the alignment of @var{mem-arg}.
 @end deffn
 
+@subsection Data segments
 
-@deffn {Procedure} mem-type? obj
-Return @code{#t} if @var{obj} is a memory type.
-@end deffn
+Data segments are static chunks of data used to initialize regions of
+memory.  They have two possible modes of use:
 
-@deffn {Procedure} mem-type-limits mem-type
-Return the limits of @var{mem-type}.
-@end deffn
-
+@enumerate
+@item @strong{Active:}
+The data segment is copied into memory during instantiation.
+@item @strong{Passive:}
+The data segment is copied into memory using the @code{memory.init}
+instruction.
+@end enumerate
 
 @deffn {Procedure} data? obj
 Return @code{#t} if @var{obj} is a data segment.
@@ -1148,7 +1270,8 @@ Return the symbolic ID of @var{data}.
 @end deffn
 
 @deffn {Procedure} data-mode data
-Return the mode of @var{data}.
+Return the mode of @var{data}.  Either @code{passive} or
+@code{active}.
 @end deffn
 
 @deffn {Procedure} data-mem data
@@ -1156,15 +1279,18 @@ Return the memory associated with @var{data}.
 @end deffn
 
 @deffn {Procedure} data-offset data
-Return the offset of @var{data}.
+Return the instructions that compute the offset of @var{data}.  Only
+constant instructions are allowed.
 @end deffn
 
 @deffn {Procedure} data-init data
 Return a bytevector containing the initialization data of @var{data}.
 @end deffn
 
-
 @subsection Tables
+
+Tables specify a vector of heap object references of a particular
+reference type.
 
 @deffn {Procedure} table? obj
 Return @code{#t} if @var{obj} is a reference table.
@@ -1178,10 +1304,8 @@ Return the symbolic ID of @var{table}.
 Return the type of @var{table}.
 @end deffn
 
-@deffn {Procedure} table-init table
-Return the initial data of @var{table}.
-@end deffn
-
+Table types specify the reference type of the elements as well as the
+size limitations.
 
 @deffn {Procedure} table-type? obj
 Return @code{#t} if @var{obj} is a table type.
@@ -1194,6 +1318,24 @@ Return the limts of @var{table-type}.
 @deffn {Procedure} table-type-elem-type table-type
 Return the element type of @var{table-type}.
 @end deffn
+
+@subsection Element segments
+
+Element segments are static vectors of references used to initialize
+regions of tables (well, mostly.)  They have three possible modes of
+use:
+
+@enumerate
+@item @strong{Active:}
+The element segment is copied into its associated table during
+instantiation.
+@item @strong{Passive:}
+The element segment is copied into its associated table using the
+@code{table.init} instruction.
+@item @strong{Declarative:}
+The element segment is unavailable at runtime and is instead used for
+forward declarations of types that are used elsewhere in the code.
+@end enumerate
 
 
 @deffn {Procedure} elem? obj
@@ -1217,15 +1359,37 @@ Return the type of @var{elem}.
 @end deffn
 
 @deffn {Procedure} elem-offset elem
-Return the offset of @var{elem}.
+Return the instructions that compute the offset of @var{elem}.  Only
+constant instructions are allowed.
 @end deffn
 
 @deffn {Procedure} elem-inits elem
-Return the initializer instructions of @var{elem}.
+Return a list of initializer instructions for the items of @var{elem}.
+Only constant instructions are allowed.
 @end deffn
 
+@subsection Limits
+
+Both memories and tables use limits to constrain their minimum and
+maximum size.  A valid limit must have a minimum of at least 1, but
+the maximum may be @code{#f} if unbounded growth is allowed.
+
+@deffn {Procedure} limits? obj
+Return @code{#t} if @var{obj} is a limits.
+@end deffn
+
+@deffn {Procedure} limits-min limits
+Return the minimum value of @var{limits}.
+@end deffn
+
+@deffn {Procedure} limits-max limits
+Return the maximum value of @var{limits} or @code{#f} if there is no
+maximum.
+@end deffn
 
 @subsection Other
+
+Tag segments specify types of runtime errors that may be raised.
 
 @deffn {Procedure} tag? obj
 Return @code{#t} if @var{obj} is a tag.
@@ -1239,6 +1403,8 @@ Return the symbolic ID of @var{tag}.
 Return the type of @var{tag}.
 @end deffn
 
+Custom segments specify arbitrary data that is not covered by the WASM
+specification.
 
 @deffn {Procedure} custom? obj
 Return @code{#t} if @var{obj} is a custom segment.
@@ -1249,7 +1415,7 @@ Return the name of @var{custom}.
 @end deffn
 
 @deffn {Procedure} custom-bytes custom
-Return the bytes of @var{custom}.
+Return the bytevector of @var{custom}.
 @end deffn
 
 @node GWAT

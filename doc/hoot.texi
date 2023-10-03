@@ -281,7 +281,7 @@ $7 = 120
 @end lisp
 
 The Hoot reflection in Guile is great for testing things out, but what
-we really want is to get our programs running in web browser.  The
+we really want is to get our programs running in a web browser.  The
 rest of this tutorial will require a web server to host the necessary
 files.  How to run a web server is out-of-scope for this tutorial.
 

@@ -684,19 +684,22 @@ assist with inspecting and debugging WASM modules.
 scheme@@(guile-user)> ,use (hoot repl)
 @end lisp
 
-To see a list of all the WASM commands from the comfort of the REPL, run:
+To see a list of all the WASM commands, run:
 
 @lisp
 scheme@@(guile-user)> ,help wasm
 @end lisp
 
 @deffn {REPL Command} wasm-trace exp
-Evaluate @var{exp} with verbose WASM tracing enabled.
+Evaluate @var{exp} with verbose WASM tracing enabled.  This will print
+out every instruction along with the state of the value stack and
+function locals at the time of evaluation.
 @end deffn
 
 @deffn {REPL Command} wasm-freq exp
 Evaluate @var{exp} and print out a table showing how many times each
-kind of WASM instruction was executed.
+kind of WASM instruction was executed as well as a total instruction
+count.
 @end deffn
 
 @deffn {REPL Command} wasm-catch exp

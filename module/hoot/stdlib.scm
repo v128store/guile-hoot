@@ -2282,10 +2282,10 @@
                ,(arith-cond 'i32
                  '((call $fixnum? (local.get $b))
                    (i32.const 0))
-                 ;; TODO: add bignum equality predicate(s) to reflect.js
                  '((ref.test $bignum (local.get $b))
-                   (f64.eq (call $bignum-to-f64 (struct.get $bignum $val (ref.cast $bignum (local.get $a))))
-                           (call $bignum-to-f64 (struct.get $bignum $val (ref.cast $bignum (local.get $b))))))
+                   (call $eq-big-big
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
                  '((ref.test $flonum (local.get $b))
                    (i32.const 0))
                  '((ref.test $fraction (local.get $b))

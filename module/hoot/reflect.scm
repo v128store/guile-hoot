@@ -77,7 +77,6 @@
 
             hoot-instantiate
             hoot-load
-            hoot-call
             compile-call
             compile-value))
 
@@ -178,12 +177,6 @@
   (reflector mutable-hoot-string-reflector)
   (obj mutable-hoot-string-obj))
 
-(define-record-type <hoot-procedure>
-  (make-hoot-procedure reflector obj)
-  hoot-procedure?
-  (reflector hoot-procedure-reflector)
-  (obj hoot-procedure-obj))
-
 (define-record-type <hoot-symbol>
   (make-hoot-symbol reflector obj)
   hoot-symbol?
@@ -249,6 +242,20 @@
   hoot-struct?
   (reflector hoot-struct-reflector)
   (obj hoot-struct-obj))
+
+;; The Hoot procedure type is defined using Guile's low-level struct
+;; API so that we can use applicable structs, allowing Hoot procedures
+;; to be called as if they were native ones.
+(define <hoot-procedure>
+  (make-struct/no-tail <applicable-struct-vtable> 'pwpwpw))
+
+(define (hoot-procedure? obj)
+  (and (struct? obj) (eq? (struct-vtable obj) <hoot-procedure>)))
+
+(define (make-hoot-procedure reflector obj)
+  (define (hoot-apply . args)
+    (hoot-call reflector obj args))
+  (make-struct/no-tail <hoot-procedure> hoot-apply reflector obj))
 
 (define (hoot-object? obj)
   (or (hoot-complex? obj)
@@ -519,7 +526,7 @@
          ($ <hoot-bitvector> _ obj)
          ($ <mutable-hoot-bitvector> _ obj)
          ($ <mutable-hoot-string> _ obj)
-         ($ <hoot-procedure> _ obj)
+         ($ <hoot-procedure> _ _ obj)
          ($ <hoot-symbol> _ obj)
          ($ <hoot-keyword> _ obj)
          ($ <hoot-variable> _ obj)
@@ -618,34 +625,32 @@
              (reflector (make-reflector (instantiate reflector abi) abi)))
         (make-hoot-module reflector instance))))
 
-(define (hoot-call proc . args)
-  (match proc
-    (($ <hoot-procedure> reflector f)
-     (let ((argv (~ reflector "make_vector"
-                    (+ (length args) 1)
-                    (~ reflector "scm_false"))))
-       (~ reflector "vector_set" argv 0 f)
-       (let loop ((args args) (i 1))
-         (match args
-           (() #t)
-           ((arg . rest)
-            (~ reflector "vector_set" argv i (guile->wasm reflector arg))
-            (loop rest (+ i 1)))))
-       (let* ((results (~ reflector "call" f argv))
-              (n-results (~ reflector "vector_length" results)))
-         (apply values
-                (let loop ((i 0))
-                  (if (= i n-results)
-                      '()
-                      (let ((result (~ reflector "vector_ref" results i)))
-                        (cons (wasm->guile reflector result)
-                              (loop (+ i 1))))))))))))
+(define (hoot-call reflector f args)
+  (let ((argv (~ reflector "make_vector"
+                           (+ (length args) 1)
+                           (~ reflector "scm_false"))))
+    (~ reflector "vector_set" argv 0 f)
+    (let loop ((args args) (i 1))
+      (match args
+        (() #t)
+        ((arg . rest)
+         (~ reflector "vector_set" argv i (guile->wasm reflector arg))
+         (loop rest (+ i 1)))))
+    (let* ((results (~ reflector "call" f argv))
+           (n-results (~ reflector "vector_length" results)))
+      (apply values
+             (let loop ((i 0))
+               (if (= i n-results)
+                   '()
+                   (let ((result (~ reflector "vector_ref" results i)))
+                     (cons (wasm->guile reflector result)
+                           (loop (+ i 1))))))))))
 
 (define (hoot-load module)
   (match module
     (($ <hoot-module> reflector instance)
      (let* (($load (wasm-instance-export-ref instance "$load")))
-       (hoot-call (wasm->guile reflector (wasm-global-ref $load)))))))
+       ((wasm->guile reflector (wasm-global-ref $load)))))))
 
 (define (compile-value reflect-wasm exp)
   (hoot-load (hoot-instantiate reflect-wasm (compile exp))))
@@ -661,4 +666,4 @@
                                                   #:import-abi? #t
                                                   #:export-abi? #f))))
                     arg-exps)))
-    (apply hoot-call proc args)))
+    (apply proc args)))

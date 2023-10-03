@@ -324,13 +324,11 @@ scheme@(guile-user)> (define hoot-factorial
 @end verbatim
 @end lisp
 
-The value of @code{hoot-factorial} is not a regular procedure, but a
-reference to the ``foreign'' procedure within a WASM instance.  To
-make a Hoot procedure call, we can use @code{hoot-call}.
+A Hoot procedure can be called just like a regular procedure:
 
 @lisp
 @verbatim
-scheme@(guile-user)> (hoot-call hoot-factorial 5 1)
+scheme@(guile-user)> (hoot-factorial 5 1)
 $7 = 120
 @end verbatim
 @end lisp
@@ -513,11 +511,6 @@ WASM module @var{scheme-wasm} and the reflection module
 @deffn {Procedure} hoot-load module
 Invoke the load thunk of @var{module} and return the reflected
 result values.
-@end deffn
-
-@deffn {Procedure} hoot-call proc args ...
-Invoke the reflected Hoot procedure @var{proc} with the arguments
-@var{args} and return the results.
 @end deffn
 
 @deffn {Procedure} compile-value reflector exp

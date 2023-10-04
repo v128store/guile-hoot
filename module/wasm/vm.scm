@@ -870,7 +870,7 @@ binary, or an input port from which a WASM binary is read."
   (hashq-ref *exported-functions* wrap))
 
 (define-record-type <wasm-instance>
-  (make-wasm-instance module types globals funcs memories tables elems
+  (make-wasm-instance module types globals funcs memories tables datas elems
                       strings exports)
   wasm-instance?
   (module wasm-instance-module)
@@ -879,6 +879,7 @@ binary, or an input port from which a WASM binary is read."
   (funcs wasm-instance-funcs)
   (memories wasm-instance-memories)
   (tables wasm-instance-tables)
+  (datas wasm-instance-datas)
   (elems wasm-instance-elems)
   (strings wasm-instance-strings)
   (exports wasm-instance-exports))
@@ -922,11 +923,12 @@ binary, or an input port from which a WASM binary is read."
             (func-vec (make-vector (+ n-func-imports (length funcs))))
             (memory-vec (make-vector (+ n-memory-imports (length memories))))
             (table-vec (make-vector (+ n-table-imports (length tables))))
+            (data-vec (make-vector (length datas)))
             (elem-vec (make-vector (length elems)))
             (string-vec (list->vector strings))
             (export-table (make-hash-table))
             (instance (make-wasm-instance module type-vec global-vec func-vec
-                                          memory-vec table-vec elem-vec
+                                          memory-vec table-vec data-vec elem-vec
                                           string-vec export-table)))
        (define (type-check vals types)
          (unless (let loop ((vals vals)
@@ -1091,11 +1093,12 @@ binary, or an input port from which a WASM binary is read."
            ((($ <memory> _ ($ <mem-type> (and ($ <limits> min) limits))) . rest)
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
-       ;; Copy active data segments into memory.
+       ;; Initialize data segments and copy active ones into memory.
        (let loop ((datas datas) (idx 0))
          (match datas
            (() #t)
            (((and ($ <data> _ mode mem-id instrs init) data) . rest)
+            (vector-set! data-vec idx init)
             (when (eq? mode 'active)
               ;; Invoke the VM to process the constant
               ;; expressions that produce the offset value.

@@ -214,9 +214,15 @@
      (data $wtf8-transitions ,%wtf8-transitions)
      (data $wtf8-states ,%wtf8-states)
      (global $wtf8-transitions (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-transitions))
+             (array.new_data $bytes $wtf8-transitions
+                             (i32.const 0)
+                             (i32.const
+                              ,(bytevector-length %wtf8-transitions))))
      (global $wtf8-states (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-states))
+             (array.new_data $bytes $wtf8-states
+                             (i32.const 0)
+                             (i32.const
+                              ,(bytevector-length %wtf8-states))))
 
      (func $decode-wtf8 (param $byte i32) (param $buf i32) (param $state i32)
            (result i32 i32) ; codepoint, state
@@ -250,15 +256,15 @@
              (if (i32.eq (array.len (local.get $a)) (local.get $i))
                  (then
                   (if (i32.eq (array.len (local.get $b)) (local.get $i))
-                      (then (return 0))
-                      (else (return -1)))))
+                      (then (return (i32.const 0)))
+                      (else (return (i32.const -1))))))
              (if (i32.eq (array.len (local.get $b)) (local.get $i))
                  (then (return (i32.const 1))))
              (local.tee
               $d
               (i32.sub
-               (array.get_u (local.get $a) (local.get $i))
-               (array.get_u (local.get $b) (local.get $i))))
+               (array.get_u $wtf8 (local.get $a) (local.get $i))
+               (array.get_u $wtf8 (local.get $b) (local.get $i))))
              (if (i32.eqz)
                  (then
                   (local.set $i
@@ -287,9 +293,9 @@
                                         (local.get $iter)))
            (local.set $i (struct.get $stringview-iter $byte-offset
                                      (local.get $iter)))
-           (local.set $state ,%wtf8-accept)
+           (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
-               (then (return -1)))
+               (then (return (i32.const -1))))
            (loop $lp
              (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
                  ;; Bad WTF-8.
@@ -327,7 +333,7 @@
                                         (local.get $iter)))
            (local.set $i (struct.get $stringview-iter $byte-offset
                                      (local.get $iter)))
-           (local.set $state ,%wtf8-accept)
+           (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.eqz (local.get $count))
                (then (return (i32.const 0))))
            (loop $lp
@@ -343,7 +349,7 @@
                   (if (i32.eq (local.get $state) (i32.const ,%wtf8-reject))
                       (then (unreachable)))
                   (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                  (if (i32.eq (local.get $state (i32.cont ,%wtf8-accept)))
+                  (if (i32.eq (local.get $state (i32.const ,%wtf8-accept)))
                       (then
                        (local.set $advanced
                                   (i32.add (local.get $advanced)
@@ -716,7 +722,10 @@
               (strings (hash-map->list
                        (lambda (str id)
                          (make-global id t
-                                      `((array.new_data $wtf8 ,id))))
+                                      `((i32.const 0)
+                                        (i32.const ,(bytevector-length
+                                                     (string->utf8 str)))
+                                        (array.new_data $wtf8 ,id))))
                        %strings))
               (wtf8 (hash-map->list
                      (lambda (str id)

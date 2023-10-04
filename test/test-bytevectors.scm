@@ -170,4 +170,9 @@
 (test-call "#vu8(1 2 3 4)"
            (lambda () (bytevector 1 2 3 4)))
 
+(test-call "#t" (lambda (a b) (equal? a b)) #vu8() #vu8())
+(test-call "#t" (lambda (a b) (equal? a b)) #vu8(1 2) #vu8(1 2))
+(test-call "#f" (lambda (a b) (equal? a b)) #vu8() #vu8(1))
+(test-call "#f" (lambda (a b) (equal? a b)) #vu8(1 2) #vu8(2 1))
+
 (test-end* "test-bytevectors")

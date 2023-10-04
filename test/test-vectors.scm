@@ -28,4 +28,9 @@
 (test-call "2" (lambda (v idx) (vector-ref v idx)) #(1 2 3) 1)
 (test-call "#(42 42 42)" (lambda (n) (make-vector n 42)) 3)
 
+(test-call "#t" (lambda (a b) (equal? a b)) #() #())
+(test-call "#t" (lambda (a b) (equal? a b)) #(1 2) #(1 2))
+(test-call "#f" (lambda (a b) (equal? a b)) #() #(1))
+(test-call "#f" (lambda (a b) (equal? a b)) #(1 2) #(2 1))
+
 (test-end* "test-vectors")

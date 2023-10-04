@@ -83,4 +83,19 @@
 (test-call "9999" (lambda (a) (exact a)) 9999.0)
 (test-call "-9999" (lambda (a) (exact a)) -9999.0)
 
+;; numeric equivalence
+(test-call "#t" (lambda (a b) (eqv? a b)) 1 1)
+(test-call "#f" (lambda (a b) (eqv? a b)) 1 1.0)
+(test-call "#t" (lambda (a b) (eqv? a (+ b b))) 1/2 1/4)
+(test-call "#t" (lambda (a b) (eqv? +nan.0 +nan.0)))
+(test-call "#t" (lambda (a b) (eqv? +inf.0 +inf.0)))
+(test-call "#t" (lambda (a b) (eqv? -inf.0 -inf.0)))
+
+(test-call "#t" (lambda (a b) (equal? a b)) 1 1)
+(test-call "#f" (lambda (a b) (equal? a b)) 1 1.0)
+(test-call "#t" (lambda (a b) (equal? a (+ b b))) 1/2 1/4)
+(test-call "#t" (lambda (a b) (equal? +nan.0 +nan.0)))
+(test-call "#t" (lambda (a b) (equal? +inf.0 +inf.0)))
+(test-call "#t" (lambda (a b) (equal? -inf.0 -inf.0)))
+
 (test-end "test-numeric")

@@ -1683,7 +1683,33 @@
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))
-(define (equal? x y) (error "unimplemented"))
+
+(define (equal? x y)
+  (cond
+   ((eqv? x y) #t)
+   ((and (pair? x) (pair? y))
+    (and (equal? (car x) (car y))
+         (equal? (cdr x) (cdr y))))
+   ((and (vector? x) (vector? y))
+    (let ((length (vector-length x)))
+      (and (= length (vector-length y))
+           (let lp ((i 0))
+             (if (= i length)
+                 #t
+                 (and (equal? (vector-ref x i) (vector-ref y i))
+                      (lp (+ i 1))))))))
+   ((and (string? x) (string? y))
+    (string-=? x y))
+   ((and (bytevector? x) (bytevector? x))
+    (let ((length (bytevector-length x)))
+      (and (= length (bytevector-length y))
+           (let lp ((i 0))
+             (if (= i length)
+                 #t
+                 (and (equal? (bytevector-u8-ref x i)
+                              (bytevector-u8-ref y i))))))))
+   (else #f)))
+
 (define (not x) (if x #f #t))
 
 (define (and-map pred l)

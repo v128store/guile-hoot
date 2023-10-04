@@ -149,6 +149,13 @@
          (match type
            ((or 'i8 'i16) types)
            (_ (visit-val-type type types))))
+       (define (visit-func-sig params results types)
+         (fold1 (lambda (param types)
+                  (match param
+                    (($ <param> id type)
+                     (visit-val-type type types))))
+                params
+                (fold1 visit-val-type results types)))
        (define (visit-type type types)
          (define (visit-base type types)
            (match type
@@ -161,12 +168,7 @@
                           (visit-storage-type type types))))
                      fields types))
              (($ <func-sig> params results)
-              (fold1 (lambda (param types)
-                       (match param
-                         (($ <param> id type)
-                          (visit-val-type type types))))
-                     params
-                     (fold1 visit-val-type results types)))))
+              (visit-func-sig params results types))))
          (define (visit-sub type types)
            (match type
              (($ <sub-type> final? supers type)
@@ -198,11 +200,11 @@
          (visit-heap-type type types))
        (define (visit-type-use type types)
          (match type
-           (($ <type-use> idx sig)
-            ;; recurse into sig?
-            (if (symbol? idx)
-                (visit-func-type idx types)
-                types))))
+           (($ <type-use> idx ($ <func-sig> params results))
+            (let ((types (visit-func-sig params results types)))
+              (if (symbol? idx)
+                  (visit-func-type idx types)
+                  types)))))
        (define (visit-body body types)
          (fold-instructions
           (lambda (inst types)
@@ -595,6 +597,45 @@
                                     (fold1 visit-elem elems
                                            (reverse globals))))))))
 
+     (define (compute-datas funcs tables globals datas)
+       (define (add-data data datas)
+         (define (lookup name datas)
+           (simple-lookup
+            datas
+            (($ <data> id) (eqv? id name))))
+         (match (lookup data datas)
+           (#f (match (lookup data std-datas)
+                 (#f datas)
+                 (data (cons data datas))))
+           (_ datas)))
+       (define (visit-body body datas)
+         (fold-instructions
+          (lambda (inst datas)
+            (match inst
+              (((or 'array.new_data 'array.init_data) type data)
+               (add-data data datas))
+              (_ datas)))
+          body datas))
+       (define (visit-func func datas)
+         (match func
+           (($ <func> id type locals body)
+            (visit-body body datas))))
+       (define (visit-table table datas)
+         (match table
+           (($ <table> id type init)
+            (if init
+                (visit-body init datas)
+                datas))))
+       (define (visit-global global datas)
+         (match global
+           (($ <global> id type init)
+            (visit-body init datas))))
+       (reverse
+        (fold1 visit-func funcs
+               (fold1 visit-table tables
+                      (fold1 visit-global globals
+                             (reverse datas))))))
+
      (match wasm
        (($ <wasm> types imports funcs tables memories globals exports
            start elems datas tags strings custom)
@@ -635,7 +676,8 @@
             (if (and (= (length funcs') (length funcs))
                      (= (length tables') (length tables))
                      (= (length globals') (length globals)))
-                (let ((memories (compute-memories funcs memories exports datas)))
+                (let* ((datas (compute-datas funcs tables globals datas))
+                       (memories (compute-memories funcs memories exports datas)))
                   (let ((imports (compute-imports imports funcs tables memories
                                                   globals exports elems))
                         (types (compute-types types imports funcs tables globals

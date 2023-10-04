@@ -44,6 +44,7 @@ SCM_TESTS = 					\
   test/test-vectors.scm				\
   test/test-vm.scm				\
   test/test-wasm-assembler.scm			\
+  test/test-disassemble.scm			\
   test/test-write.scm				\
   #
 

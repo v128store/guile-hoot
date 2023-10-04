@@ -1091,17 +1091,18 @@ binary, or an input port from which a WASM binary is read."
            ((($ <memory> _ ($ <mem-type> (and ($ <limits> min) limits))) . rest)
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
-       ;; Copy data into memory.
+       ;; Copy active data segments into memory.
        (let loop ((datas datas) (idx 0))
          (match datas
            (() #t)
            (((and ($ <data> _ mode mem-id instrs init) data) . rest)
-            ;; Invoke the VM to process the constant
-            ;; expressions that produce the offset value.
-            (let ((offset (exec-init `(data ,idx) instrs))
-                  (memory (vector-ref memory-vec mem-id)))
-              (bytevector-copy! init 0 (wasm-memory-bytes memory)
-                                offset (bytevector-length init)))
+            (when (eq? mode 'active)
+              ;; Invoke the VM to process the constant
+              ;; expressions that produce the offset value.
+              (let ((offset (exec-init `(data ,idx) instrs))
+                    (memory (vector-ref memory-vec mem-id)))
+                (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                  offset (bytevector-length init))))
             (loop rest (+ idx 1)))))
        ;; Initialize tables.
        (let loop ((tables tables)

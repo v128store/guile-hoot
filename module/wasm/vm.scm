@@ -278,7 +278,8 @@
   (define (validate-data data)
     (match data
       (($ <data> _ _ _ offset _)
-       (validate-const 'i32 offset))))
+       (when offset
+         (validate-const 'i32 offset)))))
   (define (validate-elem elem)
     (match elem
       (($ <elem> _ mode _ type offset inits)

@@ -1706,8 +1706,16 @@
            (let lp ((i 0))
              (if (= i length)
                  #t
-                 (and (equal? (bytevector-u8-ref x i)
-                              (bytevector-u8-ref y i))))))))
+                 (and (eqv? (bytevector-u8-ref x i)
+                            (bytevector-u8-ref y i))))))))
+   ((and (bitvector? x) (bitvector? y))
+    (let ((length (bitvector-length x)))
+      (and (= length (bitvector-length y))
+           (let lp ((i 0))
+             (if (= i length)
+                 #t
+                 (and (eqv? (bitvector-ref x i)
+                            (bitvector-ref y i))))))))
    (else #f)))
 
 (define (not x) (if x #f #t))

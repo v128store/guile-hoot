@@ -456,7 +456,10 @@
        `(,@args ,tag ,ti))
       (((and tag 'array.new_fixed) (? id-or-idx? ti) (? s32? k) . args)
        `(,@args ,tag ,ti ,k))
-      (((and tag 'array.copy) (? id-or-idx? ti1) (? id-or-idx? ti2) . args)
+      (((and tag (or 'array.copy
+                     'array.new_data 'array.new_elem
+                     'array.init_data 'array.init_elem))
+        (? id-or-idx? ti1) (? id-or-idx? ti2) . args)
        `(,@args ,tag ,ti1 ,ti2))
       (((and tag 'return_call) (? id-or-idx? id) . args)
        `(,@args ,tag ,id))

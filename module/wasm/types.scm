@@ -21,6 +21,7 @@
 
 (define-module (wasm types)
   #:use-module (srfi srfi-9)
+  #:use-module (srfi srfi-9 gnu)
   #:use-module (ice-9 match)
   #:export (<wasm>
             make-wasm wasm?
@@ -132,7 +133,7 @@
             <custom>
             make-custom custom?
             custom-name custom-bytes
-            
+
             find-type))
 
 (define-record-type <wasm>
@@ -153,6 +154,11 @@
   (tags wasm-tags)
   (strings wasm-strings)
   (custom wasm-custom))
+
+(define (print-wasm wasm port)
+  (format port "#<wasm ~a>" (object-address wasm)))
+
+(set-record-type-printer! <wasm> print-wasm)
 
 (define-record-type <param>
   (make-param id type)

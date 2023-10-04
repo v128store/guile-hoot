@@ -118,7 +118,7 @@
                           (hoot-load
                            (hoot-instantiate reflector arg)))
                         args)))
-       (apply hoot-call proc* args*)))))
+       (apply proc* args*)))))
 
 (define (compare-results hoot-result d8-result)
   (cond

@@ -34,9 +34,11 @@
        (let* ((clause1 (car clauses))
               (cond1 (car clause1))
               (res1 (cdr clause1)))
-         `(if ,type ,cond1
-              (then ,@res1)
-              (else ,(apply arith-cond type (cdr clauses))))))))
+         (if (eq? cond1 'else)
+             `(block ,type ,@res1)
+             `(if ,type ,cond1
+                  (then ,@res1)
+                  (else ,(apply arith-cond type (cdr clauses)))))))))
 
 (define (call-fmath fn . args)
   `(struct.new $flonum

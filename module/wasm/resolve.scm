@@ -530,7 +530,7 @@
        (match data
          (($ <data> id mode mem offset init)
           (make-data id mode (and mem (resolve-memory mem))
-                     (resolve-instructions offset '() '())
+                     (and offset (resolve-instructions offset '() '()))
                      init))))
 
      (define (visit-start start)

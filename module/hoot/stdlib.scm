@@ -74,6 +74,12 @@
                       (i32.const 0)
                       (array.new $raw-scmvector (ref.i31 (i32.const 13))
                                  (i32.const 47))))))
+  (define maybe-init-symtab
+    (if import-abi?
+        '()
+        '((array.new $symtab
+                     (ref.null $symtab-entry)
+                     (i32.const 47)))))
 
   (wat->wasm
    `((type $kvarargs
@@ -300,6 +306,13 @@
             (sub $dyn
               (struct
                (field $fluids (mut (ref $hash-table)))))))
+
+     (type $symtab-entry
+           (struct
+            (field $sym (ref $symbol))
+            (field $next (ref null $symtab-entry))))
+     (type $symtab
+           (array (mut (ref null $symtab-entry))))
 
      (type $raw-retvector (array (mut (ref $kvarargs))))
      (type $raw-dynvector (array (mut (ref $dyn))))
@@ -654,12 +667,53 @@
                     (br $lp)))
            (local.get $hash))
 
-     ;; FIXME: Replace with version from basic-types.wat.
      (func $string->symbol (param $str (ref string)) (result (ref $symbol))
-           (local.get 0) (call $string-hash) (call $finish-heap-object-hash)
-           (i32.const 0) (local.get 0) (struct.new $string)
-           (struct.new $symbol)
-           (call $intern-symbol!))
+           (local $hash i32)
+           (local $idx i32)
+           (local $tag i32)
+           (local $entry (ref null $symtab-entry))
+           (local $ret (ref null $symbol))
+           (local.set $hash (call $string-hash (local.get $str)))
+           (local.set $idx (i32.rem_u (local.get $hash) (array.len (global.get $the-symtab))))
+           (local.set $tag (call $finish-heap-object-hash (local.get $hash)))
+           (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
+           (block
+            $done
+            (block
+             $insert
+             (loop
+              $lp
+              (br_if $insert (ref.is_null (local.get $entry)))
+              (block
+               $next
+               (br_if $next
+                      (i32.ne (struct.get $symbol
+                                          $hash
+                                          (struct.get $symtab-entry
+                                                      $sym
+                                                      (local.get $entry)))
+                              (local.get $tag)))
+               (br_if $next
+                      (i32.eqz
+                       (string.eq (struct.get $string
+                                              $str
+                                              (struct.get $symbol
+                                                          $name
+                                                          (struct.get $symtab-entry
+                                                                      $sym
+                                                                      (local.get $entry))))
+                                  (local.get $str))))
+               (local.set $ret (struct.get $symtab-entry $sym (local.get $entry)))
+               (br $done))
+              (local.set $entry (struct.get $symtab-entry $next (local.get $entry)))
+              (br $lp)))
+            (local.set $ret (struct.new $symbol (local.get $tag)
+                                        (struct.new $string (i32.const 0) (local.get $str))))
+            (local.set $entry (array.get $symtab (global.get $the-symtab) (local.get $idx)))
+            (array.set $symtab (global.get $the-symtab) (local.get $idx)
+                       (struct.new $symtab-entry (ref.as_non_null (local.get $ret))
+                                   (local.get $entry))))
+           (ref.as_non_null (local.get $ret)))
 
      (func $intern-symbol! (param $sym (ref $symbol)) (result (ref $symbol))
            ;; FIXME: Actually interning into symtab is unimplemented!
@@ -3945,4 +3999,6 @@
      (global ,@(maybe-import '$current-error-port) (mut (ref eq))
              ,@maybe-init-i31-zero)
      (global ,@(maybe-import '$default-prompt-tag) (mut (ref eq))
-             ,@maybe-init-i31-zero))))
+             ,@maybe-init-i31-zero)
+     (global ,@(maybe-import '$the-symtab) (mut (ref $symtab))
+             ,@maybe-init-symtab))))

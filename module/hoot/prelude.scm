@@ -1885,7 +1885,13 @@
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str)
   (unless (string? str) (error "expected string" str))
-  (%string->symbol str))
+  (%inline-wasm
+   '(func (param $str (ref eq)) (result (ref eq))
+          (call $string->symbol
+                (struct.get $string
+                            $str
+                            (ref.cast $string (local.get $str)))))
+   str))
 (define (symbol->string sym)
   (unless (symbol? sym) (error "expected symbol" sym))
   (%symbol->string sym))

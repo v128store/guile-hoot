@@ -27,4 +27,15 @@
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")
 
+(test-call "a" (lambda (str) (string->symbol str)) "a")
+(test-call "#t"
+           (lambda (str)
+             (eq? (string->symbol str) (string->symbol str)))
+           "a")
+(test-call "#f"
+           (lambda (str1 str2)
+             (eq? (string->symbol str1) (string->symbol str2)))
+           "a"
+           "b")
+
 (test-end* "test-strings")

@@ -23,7 +23,7 @@
   #:use-module (ice-9 binary-ports)
   #:use-module (ice-9 match)
   #:use-module (rnrs bytevectors)
-  #:use-module ((srfi srfi-1) #:select (filter-map))
+  #:use-module ((srfi srfi-1) #:select (append-map filter-map))
   #:use-module (srfi srfi-11)
   #:use-module (wasm types)
   #:export (wat->wasm wasm->wat))
@@ -814,115 +814,172 @@
   (match mod
     (($ <wasm> types imports funcs tables memories globals exports start
                elems datas tags strings custom)
-     `(wasm
-       (types
-        ,@(map (lambda (type)
+     ;; TODO: Factorize type-repr code that is duplicated between here
+     ;; and (wasm dump).
+     (define (val-type-repr vt)
+       (match vt
+         (($ <ref-type> #t ht)
+          `(ref null ,ht))
+         (($ <ref-type> #f ht)
+          `(ref ,ht))
+         (_ vt)))
+     (define (params-repr params)
+       (match params
+         (() '())
+         ((($ <param> #f type) ...)
+          `((param ,@(map val-type-repr type))))
+         ((($ <param> id type) . params)
+          (cons `(param ,id ,(val-type-repr type))
+                (params-repr params)))))
+     (define (results-repr results)
+       (map (lambda (type) `(result ,(val-type-repr type))) results))
+     (define (field-repr field)
+       (define (wrap mutable? repr)
+         (if mutable? `(mut ,repr) repr))
+       (match field
+         (($ <field> id mutable? type)
+          (let ((repr (wrap mutable? (val-type-repr type))))
+            (if id
+                `(field ,id ,repr)
+                repr)))))
+     (define (type-repr type)
+       (match type
+         (($ <func-sig> params results)
+          `(func ,@(params-repr params) ,@(results-repr results)))
+         (($ <sub-type> final? supers type)
+          `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
+         (($ <struct-type> fields)
+          `(struct ,@(map field-repr fields)))
+         (($ <array-type> mutable? type)
+          `(array ,(field-repr (make-field #f mutable? type))))))
+     (define (type-use-repr type-use)
+       (match type-use
+         (($ <type-use> _ ($ <func-sig> params results))
+          (append (params-repr params) (results-repr results)))))
+     (define (instr-repr instr)
+       (define (make-prefix-arg prefix x)
+         (if (zero? x)
+             '()
+             (list (string->symbol (string-append prefix (number->string x))))))
+       (match instr
+         (($ <mem-arg> id offset align)
+          `(,id
+            ,@(make-prefix-arg "offset=" offset)
+            ,@(make-prefix-arg "align=" align)))
+         (($ <ref-type> _ (? symbol? ht))
+          `(,ht))
+         (($ <type-use> idx)
+          `((type ,idx)))
+         ;; Instructions that need special handling:
+         (('ref.cast ($ <ref-type> null? ht))
+          `(ref.cast ,@(if null? '(null) '()) ,ht))
+         (('string.const (? number? idx))
+          `(string.const ,(list-ref strings idx)))
+         (('if label bt consequent alternate)
+          `(if ,@(type-use-repr bt)
+               ,@(if label `(,label) '())
+               (then ,@(instrs-repr consequent))
+               (else ,@(instrs-repr alternate))))
+         (((and op (or 'block 'loop)) label bt body)
+          `(,op ,@(if label `(,label) '())
+                ,@(type-use-repr bt)
+                ,@(instrs-repr body)))
+         ((_ ...)
+          (append-map instr-repr instr))
+         (_ `(,instr))))
+     (define (instrs-repr instrs)
+       (map instr-repr instrs))
+     (define (limits-repr limits)
+       (match limits
+         (($ <limits> min max)
+          (if max (list min max) (list min)))))
+     (define (elem-item-repr init)
+       `(item ,@(instrs-repr init)))
+     `(module
+       ;; Types
+       ,@(map (match-lambda
+                (($ <type> id val)
+                 `(type ,id ,(type-repr val))))
+              types)
+       ;; Imports
+       ,@(map (match-lambda
+                (($ <import> mod name 'func id type)
+                 `(import ,mod ,name (func ,id ,@(type-use-repr type))))
+                (($ <import> mod name 'global id ($ <global-type> mutable? type))
+                 `(import ,mod ,name
+                          (global ,id ,(if mutable?
+                                           `(mut ,(val-type-repr type))
+                                           (val-type-repr type)))))
+                (($ <import> mod name 'memory id ($ <mem-type> limits))
+                 `(import ,mod ,name (memory ,id ,@(limits-repr limits))))
+                (($ <import> mod name 'table id ($ <table-type> limits elem-type))
+                 `(import ,mod ,name
+                          (table ,id ,@(limits-repr limits)
+                                 ,(val-type-repr elem-type)))))
+              imports)
+       ;; Exports
+       ,@(map (match-lambda
+                (($ <export> name kind idx)
+                 `(export ,name (,kind ,idx))))
+              exports)
+       ;; Globals
+       ,@(map (match-lambda
+                (($ <global> id ($ <global-type> mutable? type) init)
+                 `(global ,id
+                          ,(if mutable?
+                               `(mut ,(val-type-repr type))
+                               (val-type-repr type))
+                          ,@(instrs-repr init))))
+              globals)
+       ;; Tables
+       ,@(map (match-lambda
+                (($ <table> id ($ <table-type> limits elem-type))
+                 `(table ,id ,@(limits-repr limits)
+                         ,(val-type-repr elem-type))))
+              tables)
+       ;; Memories
+       ,@(map (match-lambda
+                (($ <memory> id ($ <mem-type> limits))
+                 `(memory ,id ,@(limits-repr limits))))
+              memories)
+       ;; Element segments
+       ,@(map (match-lambda
+                (($ <elem> id mode table type offset items)
+                 (match mode
+                   ('passive
+                    `(elem ,id ,(val-type-repr type)
+                           ,@(map elem-item-repr items)))
+                   ('active
+                    `(elem ,id (table ,table)
+                           (offset ,@(instrs-repr offset))
+                           ,(val-type-repr type)
+                           ,@(map elem-item-repr items)))
+                   ('declarative
+                    `(elem ,id declare ,@(map elem-item-repr items))))))
+              elems)
+       ;; Data segments
+       ,@(map (match-lambda
+                (($ <data> id mode mem offset init)
+                 (case mode
+                   ((active)
+                    `(data ,id ,mem ,@(instrs-repr offset) ,init))
+                   ((passive)
+                    `(data ,id ,init)))))
+              datas)
+       ;; Functions
+       ,@(map (match-lambda
+                (($ <func> id type locals body)
                  (match type
-                   (($ <type> id ($ <func-sig> params results))
-                    `(type ,id (func ,@(map (lambda (param)
-                                              (match param
-                                                (($ <param> id type)
-                                                 `(param ,type))))
-                                            params)
-                                     (result ,@results))))))
-               types))
-       (imports
-        ,@(map (lambda (import)
-                 (match import
-                   (($ <import> mod name kind id type)
-                    `(import ,mod ,name)
-                    (case kind
-                      ((memory)
-                       (match type
-                         (($ <mem-type> ($ <limits> min max))
-                          `(import ,mod
-                                   ,name
-                                   ,(if max
-                                        `(memory ,min ,max)
-                                        `(memory ,min))))))
-                      ((func)
-                       (match type
-                         ((or ($ <type-use> idx ($ <func-sig> params results))
-                              ($ <type-use> idx
-                                            ($ <type> _
-                                                      ($ <func-sig> params
-                                                                    results))))
-                          `(import ,mod
-                                   ,name
-                                   ,@(map (lambda (param)
-                                            (match param
-                                              (($ <param> id type)
-                                               `(param ,id ,type)))
-)
-                                          params)
-                                   (result ,@results)))))))))
-               imports))       
-       (funcs
-        ,@(map (lambda (func)
-                 (match func
-                   (($ <func> id type locals body)
-                    (match type
-                      (($ <type-use> idx
-                                     (or ($ <func-sig> params results)
-                                         ($ <type> _ ($ <func-sig> params results))))
-                       `(func ,(or id idx)
-                              ,@(map (lambda (param)
-                                       (match param
-                                         (($ <param> id type)
-                                          `(param ,id ,type))))
-                                     params)
-                              (result ,@results)
-                              ,@(map (lambda (local)
-                                       (match local
-                                         (($ <local> id type)
-                                          `(local ,id ,type))))
-                                     locals)
-                              ,@body))))))
-               funcs))
-       (tables ,@tables)           ;FIXME
-       (memories ,@memories)       ;FIXME
-       (globals
-        ,@(map (lambda (global)
-                 (match global
-                   (($ <global> id ($ <global-type> mutable? type) init)
-                    `(global ,id
-                             ,(if mutable? `(mut ,type) type)
-                             ,@init))))
-               globals))
-       (exports
-        ,@(map (lambda (export)
-                 (match export
-                   (($ <export> name kind idx)
-                    `(export ,name (,kind ,idx)))))
-               exports))
-       ,@(if start `((start ,start)) '())
-       (elems
-        ,@(map (lambda (elem)
-                 (match elem
-                   (($ <elem> id mode table type offset inits)
-                    (case mode
-                      ((passive)
-                       `(elem ,id ,type ,@inits))
-                      ((active)
-                       `(elem ,id
-                              (table ,table)
-                              (offset ,offset)
-                              ,type
-                              ,@inits))
-                      ((declarative)
-                       `(elem ,id declare ,type ,@inits))))))
-               elems))
-       (datas
-        ,@(map (lambda (data)
-                 (match data
-                   (($ <data> id mode mem offset init)
-                    (case mode
-                      ((active)
-                       `(data ,id (memory ,mem) (offset ,@offset) ,init))
-                      ((passive)
-                       `(data ,id ,init))))))
-               datas))
-       (tags ,@tags)        ;FIXME
-       (strings ,@strings) ;FIXME
-       (custom ,custom)  ;FIXME
-       ))))
+                   (($ <type-use> idx sig)
+                    `(func ,(or id idx)
+                           ,@(match (type-repr sig)
+                               (('func . params+results)
+                                params+results))
+                           ,@(map (match-lambda
+                                    (($ <local> id type)
+                                     `(local ,id ,(val-type-repr type))))
+                                  locals)
+                           ,@(instrs-repr body))))))
+              funcs)
+       ;; Start function
+       ,@(if start `((start ,start)) '())))))

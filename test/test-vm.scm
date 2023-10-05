@@ -1490,6 +1490,28 @@
          #:imports `(("globals" . (("bar" . ,(make-wasm-global 38 #f)))))
          #:d8? #f)
 
+(test-vm "immutable global reference in constant expression"
+         42
+         '(module
+           (global $foo i32 (i32.const 42))
+           (global $bar i32 (global.get $foo))
+           (func (export "main") (result i32)
+                 (global.get $bar))))
+
+(test-vm/error "reference to mutable global in constant expression"
+               '(module
+                 (global $foo (mut i32) (i32.const 42))
+                 (global $bar i32 (global.get $foo))
+                 (func (export "main") (result i32)
+                       (global.get $bar))))
+
+(test-vm/error "reference to subsequent global in constant expression"
+               '(module
+                 (global $bar i32 (global.get $foo))
+                 (global $foo i32 (i32.const 42))
+                 (func (export "main") (result i32)
+                       (global.get $bar))))
+
 (test-vm "drop"
          42
          '(module
@@ -1840,6 +1862,72 @@
            (func (export "main") (result i32)
                  (array.get $foo (array.new_default $foo (i32.const 1)) (i32.const 0)))))
 
+(test-vm "array.new_data"
+         4
+         '(module
+           (type $foo (array i32))
+           (data $init #s32(1 2 3 4))
+           (func (export "main") (result i32)
+                 (array.get $foo (array.new_data $foo $init
+                                                 (i32.const 0)
+                                                 (i32.const 4))
+                            (i32.const 3)))))
+
+(test-vm "array.new_elem"
+         4
+         '(module
+           (type $foo (array (ref i31)))
+           (elem $init (ref i31)
+                 (item (ref.i31 (i32.const 1)))
+                 (item (ref.i31 (i32.const 2)))
+                 (item (ref.i31 (i32.const 3)))
+                 (item (ref.i31 (i32.const 4))))
+           (func (export "main") (result i32)
+                 (i31.get_s
+                  (array.get $foo (array.new_elem $foo $init
+                                                  (i32.const 0)
+                                                  (i32.const 4))
+                             (i32.const 3))))))
+
+(test-vm "array.init_data"
+         4
+         '(module
+           (type $foo (array (mut i32)))
+           (data $init #s32(1 2 3 4))
+           (func (export "main") (result i32)
+                 (local $a (ref $foo))
+                 (local.set $a (array.new $foo
+                                          (i32.const 0)
+                                          (i32.const 4)))
+                 (array.init_data $foo $init
+                                  (local.get $a)
+                                  (i32.const 0)
+                                  (i32.const 0)
+                                  (i32.const 4))
+                 (array.get $foo (local.get $a) (i32.const 3)))))
+
+(test-vm "array.init_elem"
+         4
+         '(module
+           (type $foo (array (mut (ref i31))))
+           (elem $init (ref i31)
+                 (item (ref.i31 (i32.const 1)))
+                 (item (ref.i31 (i32.const 2)))
+                 (item (ref.i31 (i32.const 3)))
+                 (item (ref.i31 (i32.const 4))))
+           (func (export "main") (result i32)
+                 (local $a (ref $foo))
+                 (local.set $a (array.new $foo
+                                          (ref.i31 (i32.const 0))
+                                          (i32.const 4)))
+                 (array.init_elem $foo $init
+                                  (local.get $a)
+                                  (i32.const 0)
+                                  (i32.const 0)
+                                  (i32.const 4))
+                 (i31.get_s
+                  (array.get $foo (local.get $a) (i32.const 3))))))
+
 (test-vm "array.fill"
          42
          '(module
@@ -1866,6 +1954,20 @@
                              (i32.const 0)
                              (i32.const 1))
                  (array.get $foo (local.get $a) (i32.const 0)))))
+
+(test-vm "reference type constants"
+         42
+         '(module
+           (type $foo (array (ref i31)))
+           (global $bar (ref $foo)
+                   (array.new $foo
+                              (ref.i31 (i32.const 42))
+                              (i32.const 1)))
+           (func (export "main") (result i32)
+                 (i31.get_s
+                  (array.get $foo
+                             (global.get $bar)
+                             (i32.const 0))))))
 
 (test-vm "string.const"
          "Hello, world!"

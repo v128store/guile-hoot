@@ -245,7 +245,13 @@
     (check-vector elems id "invalid element"))
   (define (check-string id)
     (check-vector strings id "invalid string"))
-  (define (validate-const type instrs)
+  (define (assert-preceding-and-immutable-global i k)
+    (if (< i k)
+        (when (global-type-mutable? (vector-ref global-types i))
+          (validation-error "mutable global reference in constant" i))
+        (validation-error "uninitialized global reference in constant" i)))
+  (define* (validate-const type instrs #:optional
+                           (global-count (vector-length global-types)))
     (define (validate-instr ctx instr)
       (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
         (($ <invalid-ctx> reason)
@@ -256,9 +262,20 @@
            (('i64.const x) (assert-s64 x))
            (('f32.const x) (assert-f32 x))
            (('f64.const x) (assert-f64 x))
+           (('global.get idx)
+            (assert-preceding-and-immutable-global idx global-count))
            (('string.const idx) (check-string idx))
            (('ref.func f) (check-func f))
-           (('ref.null _) #t)
+           ((or ('ref.null _)
+                ('ref.i31)
+                ('struct.new _)
+                ('struct.new_default _)
+                ('array.new _)
+                ('array.new_default _)
+                ('array.new_fixed _ _)
+                ('extern.internalize)
+                ('extern.externalize))
+            #t)
            (_ (validation-error "invalid constant instruction" instr)))
          ctx)))
     ;; We need to make a phony func object that represents the
@@ -271,14 +288,15 @@
           (() #t)
           ((instr . rest)
            (validate-instr ctx instr))))))
-  (define (validate-global global)
+  (define (validate-global global idx)
     (match global
-      (($ <global> _ ($ <global-type> _ type) instrs)
-       (validate-const type instrs))))
+      (($ <global> id ($ <global-type> _ type) instrs)
+       (validate-const type instrs idx))))
   (define (validate-data data)
     (match data
       (($ <data> _ _ _ offset _)
-       (validate-const 'i32 offset))))
+       (when offset
+         (validate-const 'i32 offset)))))
   (define (validate-elem elem)
     (match elem
       (($ <elem> _ mode _ type offset inits)
@@ -366,7 +384,9 @@
                  (unless (defaultable-type? (array-type-type array))
                    (validation-error "array type has non-defaultable element type"
                                      array))))
-              (('array.set t)
+              ((or ('array.set t)
+                   ('array.init_data t _)
+                   ('array.init_elem t _))
                (let ((type (resolve-type (vector-ref types t))))
                  (unless (array-type-mutable? type)
                    (validation-error "array is immutable" type instr))))
@@ -385,7 +405,23 @@
              ((instr . rest)
               (loop (validate-instr ctx instr) rest)))))
        (validate-branch (initial-ctx wasm func) body))))
-  (for-each validate-global (wasm-globals wasm))
+  ;; Because global.get is a valid constant expression, we need to
+  ;; track the index of the global that is currently being validated.
+  ;; Any global.get instructions that reference an index greater than
+  ;; or equal to the current global's index is invalid.
+  (let ((imported-globals-count
+         (fold (lambda (i sum)
+                 (match i
+                   (($ <import> _ _ 'global) (+ sum 1))
+                   (_ sum)))
+               0 (wasm-imports wasm))))
+    (let loop ((globals (wasm-globals wasm))
+               (i imported-globals-count))
+      (match globals
+        (() #t)
+        ((global . rest)
+         (validate-global global i)
+         (loop rest (+ i 1))))))
   (for-each validate-func (wasm-funcs wasm))
   (for-each validate-data (wasm-datas wasm))
   (for-each validate-elem (wasm-elems wasm))
@@ -626,7 +662,7 @@ binary, or an input port from which a WASM binary is read."
                             (format port "#<wasm-array ~s>"
                                     (wasm-array-vector array))))
 
-(define (make-wasm-array type k fill)
+(define* (make-wasm-array type k #:optional (fill *unspecified*))
   (%make-wasm-array type (make-vector k fill)))
 
 (define (wasm-array-length array)
@@ -652,6 +688,23 @@ binary, or an input port from which a WASM binary is read."
 
 (define (wasm-array-set! array i value)
   (vector-set! (wasm-array-vector array) i value))
+
+(define (wasm-array-init-data! array at data offset length)
+  (let ((ref (match (array-type-type (wasm-array-type array))
+               ('f64 f64vector-ref)
+               ('f32 f32vector-ref)
+               ('i32 s32vector-ref)
+               ('i16 u16vector-ref)
+               ('i8 u8vector-ref)
+               (type (error "non-numeric array type" type)))))
+    (do ((i 0 (+ i 1)))
+        ((= i length))
+      (wasm-array-set! array (+ i at) (ref data (+ i offset))))))
+
+(define (wasm-array-init-elem! array at elem offset length)
+  (do ((i 0 (+ i 1)))
+        ((= i length))
+      (wasm-array-set! array (+ i at) (vector-ref elem (+ i offset)))))
 
 (define (wasm-array-fill! array start fill length)
   (vector-fill! (wasm-array-vector array) fill start (+ start length)))
@@ -870,7 +923,7 @@ binary, or an input port from which a WASM binary is read."
   (hashq-ref *exported-functions* wrap))
 
 (define-record-type <wasm-instance>
-  (make-wasm-instance module types globals funcs memories tables elems
+  (make-wasm-instance module types globals funcs memories tables datas elems
                       strings exports)
   wasm-instance?
   (module wasm-instance-module)
@@ -879,6 +932,7 @@ binary, or an input port from which a WASM binary is read."
   (funcs wasm-instance-funcs)
   (memories wasm-instance-memories)
   (tables wasm-instance-tables)
+  (datas wasm-instance-datas)
   (elems wasm-instance-elems)
   (strings wasm-instance-strings)
   (exports wasm-instance-exports))
@@ -922,11 +976,12 @@ binary, or an input port from which a WASM binary is read."
             (func-vec (make-vector (+ n-func-imports (length funcs))))
             (memory-vec (make-vector (+ n-memory-imports (length memories))))
             (table-vec (make-vector (+ n-table-imports (length tables))))
+            (data-vec (make-vector (length datas)))
             (elem-vec (make-vector (length elems)))
             (string-vec (list->vector strings))
             (export-table (make-hash-table))
             (instance (make-wasm-instance module type-vec global-vec func-vec
-                                          memory-vec table-vec elem-vec
+                                          memory-vec table-vec data-vec elem-vec
                                           string-vec export-table)))
        (define (type-check vals types)
          (unless (let loop ((vals vals)
@@ -1091,17 +1146,19 @@ binary, or an input port from which a WASM binary is read."
            ((($ <memory> _ ($ <mem-type> (and ($ <limits> min) limits))) . rest)
             (vector-set! memory-vec idx (make-wasm-memory min limits))
             (loop rest (+ idx 1)))))
-       ;; Copy data into memory.
+       ;; Initialize data segments and copy active ones into memory.
        (let loop ((datas datas) (idx 0))
          (match datas
            (() #t)
            (((and ($ <data> _ mode mem-id instrs init) data) . rest)
-            ;; Invoke the VM to process the constant
-            ;; expressions that produce the offset value.
-            (let ((offset (exec-init `(data ,idx) instrs))
-                  (memory (vector-ref memory-vec mem-id)))
-              (bytevector-copy! init 0 (wasm-memory-bytes memory)
-                                offset (bytevector-length init)))
+            (vector-set! data-vec idx init)
+            (when (eq? mode 'active)
+              ;; Invoke the VM to process the constant
+              ;; expressions that produce the offset value.
+              (let ((offset (exec-init `(data ,idx) instrs))
+                    (memory (vector-ref memory-vec mem-id)))
+                (bytevector-copy! init 0 (wasm-memory-bytes memory)
+                                  offset (bytevector-length init))))
             (loop rest (+ idx 1)))))
        ;; Initialize tables.
        (let loop ((tables tables)
@@ -1377,6 +1434,8 @@ binary, or an input port from which a WASM binary is read."
     (vector-ref (wasm-instance-tables instance) idx))
   (define (elem-ref idx)
     (vector-ref (wasm-instance-elems instance) idx))
+  (define (data-ref idx)
+    (vector-ref (wasm-instance-datas instance) idx))
   (define (func-ref idx)
     (vector-ref (wasm-instance-funcs instance) idx))
   (define (string-ref idx)
@@ -1660,19 +1719,34 @@ binary, or an input port from which a WASM binary is read."
     (('array.new t)
      (lets (fill k) (push (make-wasm-array (type-ref t) (s32->u32 k) fill))))
     (('array.new_fixed t k)
-     (let ((array (make-wasm-array (type-ref t) k *unspecified*)))
+     (let ((array (make-wasm-array (type-ref t) k)))
        (do ((i (- k 1) (- i 1)))
            ((< i 0))
          (wasm-array-set! array i (pop)))
        (push array)))
-    (('array.new_default idx)
+    (('array.new_default t)
      (lets (k)
-           (let ((type (type-ref idx)))
+           (let ((type (type-ref t)))
              (push (make-wasm-array type k
                                     (default-for-type
                                       (array-type-type
                                        (resolve-type type))))))))
-    ;; TODO: array.new_data, array.new_elem, array.init_data, array.init_elem
+    (('array.new_data t d)
+     (lets (offset k)
+           (let ((array (make-wasm-array (type-ref t) k)))
+             (wasm-array-init-data! array 0 (data-ref d) offset k)
+             (push array))))
+    (('array.new_elem t d)
+     (lets (offset k)
+           (let ((array (make-wasm-array (type-ref t) k)))
+             (wasm-array-init-elem! array 0 (elem-ref d) offset k)
+             (push array))))
+    (('array.init_data t d)
+     (lets (a at offset length)
+           (wasm-array-init-data! a at (data-ref d) offset length)))
+    (('array.init_elem t d)
+     (lets (a at offset length)
+           (wasm-array-init-elem! a at (elem-ref d) offset length)))
     (('array.len) (lets (a) (push (wasm-array-length a))))
     (('array.get _) (lets (a i) (push (wasm-array-ref a (s32->u32 i)))))
     (('array.get_s _) (lets (a i) (push (wasm-array-ref-signed a (s32->u32 i)))))
@@ -1680,6 +1754,8 @@ binary, or an input port from which a WASM binary is read."
     (('array.set _) (lets (a i x) (wasm-array-set! a (s32->u32 i) x)))
     (('array.fill _) (lets (a d x n) (wasm-array-fill! a d x n)))
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
+    (('extern.internalize _) #t)
+    (('extern.externalize _) #t)
     ;; Strings:
     (('string.const idx) (push (string-ref idx)))
     (('string.new_lossy_utf8_array)

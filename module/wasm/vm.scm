@@ -245,7 +245,13 @@
     (check-vector elems id "invalid element"))
   (define (check-string id)
     (check-vector strings id "invalid string"))
-  (define (validate-const type instrs)
+  (define (assert-preceding-and-immutable-global i k)
+    (if (< i k)
+        (when (global-type-mutable? (vector-ref global-types i))
+          (validation-error "mutable global reference in constant" i))
+        (validation-error "uninitialized global reference in constant" i)))
+  (define* (validate-const type instrs #:optional
+                           (global-count (vector-length global-types)))
     (define (validate-instr ctx instr)
       (match (apply-stack-effect ctx (compute-stack-effect ctx instr))
         (($ <invalid-ctx> reason)
@@ -256,6 +262,8 @@
            (('i64.const x) (assert-s64 x))
            (('f32.const x) (assert-f32 x))
            (('f64.const x) (assert-f64 x))
+           (('global.get idx)
+            (assert-preceding-and-immutable-global idx global-count))
            (('string.const idx) (check-string idx))
            (('ref.func f) (check-func f))
            ((or ('ref.null _)
@@ -280,10 +288,10 @@
           (() #t)
           ((instr . rest)
            (validate-instr ctx instr))))))
-  (define (validate-global global)
+  (define (validate-global global idx)
     (match global
-      (($ <global> _ ($ <global-type> _ type) instrs)
-       (validate-const type instrs))))
+      (($ <global> id ($ <global-type> _ type) instrs)
+       (validate-const type instrs idx))))
   (define (validate-data data)
     (match data
       (($ <data> _ _ _ offset _)
@@ -397,7 +405,23 @@
              ((instr . rest)
               (loop (validate-instr ctx instr) rest)))))
        (validate-branch (initial-ctx wasm func) body))))
-  (for-each validate-global (wasm-globals wasm))
+  ;; Because global.get is a valid constant expression, we need to
+  ;; track the index of the global that is currently being validated.
+  ;; Any global.get instructions that reference an index greater than
+  ;; or equal to the current global's index is invalid.
+  (let ((imported-globals-count
+         (fold (lambda (i sum)
+                 (match i
+                   (($ <import> _ _ 'global) (+ sum 1))
+                   (_ sum)))
+               0 (wasm-imports wasm))))
+    (let loop ((globals (wasm-globals wasm))
+               (i imported-globals-count))
+      (match globals
+        (() #t)
+        ((global . rest)
+         (validate-global global i)
+         (loop rest (+ i 1))))))
   (for-each validate-func (wasm-funcs wasm))
   (for-each validate-data (wasm-datas wasm))
   (for-each validate-elem (wasm-elems wasm))

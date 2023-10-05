@@ -1490,6 +1490,28 @@
          #:imports `(("globals" . (("bar" . ,(make-wasm-global 38 #f)))))
          #:d8? #f)
 
+(test-vm "immutable global reference in constant expression"
+         42
+         '(module
+           (global $foo i32 (i32.const 42))
+           (global $bar i32 (global.get $foo))
+           (func (export "main") (result i32)
+                 (global.get $bar))))
+
+(test-vm/error "reference to mutable global in constant expression"
+               '(module
+                 (global $foo (mut i32) (i32.const 42))
+                 (global $bar i32 (global.get $foo))
+                 (func (export "main") (result i32)
+                       (global.get $bar))))
+
+(test-vm/error "reference to subsequent global in constant expression"
+               '(module
+                 (global $bar i32 (global.get $foo))
+                 (global $foo i32 (i32.const 42))
+                 (func (export "main") (result i32)
+                       (global.get $bar))))
+
 (test-vm "drop"
          42
          '(module

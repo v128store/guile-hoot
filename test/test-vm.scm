@@ -1933,6 +1933,20 @@
                              (i32.const 1))
                  (array.get $foo (local.get $a) (i32.const 0)))))
 
+(test-vm "reference type constants"
+         42
+         '(module
+           (type $foo (array (ref i31)))
+           (global $bar (ref $foo)
+                   (array.new $foo
+                              (ref.i31 (i32.const 42))
+                              (i32.const 1)))
+           (func (export "main") (result i32)
+                 (i31.get_s
+                  (array.get $foo
+                             (global.get $bar)
+                             (i32.const 0))))))
+
 (test-vm "string.const"
          "Hello, world!"
          '(module

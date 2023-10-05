@@ -2205,6 +2205,45 @@
                (call $die0 (string.const "$slow-="))
                (unreachable))))
 
+     (func $heap-numbers-equal? (param $a (ref eq)) (param $b (ref eq))
+           (result i32)
+           ,(arith-cond
+             'i32
+             `((ref.test $bignum (local.get $a))
+               ,(arith-cond
+                 'i32
+                 `((ref.test $bignum (local.get $b))
+                   (call $eq-big-big
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
+                         (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
+                 '((i32.const 1)
+                   (i32.const 0))))
+             `((ref.test $flonum (local.get $a))
+               ,(arith-cond
+                 'i32
+                 `((ref.test $flonum (local.get $b))
+                   (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                 '((i32.const 1)
+                   (i32.const 0))))
+             `((ref.test $fraction (local.get $a))
+               ,(arith-cond
+                 'i32
+                 `((ref.test $fraction (local.get $b))
+                   (i32.and
+                    (call $slow-=
+                          (struct.get $fraction $num
+                                      (ref.cast $fraction (local.get $a)))
+                          (struct.get $fraction $num
+                                      (ref.cast $fraction (local.get $b))))
+                    (call $slow-=
+                          (struct.get $fraction $denom
+                                      (ref.cast $fraction (local.get $a)))
+                          (struct.get $fraction $denom
+                                      (ref.cast $fraction (local.get $b))))))
+                 '((i32.const 1)
+                   (i32.const 0))))))
+
      (func $string-set! (param $str (ref $string)) (param $idx i32)
            (param $ch i32)
            (call $die0 (string.const "$string-set!")) (unreachable))

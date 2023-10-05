@@ -27,4 +27,10 @@
 (test-call "1" (lambda (a) (car a)) '(1 . 2))
 (test-call "2" (lambda (a) (cdr a)) '(1 . 2))
 
+(test-call "#t" (lambda (a b) (equal? a b)) '() '())
+(test-call "#t" (lambda (a b) (equal? a b)) '(1 . 2) '(1 . 2))
+(test-call "#t" (lambda (a b) (equal? a b)) '(1 2) '(1 2))
+(test-call "#f" (lambda (a b) (equal? a b)) '() '(1))
+(test-call "#f" (lambda (a b) (equal? a b)) '(1 2) '(2 1))
+
 (test-end* "test-pairs")

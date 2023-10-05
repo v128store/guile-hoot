@@ -45,4 +45,10 @@
 (test-call "18446744073709551616" (lambda (x y) (ash x y)) 1 64)
 (test-call "0" (lambda (x y z) (ash (+ x y) z)) 536870911 1 -64)
 
+;; Bitvector equality
+(test-call "#t" (lambda (a b) (equal? a b)) #* #*)
+(test-call "#t" (lambda (a b) (equal? a b)) #*10 #*10)
+(test-call "#f" (lambda (a b) (equal? a b)) #* #*1)
+(test-call "#f" (lambda (a b) (equal? a b)) #*10 #*01)
+
 (test-end* "test-bitwise")

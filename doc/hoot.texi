@@ -1648,7 +1648,7 @@ containing a WASM binary, or an input port from which to read a WASM
 binary.
 @end deffn
 
-@deffn {Procedure} validate-wasm? obj
+@deffn {Procedure} validated-wasm? obj
 Return @code{#t} if @var{obj} is a validated WASM object.
 @end deffn
 

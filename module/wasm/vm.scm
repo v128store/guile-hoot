@@ -1721,6 +1721,8 @@ binary, or an input port from which a WASM binary is read."
     (('array.set _) (lets (a i x) (wasm-array-set! a (s32->u32 i) x)))
     (('array.fill _) (lets (a d x n) (wasm-array-fill! a d x n)))
     (('array.copy _ _) (lets (dst d src s n) (wasm-array-copy! dst d src s n)))
+    (('extern.internalize _) #t)
+    (('extern.externalize _) #t)
     ;; Strings:
     (('string.const idx) (push (string-ref idx)))
     (('string.new_lossy_utf8_array)

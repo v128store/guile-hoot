@@ -629,7 +629,7 @@ binary, or an input port from which a WASM binary is read."
                             (format port "#<wasm-array ~s>"
                                     (wasm-array-vector array))))
 
-(define (make-wasm-array type k fill)
+(define* (make-wasm-array type k #:optional (fill *unspecified*))
   (%make-wasm-array type (make-vector k fill)))
 
 (define (wasm-array-length array)
@@ -1686,7 +1686,7 @@ binary, or an input port from which a WASM binary is read."
     (('array.new t)
      (lets (fill k) (push (make-wasm-array (type-ref t) (s32->u32 k) fill))))
     (('array.new_fixed t k)
-     (let ((array (make-wasm-array (type-ref t) k *unspecified*)))
+     (let ((array (make-wasm-array (type-ref t) k)))
        (do ((i (- k 1) (- i 1)))
            ((< i 0))
          (wasm-array-set! array i (pop)))
@@ -1700,12 +1700,12 @@ binary, or an input port from which a WASM binary is read."
                                        (resolve-type type))))))))
     (('array.new_data t d)
      (lets (offset k)
-           (let ((array (make-wasm-array (type-ref t) k *unspecified*)))
+           (let ((array (make-wasm-array (type-ref t) k)))
              (wasm-array-init-data! array 0 (data-ref d) offset k)
              (push array))))
     (('array.new_elem t d)
      (lets (offset k)
-           (let ((array (make-wasm-array (type-ref t) k *unspecified*)))
+           (let ((array (make-wasm-array (type-ref t) k)))
              (wasm-array-init-elem! array 0 (elem-ref d) offset k)
              (push array))))
     (('array.init_data t d)

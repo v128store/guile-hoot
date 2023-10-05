@@ -374,13 +374,9 @@ To run @file{hello.wasm}, we need a little JavaScript glue code:
 @example
 @verbatim
 async function load() {
-  const mod = await SchemeModule.fetch_and_instantiate("hello.wasm", {});
-  const reflect = await mod.reflect();
-  const proc = new Procedure(reflect, mod.get_export("$load").value);
-  const [message] = proc.call();
+  const [message] = await Scheme.load_main("hello.wasm", {});
   console.log(message);
 }
-
 window.addEventListener("load", load);
 @end verbatim
 @end example

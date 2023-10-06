@@ -322,6 +322,32 @@ function flonum_to_string(f64) {
     }
 }
 
+let wtf8_helper;
+
+function wtf8_to_string(wtf8) {
+    let { string_iter, iter_next } = wtf8_helper.exports;
+    let codepoints = [];
+    let iter = string_iter(wtf8);
+    for (let cp = iter_next(iter); cp != -1; cp = iter_next(iter))
+        codepoints.push(cp);
+    return String.fromCodePoint(...codepoints);
+}
+
+function string_to_wtf8(str) {
+    let { make_builder, builder_push_codepoint, finish_builder } =
+        wtf8_helper.exports;
+    let builder = make_builder()
+    for (let cp of str)
+        builder_push_codepoint(builder, cp);
+    return finish_builder(builder);
+}
+
+async function load_wtf8_helper_module() {
+    if (wtf8_helper) return;
+    let { module, instance } = await instantiate_streaming("js-runtime/wtf8.wasm");
+    wtf8_helper = instance;
+}
+
 class SchemeModule {
     #instance;
     #io_handler;
@@ -404,6 +430,10 @@ class SchemeModule {
         fatan: Math.atan,
         fatan2: Math.atan2,
 
+        // Wrap in functions to allow for lazy loading of the wtf8
+        // module.
+        wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); },
+        string_to_wtf8(str) { return string_to_wtf8(str); },
 
         die(tag, data) { throw new SchemeTrapError(tag, data); }
     };
@@ -437,6 +467,7 @@ class SchemeModule {
         }
     }
     static async fetch_and_instantiate(path, imported_abi) {
+        await load_wtf8_helper_module();
         let io = {
             write_stdout(str) { mod.#io_handler.write_stdout(str); },
             write_stderr(str) { mod.#io_handler.write_stderr(str); },

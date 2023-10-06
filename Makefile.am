@@ -7,7 +7,8 @@ nobase_noinst_DATA = $(WASMOBJECTS)
 
 WATS = 						\
   examples/basic-types.wat			\
-  js-runtime/reflect.wat
+  js-runtime/reflect.wat			\
+  js-runtime/wtf8.wat
 
 SUFFIXES = .wat .wasm
 # The mkdir is necessary for 'make distcheck' since it's building in a

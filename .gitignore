@@ -16,3 +16,4 @@ Makefile.in
 /js-test
 /doc/hoot.info
 /doc/hoot.html/
+/js-runtime/wtf8.wasm

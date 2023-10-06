@@ -84,6 +84,19 @@ Licensed under the Apache License, Version 2.0:
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.~%"))
 
+(define (read-wat port)
+  (let ((datum (read port)))
+    (match datum
+      (('module . _)
+       (match (read port)
+         ((? eof-object?) datum)
+         (tail (error "unexpected form after (module)" tail))))
+      (_
+       (let lp ((datum datum))
+         (if (eof-object? datum)
+             '()
+             (cons datum (lp (read port)))))))))
+
 (define (assemble-wasm . args)
   (let* ((options         (parse-args args))
          (help?           (assoc-ref options 'help?))
@@ -115,7 +128,7 @@ Report bugs to <~A>.~%"
     (match input-files
       (() (fail "missing input file"))
       ((input-file)
-       (let ((expr (with-input-from-file input-file read)))
+       (let ((expr (call-with-input-file input-file read-wat)))
          (call-with-output-file output-file
            (cut put-bytevector <>
                 (wasm:assemble-wasm (lower-wasm (wat->wasm expr))))))

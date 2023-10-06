@@ -330,9 +330,9 @@ function flonum_to_string(f64) {
 let wtf8_helper;
 
 function wtf8_to_string(wtf8) {
-    let { string_iter, iter_next } = wtf8_helper.exports;
+    let { as_iter, iter_next } = wtf8_helper.exports;
     let codepoints = [];
-    let iter = string_iter(wtf8);
+    let iter = as_iter(wtf8);
     for (let cp = iter_next(iter); cp != -1; cp = iter_next(iter))
         codepoints.push(cp);
     return String.fromCodePoint(...codepoints);

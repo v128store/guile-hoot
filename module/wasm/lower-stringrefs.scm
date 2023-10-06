@@ -214,12 +214,12 @@
      (data $wtf8-transitions ,%wtf8-transitions)
      (data $wtf8-states ,%wtf8-states)
      (global $wtf8-transitions (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-transitions
+             (array.new_data $immutable-bytes $wtf8-transitions
                              (i32.const 0)
                              (i32.const
                               ,(bytevector-length %wtf8-transitions))))
      (global $wtf8-states (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-states
+             (array.new_data $immutable-bytes $wtf8-states
                              (i32.const 0)
                              (i32.const
                               ,(bytevector-length %wtf8-states))))
@@ -275,6 +275,10 @@
                  (then (i32.const -1))
                  (else (i32.const 0)))))
 
+     (func $string.eq (param $a (ref $wtf8)) (param $b (ref $wtf8))
+           (result i32)
+           (i32.eqz (call $string.compare (local.get $a) (local.get $b))))
+
      (func $string.as_iter (param $wtf8 (ref $wtf8))
            (result (ref $stringview-iter))
            (struct.new $stringview-iter
@@ -315,7 +319,7 @@
            (struct.set $stringview-iter $byte-offset
                        (local.get $iter) (local.get $i))
            (struct.set $stringview-iter $codepoint-offset
-                       (local.get $stringview-iter)
+                       (local.get $iter)
                        (i32.add (struct.get $stringview-iter
                                             $codepoint-offset
                                             (local.get $iter))
@@ -366,7 +370,7 @@
            (struct.set $stringview-iter $byte-offset
                        (local.get $iter) (local.get $i))
            (struct.set $stringview-iter $codepoint-offset
-                       (local.get $stringview-iter)
+                       (local.get $iter)
                        (i32.add (struct.get $stringview-iter
                                             $codepoint-offset
                                             (local.get $iter))
@@ -421,7 +425,7 @@
            (local.set $out (array.new_default $wtf8 (local.get $len)))
            (array.copy $wtf8 $wtf8
                        (local.get $out) (i32.const 0)
-                       (local.get $wtf8) (local.get $start) (local.get $len))
+                       (local.get $buf) (local.get $start) (local.get $len))
            (local.get $out)))))
 
 (define (lower-stringrefs/wtf8 wasm)
@@ -649,11 +653,12 @@
           (make-func
            id
            (visit-type-use type)
-           (map (lambda (type) (make-local #f type)) results)
+           (map (lambda (type) (make-local #f (lower-extern-val-type type)))
+                results)
            (let lp ((params params) (i 0))
              (match params
                ((param . params)
-                `((local.ref ,i)
+                `((local.get ,i)
                   ,@(lower-extern-func-param param)
                   . ,(lp params (1+ i))))
                (()
@@ -664,7 +669,7 @@
                        (match results
                          (() '())
                          ((result . results)
-                          `((local.ref ,i)
+                          `((local.get ,i)
                             ,@(lift-extern-func-result result)
                             . ,(lp results (1+ i))))))))))))))
 

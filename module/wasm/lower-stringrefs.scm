@@ -650,28 +650,29 @@
      (define (lower-extern-func id wrapped-id type)
        (match type
          (($ <type-use> _ ($ <func-sig> (($ <param> _ params) ...) results))
-          (make-func
-           id
-           (visit-type-use type)
-           (map (lambda (type) (make-local #f (lower-extern-val-type type)))
-                results)
-           (let lp ((params params) (i 0))
-             (match params
-               ((param . params)
-                `((local.get ,i)
-                  ,@(lower-extern-func-param param)
-                  . ,(lp params (1+ i))))
-               (()
-                `((call ,wrapped-id)
-                  ,@(reverse (map (lambda (i) `(local.set ,i))
-                                  (iota (length results))))
-                  . ,(let lp ((results results) (i 0))
-                       (match results
-                         (() '())
-                         ((result . results)
-                          `((local.get ,i)
-                            ,@(lift-extern-func-result result)
-                            . ,(lp results (1+ i))))))))))))))
+          (let ((param-count (length params)))
+            (make-func
+             id
+             (visit-type-use type)
+             (map (lambda (type) (make-local #f (lower-extern-val-type type)))
+                  results)
+             (let lp ((params params) (i 0))
+               (match params
+                 ((param . params)
+                  `((local.get ,i)
+                    ,@(lower-extern-func-param param)
+                    . ,(lp params (1+ i))))
+                 (()
+                  `((call ,wrapped-id)
+                    ,@(reverse (map (lambda (i) `(local.set ,i))
+                                    (iota (length results) param-count)))
+                    . ,(let lp ((results results) (i param-count))
+                         (match results
+                           (() '())
+                           ((result . results)
+                            `((local.get ,i)
+                              ,@(lift-extern-func-result result)
+                              . ,(lp results (1+ i)))))))))))))))
 
      (let ((types (map (match-lambda
                         (($ <rec-group> (($ <type> id type) ...))

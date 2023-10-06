@@ -24,6 +24,7 @@
   #:use-module (ice-9 match)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 binary-ports)
+  #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
   #:use-module (wasm vm)
@@ -588,6 +589,8 @@
       ("facos" . ,acos)
       ("fatan" . ,atan)
       ("fatan2" . ,atan)
+      ("wtf8_to_string" . ,utf8->string)
+      ("string_to_wtf8" . ,string->utf8)
       ("die" . ,(lambda (key . args)
                   (apply throw (string->symbol key) args)))))
     ("io" .

@@ -46,7 +46,7 @@
                 (global $s0 (ref string) (string.const "hey"))
                 (func $main (param $i i32) (result i32)
                       (local.get 0) (call 1) (call 0)))
-              (wasm->wat (lower-wasm mod))))
+              (wasm->wat (lower-wasm mod #:stringref-lowering 'stringref))))
 
 (let ((mod (wat->wasm
             '((func $string-to-i32 (import "app" "string-to-i32")

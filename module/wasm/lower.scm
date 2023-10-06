@@ -24,7 +24,7 @@
   #:use-module (wasm resolve)
   #:export (lower-wasm stringref-lowering))
 
-(define stringref-lowering (make-parameter 'stringref))
+(define stringref-lowering (make-parameter 'wtf8))
 
 (define* (lower-wasm wasm #:key (stringref-lowering (stringref-lowering)))
   (resolve-wasm

@@ -24,6 +24,7 @@
              (ice-9 popen)
              (ice-9 textual-ports)
              (srfi srfi-64)
+             (test utils)
              (wasm wat)
              (wasm lower)
              (wasm assemble)
@@ -95,7 +96,7 @@
 
 (define* (test-vm name expected wat #:key
                   (func "main") (args '()) (imports '())
-                  (d8? #t) (d8-read read))
+                  (d8? use-d8?) (d8-read read))
   (test-equal name
     expected
     (eval-wat wat func args imports d8? d8-read)))

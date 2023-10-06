@@ -30,6 +30,7 @@
   #:use-module (srfi srfi-64)
   #:export (d8
             srcdir
+            use-d8?
             use-hoot-vm?
             test-compilation
             test-call

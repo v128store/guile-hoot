@@ -160,7 +160,12 @@ class Scheme {
 
     static async reflect(abi) {
         let { module, instance } =
-            await instantiate_streaming('js-runtime/reflect.wasm', { abi });
+            await instantiate_streaming('js-runtime/reflect.wasm', {
+              abi,
+              rt: {
+                wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); }
+              }
+            });
         return new Scheme(instance, abi);
     }
 

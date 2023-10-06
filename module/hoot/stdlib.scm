@@ -34,9 +34,11 @@
        (let* ((clause1 (car clauses))
               (cond1 (car clause1))
               (res1 (cdr clause1)))
-         `(if ,type ,cond1
-              (then ,@res1)
-              (else ,(apply arith-cond type (cdr clauses))))))))
+         (if (eq? cond1 'else)
+             `(block ,type ,@res1)
+             `(if ,type ,cond1
+                  (then ,@res1)
+                  (else ,(apply arith-cond type (cdr clauses)))))))))
 
 (define (call-fmath fn . args)
   `(struct.new $flonum
@@ -1873,7 +1875,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -1898,7 +1900,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
              `((ref.test $flonum (local.get $a))
@@ -1926,11 +1928,11 @@
                        (f64.lt (call $flonum->f64
                                      (ref.cast $flonum (local.get $a)))
                                (f64.const 0)))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-<
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))
                              (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
              `((ref.test $fraction (local.get $a))
@@ -1958,14 +1960,14 @@
                        (f64.lt (f64.const 0)
                                (call $flonum->f64
                                      (ref.cast $flonum (local.get $b)))))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-<
                              (local.get $a)
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$slow-<"))
                (unreachable))))
 
@@ -1991,7 +1993,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<="))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -2016,7 +2018,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<="))
                    (unreachable))))
              `((ref.test $flonum (local.get $a))
@@ -2044,11 +2046,11 @@
                        (f64.lt (call $flonum->f64
                                      (ref.cast $flonum (local.get $a)))
                                (f64.const 0)))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-<=
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))
                              (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<="))
                    (unreachable))))
              `((ref.test $fraction (local.get $a))
@@ -2076,14 +2078,14 @@
                        (f64.le (f64.const 0)
                                (call $flonum->f64
                                      (ref.cast $flonum (local.get $b)))))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-<=
                              (local.get $a)
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $b))))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-<="))
                    (unreachable))))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$slow-<="))
                (unreachable))))
 
@@ -2109,7 +2111,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-="))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -2134,7 +2136,7 @@
                                            (ref.cast $fraction (local.get $b))))
                          (struct.get $fraction $num
                                      (ref.cast $fraction (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-="))
                    (unreachable))))
              `((ref.test $flonum (local.get $a))
@@ -2162,11 +2164,11 @@
                        (f64.eq (call $flonum->f64
                                      (ref.cast $flonum (local.get $a)))
                                (f64.const 0)))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-=
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))
                              (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-="))
                    (unreachable))))
              `((ref.test $fraction (local.get $a))
@@ -2194,14 +2196,14 @@
                        (f64.eq (f64.const 0)
                                (call $flonum->f64
                                      (ref.cast $flonum (local.get $b)))))
-                     '((i32.const 1)
+                     '(else
                        (call $slow-=
                              (local.get $a)
                              (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $b))))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$slow-="))
                    (unreachable))))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$slow-="))
                (unreachable))))
 
@@ -2216,7 +2218,7 @@
                    (call $eq-big-big
                          (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
                          (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (i32.const 0))))
              `((ref.test $flonum (local.get $a))
                ,(arith-cond
@@ -2224,7 +2226,7 @@
                  `((ref.test $flonum (local.get $b))
                    (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
                            (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
-                 '((i32.const 1)
+                 '(else
                    (i32.const 0))))
              `((ref.test $fraction (local.get $a))
                ,(arith-cond
@@ -2241,7 +2243,7 @@
                                       (ref.cast $fraction (local.get $a)))
                           (struct.get $fraction $denom
                                       (ref.cast $fraction (local.get $b))))))
-                 '((i32.const 1)
+                 '(else
                    (i32.const 0))))))
 
      (func $string-set! (param $str (ref $string)) (param $idx i32)
@@ -3381,7 +3383,7 @@
                                      (call $bignum-logand-i32
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
                                            (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$logand"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -3400,7 +3402,7 @@
                                      (call $bignum-logand-bignum
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
-                 `((i32.const 1)
+                 `(else
                    (call $die0 (string.const "$logand"))
                    (unreachable))))
              '((ref.test $flonum (local.get $a))
@@ -3409,7 +3411,7 @@
              '((ref.test $fraction (local.get $a))
                (call $die0 (string.const "$logand"))
                (unreachable))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$logand"))
                (unreachable))))
 
@@ -3428,7 +3430,7 @@
                                 (call $bignum-logior-i32
                                       (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
                                       (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$logior"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -3447,7 +3449,7 @@
                                      (call $bignum-logior-bignum
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
-                 `((i32.const 1)
+                 `(else
                    (call $die0 (string.const "$logior"))
                    (unreachable))))
              '((ref.test $flonum (local.get $a))
@@ -3456,7 +3458,7 @@
              '((ref.test $fraction (local.get $a))
                (call $die0 (string.const "$logior"))
                (unreachable))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$logior"))
                (unreachable))))
 
@@ -3475,7 +3477,7 @@
                                      (call $bignum-logxor-i32
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))
                                            (call $fixnum->i32 (ref.cast i31 (local.get $a)))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$logxor"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -3494,7 +3496,7 @@
                                      (call $bignum-logxor-bignum
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
-                 `((i32.const 1)
+                 `(else
                    (call $die0 (string.const "$logxor"))
                    (unreachable))))
              '((ref.test $flonum (local.get $a))
@@ -3503,7 +3505,7 @@
              '((ref.test $fraction (local.get $a))
                (call $die0 (string.const "$logxor"))
                (unreachable))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$logxor"))
                (unreachable))))
 
@@ -3525,7 +3527,7 @@
                                      (call $i32-logsub-bignum
                                            (call $fixnum->i32 (ref.cast i31 (local.get $a)))
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $b)))))))
-                 '((i32.const 1)
+                 '(else
                    (call $die0 (string.const "$logsub"))
                    (unreachable))))
              `((ref.test $bignum (local.get $a))
@@ -3544,7 +3546,7 @@
                                      (call $bignum-logsub-bignum
                                            (struct.get $bignum $val (ref.cast $bignum (local.get $a)))
                                            (struct.get $bignum $val (ref.cast i31 (local.get $b)))))))
-                 `((i32.const 1)
+                 `(else
                    (call $die0 (string.const "$logsub"))
                    (unreachable))))
              '((ref.test $flonum (local.get $a))
@@ -3553,7 +3555,7 @@
              '((ref.test $fraction (local.get $a))
                (call $die0 (string.const "$logsub"))
                (unreachable))
-             '((i32.const 1)
+             '(else
                (call $die0 (string.const "$logsub"))
                (unreachable))))
 
@@ -3567,7 +3569,7 @@
                                        (struct.get $bignum $val
                                                    (ref.cast $bignum (local.get $a)))
                                        (local.get $b)))))
-             '((i32.const 1)
+             '(else
                (call $die
                      (string.const "$rsh bad first arg")
                      (local.get $a))
@@ -3589,7 +3591,7 @@
                                  (struct.get $bignum $val
                                              (ref.cast $bignum (local.get $a)))
                                  (local.get $b))))
-             '((i32.const 1)
+             '(else
                (call $die
                      (string.const "$lsh bad first arg")
                      (local.get $a))

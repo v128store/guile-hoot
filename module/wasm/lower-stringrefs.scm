@@ -683,17 +683,21 @@
                        types))
            (imports (map
                      (match-lambda
-                      (($ <import> mod name kind id type)
-                       (let* ((type* (match kind
-                                       ('func (lower-extern-func-type type))
-                                       ('table (visit-table-type type))
-                                       ('memory type)
-                                       ('global (visit-global-type type))))
-                              (id* (and (eq? kind 'func)
-                                        (not (equal? type type*))
-                                        (make-id (symbol-append id '-stringref)))))
-                         (cons (and id* (lower-extern-func id id* type))
-                               (make-import mod name kind (or id* id) type*)))))
+                       (($ <import> mod name kind id type)
+                        (let* ((internal? (eqv? (string-ref name 0) #\$))
+                               (type* (match kind
+                                        ('func (if internal?
+                                                   (visit-type-use type)
+                                                   (lower-extern-func-type type)))
+                                        ('table (visit-table-type type))
+                                        ('memory type)
+                                        ('global (visit-global-type type))))
+                               (id* (and (eq? kind 'func)
+                                         (not internal?)
+                                         (not (equal? type type*))
+                                         (make-id (symbol-append id '-stringref)))))
+                          (cons (and id* (lower-extern-func id id* type))
+                                (make-import mod name kind (or id* id) type*)))))
                      imports))
            (funcs (map visit-func funcs))
            (tables (map (match-lambda

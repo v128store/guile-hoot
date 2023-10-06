@@ -35,6 +35,7 @@ SCM_TESTS = 					\
   test/test-fluids.scm				\
   test/test-fractions.scm			\
   test/test-ints.scm				\
+  test/test-lower.scm				\
   test/test-lower-globals.scm			\
   test/test-lower-stringrefs.scm		\
   test/test-number-to-string.scm		\

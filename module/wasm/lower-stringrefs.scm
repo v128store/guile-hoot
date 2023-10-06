@@ -729,7 +729,7 @@
                        %strings))
               (wtf8 (hash-map->list
                      (lambda (str id)
-                       (make-data id 'passive 0 0 (string->utf8 str)))
+                       (make-data id 'passive #f #f (string->utf8 str)))
                      %strings)))
          (add-stdlib
           (make-wasm types

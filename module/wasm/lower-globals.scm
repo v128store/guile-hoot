@@ -77,6 +77,7 @@
            (('extern.externalize) #t)
            (('extern.internalize) #t)
            (('ref.i31) #t)
+           (('string.const _) #t)
            (_ #f)))
        (and-map constant-inst? expr))
 

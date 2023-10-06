@@ -22,8 +22,11 @@
   #:use-module (wasm lower-globals)
   #:use-module (wasm lower-stringrefs)
   #:use-module (wasm resolve)
-  #:export (lower-wasm))
+  #:export (lower-wasm stringref-lowering))
 
-(define (lower-wasm wasm)
-  ;(resolve-wasm (lower-globals (lower-stringrefs wasm)))
-  (resolve-wasm (lower-globals wasm)))
+(define stringref-lowering (make-parameter 'stringref))
+
+(define* (lower-wasm wasm #:key (stringref-lowering (stringref-lowering)))
+  (resolve-wasm
+   (lower-globals
+    (lower-stringrefs wasm #:strategy stringref-lowering))))

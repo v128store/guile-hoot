@@ -32,7 +32,7 @@
   #:use-module (srfi srfi-26)
   #:use-module (srfi srfi-37)
   #:use-module ((wasm assemble) #:select ((assemble-wasm . wasm:assemble-wasm)))
-  #:use-module (wasm resolve)
+  #:use-module (wasm lower)
   #:use-module (wasm wat)
   #:export (assemble-wasm))
 
@@ -117,7 +117,8 @@ Report bugs to <~A>.~%"
       ((input-file)
        (let ((expr (with-input-from-file input-file read)))
          (call-with-output-file output-file
-           (cut put-bytevector <> (wasm:assemble-wasm (resolve-wasm (wat->wasm expr))))))
+           (cut put-bytevector <>
+                (wasm:assemble-wasm (lower-wasm (wat->wasm expr))))))
        (format #t "wrote `~A'\n" output-file))
       (_ (fail "multiple input files not supported")))))
 

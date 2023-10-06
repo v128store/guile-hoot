@@ -25,7 +25,7 @@
              (ice-9 textual-ports)
              (srfi srfi-64)
              (wasm wat)
-             (wasm resolve)
+             (wasm lower)
              (wasm assemble)
              (wasm vm))
 
@@ -80,7 +80,7 @@
   (let ((instance (instantiate-wasm (validate-wasm wasm) #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
-(define (wat->wasm* wat) (resolve-wasm (wat->wasm wat)))
+(define (wat->wasm* wat) (lower-wasm (wat->wasm wat)))
 
 (define (eval-wat wat func args imports d8? d8-read)
   (let* ((wasm (wat->wasm* wat))

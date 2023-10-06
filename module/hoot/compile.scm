@@ -44,7 +44,7 @@
   #:use-module (wasm assemble)
   #:use-module (wasm dump)
   #:use-module (wasm link)
-  #:use-module (wasm resolve)
+  #:use-module (wasm lower)
   #:use-module (wasm types)
   #:export (read-and-compile
             compile-file
@@ -2442,7 +2442,7 @@
     (let* ((wasm (lower-to-wasm cps #:import-abi? import-abi?))
            (wasm (if export-abi? (export-abi wasm) wasm))
            (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
-           (wasm (resolve-wasm wasm)))
+           (wasm (lower-wasm wasm)))
       (when dump-wasm?
         (format #t "\n\nThe wasm we are going to emit:\n")
         (dump-wasm wasm))

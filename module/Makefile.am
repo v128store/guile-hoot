@@ -13,6 +13,8 @@ SOURCES = 					\
   wasm/assemble.scm				\
   wasm/dump.scm					\
   wasm/link.scm					\
+  wasm/lower.scm				\
+  wasm/lower-globals.scm			\
   wasm/lower-stringrefs.scm			\
   wasm/parse.scm				\
   wasm/stack.scm				\

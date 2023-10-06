@@ -20,7 +20,7 @@
 ;;; Code:
 
 (use-modules (wasm assemble)
-             (wasm resolve)
+             (wasm lower)
              (wasm wat)
              (wasm parse)
              (ice-9 binary-ports)
@@ -33,7 +33,7 @@
 
 (define-syntax-rule (test-wat->wasm expected wat)
   (begin
-    (test-equal expected (assemble-wasm (resolve-wasm (wat->wasm 'wat))))
+    (test-equal expected (assemble-wasm (lower-wasm (wat->wasm 'wat))))
     (test-equal expected
                 (assemble-wasm (call-with-input-bytevector expected parse-wasm)))))
 

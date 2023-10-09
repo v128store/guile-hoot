@@ -344,7 +344,7 @@ function string_to_wtf8(str) {
         wtf8_helper.exports;
     let builder = string_builder()
     for (let cp of str)
-        builder_push_codepoint(builder, cp);
+        builder_push_codepoint(builder, cp.codePointAt(0));
     return finish_builder(builder);
 }
 

@@ -445,7 +445,22 @@
                   (br $lp))))
            (local.get $count)))))
 
-(define (lower-stringrefs/wtf8 wasm)
+;; Some imports and exports are to other wasm modules, and some are to
+;; the host.  Imports and exports to other wasm modules should be
+;; lowered to $wtf8, whereas "external" interfaces to the host should
+;; also be wrapped with wtf8-to-string.  The right way to know whether
+;; an import or export is internal or external is to use some kind of
+;; explicit information in a custom section.  For now, though, we just
+;; look at the name under which the function is imported or exported,
+;; because that's compatible with what the hoot compiler does.
+(define (import-is-external? mod name)
+  (not (string-prefix? "$" name)))
+(define (export-is-external? name)
+  (not (string-prefix? "$" name)))
+
+(define* (lower-stringrefs/wtf8 wasm #:key
+                                (import-is-external? import-is-external?)
+                                (export-is-external? export-is-external?))
   (define make-id
     (let ((counter 0))
       (lambda (stem)
@@ -635,25 +650,25 @@
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import param/result with stringview type unimplemented" type))
-         (_ type)))
-     (define (lower-extern-func-param type)
+          (error "extern param/result with stringview type unimplemented" type))
+         (_ (visit-val-type type))))
+     (define (lower-extern-val type)
        (match type
          (($ <ref-type> nullable? 'string)
           '((call $wtf8->extern-string)))
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import param with stringview type unimplemented" type))
+          (error "extern value with stringview type unimplemented" type))
          (_ '())))
-     (define (lift-extern-func-result type)
+     (define (lift-extern-val type)
        (match type
          (($ <ref-type> nullable? 'string)
           '((call $extern-string->wtf8)))
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import result with stringview type unimplemented" type))
+          (error "extern value with stringview type unimplemented" type))
          (_ '())))
      (define (lower-extern-func-type type)
        (match type
@@ -664,7 +679,7 @@
                           (map make-param pid
                                (map lower-extern-val-type ptype))
                           (map lower-extern-val-type rtype))))))
-     (define (lower-extern-func id wrapped-id type)
+     (define (lower-extern-func-import id wrapped-id type)
        (match type
          (($ <type-use> _ ($ <func-sig> (($ <param> _ params) ...) results))
           (let ((param-count (length params)))
@@ -677,7 +692,7 @@
                (match params
                  ((param . params)
                   `((local.get ,i)
-                    ,@(lower-extern-func-param param)
+                    ,@(lower-extern-val param)
                     . ,(lp params (1+ i))))
                  (()
                   `((call ,wrapped-id)
@@ -688,8 +703,44 @@
                            (() '())
                            ((result . results)
                             `((local.get ,i)
-                              ,@(lift-extern-func-result result)
+                              ,@(lift-extern-val result)
                               . ,(lp results (1+ i)))))))))))))))
+     (define (lower-extern-func-export id wrapped-id type)
+       (match type
+         (($ <type-use> _ ($ <func-sig> (($ <param> _ params) ...) results))
+          (let ((param-count (length params)))
+            (make-func
+             id
+             (lower-extern-func-type type)
+             (map (lambda (type) (make-local #f (visit-val-type type)))
+                  results)
+             (let lp ((params params) (i 0))
+               (match params
+                 ((param . params)
+                  `((local.get ,i)
+                    ,@(lift-extern-val param)
+                    . ,(lp params (1+ i))))
+                 (()
+                  `((call ,wrapped-id)
+                    ,@(reverse (map (lambda (i) `(local.set ,i))
+                                    (iota (length results) param-count)))
+                    . ,(let lp ((results results) (i param-count))
+                         (match results
+                           (() '())
+                           ((result . results)
+                            `((local.get ,i)
+                              ,@(lower-extern-val result)
+                              . ,(lp results (1+ i)))))))))))))))
+
+     (define (lookup-func-type id)
+       (or (or-map (match-lambda
+                    (($ <import> mod name kind id' type)
+                     (and (eq? id id') type)))
+                   imports)
+           (or-map (match-lambda
+                    (($ <func> id' type locals body)
+                     (and (eq? id id') type)))
+                   funcs)))
 
      (let ((types (map (match-lambda
                         (($ <rec-group> (($ <type> id type) ...))
@@ -701,21 +752,41 @@
            (imports (map
                      (match-lambda
                        (($ <import> mod name kind id type)
-                        (let* ((internal? (eqv? (string-ref name 0) #\$))
-                               (type* (match kind
-                                        ('func (if internal?
-                                                   (visit-type-use type)
-                                                   (lower-extern-func-type type)))
+                        (let* ((type* (match kind
+                                        ('func (if (import-is-external? mod name)
+                                                   (lower-extern-func-type type)
+                                                   (visit-type-use type)))
                                         ('table (visit-table-type type))
                                         ('memory type)
                                         ('global (visit-global-type type))))
                                (id* (and (eq? kind 'func)
-                                         (not internal?)
+                                         (import-is-external? mod name)
                                          (not (equal? type type*))
                                          (make-id (symbol-append id '-stringref)))))
-                          (cons (and id* (lower-extern-func id id* type))
+                          (cons (and id* (lower-extern-func-import id id* type))
                                 (make-import mod name kind (or id* id) type*)))))
                      imports))
+           (exports (map
+                     (match-lambda
+                      ((and export ($ <export> name kind id))
+                       (cond
+                        ((and (eq? kind 'func)
+                              (export-is-external? name)
+                              (and=>
+                               (lookup-func-type id)
+                               (lambda (type)
+                                 (if (equal? type
+                                             (lower-extern-func-type type))
+                                     #f
+                                     type))))
+                         => (lambda (type)
+                              (let ((id* (make-id
+                                          (symbol-append id '-stringref))))
+                                (cons (lower-extern-func-export id* id type)
+                                      (make-export name kind id*)))))
+                        (else
+                         (cons #f export)))))
+                     exports))
            (funcs (map visit-func funcs))
            (tables (map (match-lambda
                          (($ <table> id type init)
@@ -761,11 +832,13 @@
          (add-stdlib
           (make-wasm types
                      (map cdr imports)
-                     (append (filter-map car imports) funcs)
+                     (append funcs
+                             (filter-map car imports)
+                             (filter-map car exports))
                      tables
                      memories
                      (append strings globals)
-                     exports
+                     (map cdr exports)
                      start
                      elems
                      (append wtf8 datas)

@@ -60,6 +60,11 @@
                         (i32.const 0) (i32.const 3) (array.new_data $wtf8 $stringref-2))
                 (global $s0 (ref $wtf8) (global.get $stringref-2))
                 (data $stringref-2 #vu8(104 101 121))
+                (func $main
+                      (param $i i32) (result i32)
+                      (local.get $i)
+                      (call $i32-to-string)
+                      (call $string-to-i32))
                 (func $string-to-i32
                       (param (ref $wtf8)) (result i32)
                       (local #f i32)
@@ -76,12 +81,7 @@
                       (call $i32-to-string-stringref-1)
                       (local.set 1)
                       (local.get 1)
-                      (call $extern-string->wtf8))
-                (func $main
-                      (param $i i32) (result i32)
-                      (local.get $i)
-                      (call $i32-to-string)
-                      (call $string-to-i32)))
+                      (call $extern-string->wtf8)))
               (wasm->wat (lower-stringrefs mod #:strategy 'wtf8))))
 
 (test-end* "test-lower-stringrefs")

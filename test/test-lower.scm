@@ -65,9 +65,9 @@
                 (type #f (func (param i32) (result (ref extern))))
                 (type #f (func (param $wtf8 (ref null 0)) (result (ref extern))))
                 (type #f (func (param $str (ref null extern)) (result (ref 0))))
+                (type #f (func (param $i i32) (result i32)))
                 (type #f (func (param (ref 0)) (result i32)))
                 (type #f (func (param i32) (result (ref 0))))
-                (type #f (func (param $i i32) (result i32)))
                 (import "app" "string-to-i32"
                         (func $string-to-i32-stringref-0
                               (param (ref extern)) (result i32)))
@@ -83,6 +83,8 @@
                 (global $stringref-2 (mut (ref null 0)) (ref.null 0))
                 (global $s0 (mut (ref null 0)) (ref.null 0))
                 (data $stringref-2 #vu8(104 101 121))
+                (func $main (param $i i32) (result i32)
+                      (local.get 0) (call 6) (call 5))
                 (func $string-to-i32 (param (ref 0)) (result i32)
                       (local #f i32)
                       (local.get 0)
@@ -97,8 +99,6 @@
                       (local.set 1)
                       (local.get 1)
                       (call 3))
-                (func $main (param $i i32) (result i32)
-                      (local.get 0) (call 5) (call 4))
                 (func $__start
                       (i32.const 0)
                       (i32.const 3)

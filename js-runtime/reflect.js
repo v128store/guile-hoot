@@ -163,7 +163,8 @@ class Scheme {
             await instantiate_streaming('js-runtime/reflect.wasm', {
               abi,
               rt: {
-                wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); }
+                  wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); },
+                  string_to_wtf8(str) { return string_to_wtf8(str); },
               }
             });
         return new Scheme(instance, abi);
@@ -171,7 +172,7 @@ class Scheme {
 
     #init_module(mod) {
         mod.set_debug_handler({
-            debug_str(x) { console.log(`debug: ${wtf8_to_string(x)}`); },
+            debug_str(x) { console.log(`debug: ${x}`); },
             debug_str_i32(x, y) { console.log(`debug: ${x}: ${y}`); },
             debug_str_scm: (x, y) => {
                 console.log(`debug: ${x}: ${repr(this.#to_js(y))}`);
@@ -223,7 +224,7 @@ class Scheme {
 
     #to_js(scm) {
         let api = this.#instance.exports;
-        let descr = wtf8_to_string(api.describe(scm));
+        let descr = api.describe(scm);
         let handlers = {
             fixnum: () => BigInt(api.fixnum_value(scm)),
             char: () => new Char(api.char_value(scm)),
@@ -302,9 +303,9 @@ class Scheme {
         return this.#instance.exports.bitvector_ref(x.obj, i) == 1;
     }
 
-    string_value(x) { return wtf8_to_string(this.#instance.exports.string_value(x.obj)); }
-    symbol_name(x) { return wtf8_to_string(this.#instance.exports.symbol_name(x.obj)); }
-    keyword_name(x) { return wtf8_to_string(this.#instance.exports.keyword_name(x.obj)); }
+    string_value(x) { return this.#instance.exports.string_value(x.obj); }
+    symbol_name(x) { return this.#instance.exports.symbol_name(x.obj); }
+    keyword_name(x) { return this.#instance.exports.keyword_name(x.obj); }
 }
 
 class SchemeTrapError extends Error {

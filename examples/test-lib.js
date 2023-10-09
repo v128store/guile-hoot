@@ -7,6 +7,26 @@ let readBinaryFile = (()=> {
     return f => fs.readFileSync(f);
 })();
 
+let Wtf8 = (() => {
+    let bytes = readBinaryFile(`${builddir}/js-runtime/wtf8.wasm`);
+    return new WebAssembly.Instance(new WebAssembly.Module(bytes));
+})();
+function wtf8_to_string(wtf8) {
+    let { as_iter, iter_next } = Wtf8.exports;
+    let codepoints = [];
+    let iter = as_iter(wtf8);
+    for (let cp = iter_next(iter); cp != -1; cp = iter_next(iter))
+        codepoints.push(cp);
+    return String.fromCodePoint(...codepoints);
+}
+function string_to_wtf8(str) {
+    let { make_builder, builder_push_codepoint, finish_builder } = Wtf8.exports;
+    let builder = make_builder()
+    for (let cp of str)
+        builder_push_codepoint(builder, cp);
+    return finish_builder(builder);
+}
+
 class Char {
     constructor(codepoint) {
         this.codepoint = codepoint;
@@ -84,6 +104,9 @@ class SCM {
             },
             // This truncates; see https://tc39.es/ecma262/#sec-tobigint64.
             bignum_get_i64(n) { return n; },
+
+            wtf8_to_string,
+            string_to_wtf8,
 
             make_weak_map() { return new WeakMap; },
             weak_map_get(map, k) { return map.get(k); },

@@ -75,6 +75,22 @@
     (($ <type-use> idx type)
      `(type ,(or idx "error: invalid type use!")))))
 
+(define (table-type-repr type)
+    (match type
+      (($ <table-type> ($ <limits> min max) elem-type)
+       `(,min ,max ,(val-type-repr elem-type)))))
+
+(define (global-type-repr type)
+  (match type
+    (($ <global-type> mutable? type)
+     (let ((t (val-type-repr type)))
+       (if mutable? `(mut ,t) t)))))
+
+(define (memory-type-repr type)
+  (match type
+    (($ <mem-type> ($ <limits> min max))
+     `(,min ,max))))
+
 (define* (dump-wasm mod #:key (port (current-output-port))
                     (dump-func-defs? #t))
   (define (enumerate f items start)
@@ -119,10 +135,14 @@
   (define (dump-imports imports)
     (dump-items "Imports"
                 (map (match-lambda
-                       (($ <import> mod name kind _ (? type-use? type-use))
-                        `(import ,mod ,name ,kind ,(type-use-repr type-use)))
-                       (($ <import> mod name kind _ (? type? type))
-                        `(import ,mod ,name ,kind ,(type-repr type))))
+                       (($ <import> mod name 'func _ type)
+                        `(import ,mod ,name func ,(type-use-repr type)))
+                       (($ <import> mod name 'table _ type)
+                        `(import ,mod ,name table ,@(table-type-repr type)))
+                       (($ <import> mod name 'global _ type)
+                        `(import ,mod ,name global ,(global-type-repr type)))
+                       (($ <import> mod name 'memory _ type)
+                        `(import ,mod ,name memory ,@(memory-type-repr type))))
                      imports)))
 
   (define (dump-func-decls funcs imported)
@@ -135,18 +155,18 @@
   (define (dump-tables tables imported)
     (dump-items "Tables"
                 (map (match-lambda
-                       (($ <table> id ($ <table-type> ($ <limits> min max) elem-type) init)
-                        `(table ,id ,min ,max ,(val-type-repr elem-type))))
+                       (($ <table> id type init)
+                        `(table ,id ,@(table-type-repr type))))
                      tables)
                 imported))
 
   (define (dump-memories memories imported)
     (dump-items "Memories"
                 (map (match-lambda
-                       (($ <memory> id ($ <mem-type> ($ <limits> min max)))
-                        `(memory ,id ,min ,max))
-                       (($ <mem-type> ($ <limits> min max))
-                        `(memory #f ,min ,max)))
+                       (($ <memory> id type)
+                        `(memory ,id ,@(memory-type-repr type)))
+                       (type
+                        `(memory #f ,@(memory-type-repr type))))
                      memories)))
 
   (define (dump-tags tags)
@@ -158,9 +178,9 @@
   (define (dump-globals globals imported)
     (dump-items "Globals"
                 (map (match-lambda
-                       (($ <global> id ($ <global-type> mutable? type) init)
+                       (($ <global> id type init)
                         (let ((t (val-type-repr type)))
-                          `(global ,(if mutable? `(mut ,t) t) ,init))))
+                          `(global ,(global-type-repr type) ,init))))
                      globals)
                 imported))
 

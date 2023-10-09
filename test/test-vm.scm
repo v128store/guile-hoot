@@ -81,7 +81,8 @@
   (let ((instance (instantiate-wasm (validate-wasm wasm) #:imports imports)))
     (apply (wasm-instance-export-ref instance func) args)))
 
-(define (wat->wasm* wat) (lower-wasm (wat->wasm wat)))
+(define (wat->wasm* wat)
+  (lower-wasm (wat->wasm wat) #:stringref-lowering 'stringref))
 
 (define (eval-wat wat func args imports d8? d8-read)
   (let* ((wasm (wat->wasm* wat))

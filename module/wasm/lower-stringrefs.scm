@@ -435,7 +435,7 @@
            (local.set $iter (call $string.as_iter (local.get $wtf8)))
            (loop $lp
              (local.set $cp (call $stringview_iter.next (local.get $iter)))
-             (if (i32.le_u (i32.const 0) (local.get $cp))
+             (if (i32.le_s (i32.const 0) (local.get $cp))
                  (then
                   (local.set $count
                              (i32.add (i32.add (local.get $count)

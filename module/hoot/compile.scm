@@ -999,6 +999,7 @@
                ,(local.get idx)
                (i32.wrap_i64)
                (stringview_iter.advance)
+               (drop)
                (local.get $str_iter)
                (stringview_iter.next)
                (i64.extend_i32_u)))

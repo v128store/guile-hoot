@@ -200,8 +200,7 @@
    `((type $wtf8 (array (mut i8)))
      (type $stringview-iter
            (struct (field $wtf8 (ref $wtf8))
-                   (field $byte-offset (mut i32))
-                   (field $codepoint-offset (mut i32))))
+                   (field $pos (mut i32))))
 
      (func $wtf8->extern-string (import "rt" "wtf8_to_string")
            (param $wtf8 (ref null $wtf8))
@@ -281,10 +280,7 @@
 
      (func $string.as_iter (param $wtf8 (ref $wtf8))
            (result (ref $stringview-iter))
-           (struct.new $stringview-iter
-                       (local.get $wtf8)
-                       (i32.const 0)
-                       (i32.const 0)))
+           (struct.new $stringview-iter (local.get $wtf8) (i32.const 0)))
      
      (func $stringview_iter.next
            (param $iter (ref $stringview-iter))
@@ -295,15 +291,12 @@
            (local $i i32)
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $i (struct.get $stringview-iter $byte-offset
+           (local.set $i (struct.get $stringview-iter $pos
                                      (local.get $iter)))
            (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
                (then (return (i32.const -1))))
            (loop $lp
-             (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
-                 ;; Bad WTF-8.
-                 (then (unreachable)))
              (call $decode-wtf8
                    (array.get_u $wtf8 (local.get $wtf8) (local.get $i))
                    (local.get $cp)
@@ -315,15 +308,13 @@
                  (then (unreachable)))
              (local.set $i (i32.add (local.get $i) (i32.const 1)))
              (if (i32.ne (local.get $state) (i32.const ,%wtf8-accept))
-                 (then (br $lp))))
-           (struct.set $stringview-iter $byte-offset
+                 (then
+                  (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
+                      ;; Bad WTF-8.
+                      (then (unreachable)))
+                  (br $lp))))
+           (struct.set $stringview-iter $pos
                        (local.get $iter) (local.get $i))
-           (struct.set $stringview-iter $codepoint-offset
-                       (local.get $iter)
-                       (i32.add (struct.get $stringview-iter
-                                            $codepoint-offset
-                                            (local.get $iter))
-                                (i32.const 1)))
            (local.get $cp))
 
      (func $stringview_iter.advance
@@ -335,7 +326,7 @@
            (local $advanced i32)
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $i (struct.get $stringview-iter $byte-offset
+           (local.set $i (struct.get $stringview-iter $pos
                                      (local.get $iter)))
            (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.eqz (local.get $count))
@@ -367,14 +358,8 @@
                   ;; Must be valid WTF-8!
                   (if (i32.ne (local.get $state) (i32.const ,%wtf8-accept))
                       (then (unreachable))))))
-           (struct.set $stringview-iter $byte-offset
+           (struct.set $stringview-iter $pos
                        (local.get $iter) (local.get $i))
-           (struct.set $stringview-iter $codepoint-offset
-                       (local.get $iter)
-                       (i32.add (struct.get $stringview-iter
-                                            $codepoint-offset
-                                            (local.get $iter))
-                                (local.get $advanced)))
            (local.get $advanced))
 
      (func $stringview_iter.slice
@@ -387,19 +372,15 @@
            (local $out (ref $wtf8))
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $start (struct.get $stringview-iter $byte-offset
+           (local.set $start (struct.get $stringview-iter $pos
                                          (local.get $iter)))
-           (local.set $temp (struct.new $stringview-iter
-                                        (local.get $wtf8)
-                                        (local.get $start)
-                                        (struct.get $stringview-iter
-                                                    $codepoint-offset
-                                                    (local.get $iter))))
+           (local.set $temp (struct.new $stringview-iter (local.get $wtf8)
+                                        (local.get $start)))
            (call $stringview_iter.advance (local.get $temp)
                  (local.get $count))
            (drop)
            (local.set $len
-                      (i32.sub (struct.get $stringview-iter $byte-offset
+                      (i32.sub (struct.get $stringview-iter $pos
                                            (local.get $iter))
                                (local.get $start)))
            (local.set $out (array.new_default $wtf8 (local.get $len)))

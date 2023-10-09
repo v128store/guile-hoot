@@ -340,9 +340,9 @@ function wtf8_to_string(wtf8) {
 }
 
 function string_to_wtf8(str) {
-    let { make_builder, builder_push_codepoint, finish_builder } =
+    let { string_builder, builder_push_codepoint, finish_builder } =
         wtf8_helper.exports;
-    let builder = make_builder()
+    let builder = string_builder()
     for (let cp of str)
         builder_push_codepoint(builder, cp);
     return finish_builder(builder);

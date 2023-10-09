@@ -326,8 +326,7 @@
            (local $advanced i32)
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $i (struct.get $stringview-iter $pos
-                                     (local.get $iter)))
+           (local.set $i (struct.get $stringview-iter $pos (local.get $iter)))
            (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.eqz (local.get $count))
                (then (return (i32.const 0))))
@@ -358,8 +357,7 @@
                   ;; Must be valid WTF-8!
                   (if (i32.ne (local.get $state) (i32.const ,%wtf8-accept))
                       (then (unreachable))))))
-           (struct.set $stringview-iter $pos
-                       (local.get $iter) (local.get $i))
+           (struct.set $stringview-iter $pos (local.get $iter) (local.get $i))
            (local.get $advanced))
 
      (func $stringview_iter.slice

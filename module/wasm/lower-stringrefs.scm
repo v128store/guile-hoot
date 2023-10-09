@@ -426,7 +426,24 @@
            (array.copy $wtf8 $wtf8
                        (local.get $out) (i32.const 0)
                        (local.get $buf) (local.get $start) (local.get $len))
-           (local.get $out)))))
+           (local.get $out))
+
+     (func $string.measure_wtf16 (param $wtf8 (ref $wtf8)) (result i32)
+           (local $iter (ref $stringview-iter))
+           (local $cp i32)
+           (local $count i32)
+           (local.set $iter (call $string.as_iter (local.get $wtf8)))
+           (loop $lp
+             (local.set $cp (call $stringview_iter.next (local.get $iter)))
+             (if (i32.le_u (i32.const 0) (local.get $cp))
+                 (then
+                  (local.set $count
+                             (i32.add (i32.add (local.get $count)
+                                               (i32.const 1))
+                                      (i32.gt_u (local.get $cp)
+                                                (i32.const #xffff))))
+                  (br $lp))))
+           (local.get $count)))))
 
 (define (lower-stringrefs/wtf8 wasm)
   (define make-id

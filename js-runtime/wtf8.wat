@@ -213,7 +213,7 @@
                  (i32.or (i32.and (local.get $cp) (i32.const #b00111111))
                          (i32.const #b10000000)))
       (struct.set $builder $pos (local.get $builder)
-                  (i32.add (local.get $pos) (i32.const 3))))
+                  (i32.add (local.get $pos) (i32.const 4))))
 
 (func $builder_finish (export "finish_builder")
       (param $builder (ref $builder)) (result (ref $wtf8))

@@ -98,4 +98,11 @@
 (test-call "#t" (lambda (a b) (equal? +inf.0 +inf.0)))
 (test-call "#t" (lambda (a b) (equal? -inf.0 -inf.0)))
 
+;; numerator and denominator
+(test-call "42" (lambda (a) (numerator a)) 42)
+(test-call "1" (lambda (a) (denominator a)) 42)
+(test-call "3" (lambda (a) (numerator a)) 6/4)
+(test-call "2" (lambda (a) (denominator a)) 6/4)
+(test-call "2.0" (lambda (a) (denominator (inexact a))) 6/4)
+
 (test-end "test-numeric")

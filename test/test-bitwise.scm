@@ -50,5 +50,6 @@
 (test-call "#t" (lambda (a b) (equal? a b)) #*10 #*10)
 (test-call "#f" (lambda (a b) (equal? a b)) #* #*1)
 (test-call "#f" (lambda (a b) (equal? a b)) #*10 #*01)
+(test-call "#f" (lambda (a b) (equal? a b)) #*100 #*101)
 
 (test-end* "test-bitwise")

@@ -23,6 +23,7 @@
   #:use-module (ice-9 match)
   #:use-module ((srfi srfi-1) #:select (append-map filter-map))
   #:use-module (srfi srfi-9)
+  #:use-module (wasm canonical-types)
   #:use-module (wasm types)
   #:export (<ctx>
             ctx?
@@ -99,12 +100,10 @@
 (define (make-func-info wasm func)
   (define types
     (list->vector
-     (append-map (match-lambda
-                  (($ <rec-group> (($ <type> id type) ...))
-                   (map cons id type))
-                  (($ <type> id type)
-                   (list (cons id type))))
-                 (wasm-types wasm))))
+     (map (match-lambda
+            (($ <type> id type)
+             (cons id type)))
+          (canonicalize-types! (wasm-types wasm)))))
   (define (select-imports kind)
     (filter-map (lambda (import)
                   (and (eq? (import-kind import) kind)
@@ -232,6 +231,9 @@
     (cond
      ((block-parent block) => lp)
      (else (block-branch-arg-types block)))))
+
+(define $i8-array (canonicalize-type! (make-array-type #t 'i8)))
+(define $i16-array (canonicalize-type! (make-array-type #t 'i16)))
 
 (define (compute-stack-effect ctx inst)
   (define (-> params results)
@@ -640,10 +642,10 @@
             (list (make-ref-type #f 'string))))
        ((or 'string.new_utf8_array 'string.new_lossy_utf8_array
             'string.new_wtf8_array)
-        (-> (list (make-ref-type #t '$i8-array) 'i32 'i32)
+        (-> (list (make-ref-type #t $i8-array) 'i32 'i32)
             (list (make-ref-type #f 'string))))
        ((or 'string.new_wtf16_array)
-        (-> (list (make-ref-type #t '$i16-array) 'i32 'i32)
+        (-> (list (make-ref-type #t $i16-array) 'i32 'i32)
             (list (make-ref-type #f 'string))))
        ((or 'string.measure_utf8 'string.measure_wtf8
             'string.measure_wtf16)
@@ -656,12 +658,12 @@
        ((or 'string.encode_utf8_array 'string.encode_lossy_utf8_array
             'string.encode_wtf8_array)
         (-> (list (make-ref-type #t 'string)
-                  (make-ref-type #t '$i8-array)
+                  (make-ref-type #t $i8-array)
                   'i32)
             '(i32)))
        ('string.encode_wtf16_array
         (-> (list (make-ref-type #t 'string)
-                  (make-ref-type #t '$i16-array)
+                  (make-ref-type #t $i16-array)
                   'i32)
             '(i32)))
        ('string.const
@@ -739,23 +741,27 @@
        (_ (error "unhandled instruction" op))))))
 
 (define (apply-stack-effect ctx effect)
+  (define (resolve-type x)
+    (match x
+      ((? promise?) (force x))
+      ((? exact-integer?) (lookup-type ctx x))
+      (_ x)))
   (define (heap-type-sub-type? sub super)
-    (or (eq? sub super)
-        (let lp ((sub (if (symbol? sub) sub (lookup-type ctx sub))))
-          (match sub
-            ('i31 (memq super '(i31 eq any)))
-            (($ <sub-type> _ supers type)
-             (or (and supers (memq super supers))
-                 (lp type)))
-            (($ <array-type> mutable? type)
-             (match super
-               ('$i8-array (eq? type 'i8))
-               ('$i16-array (eq? type 'i16))
-               (_ (memq super '(array eq any)))))
-            (($ <struct-type>)
-             (memq super '(struct eq any)))
-            (($ <func-sig>)
-             (eq? super 'func))))))
+    (let ((sub (resolve-type sub))
+          (super (resolve-type super)))
+      (or (eq? sub super)
+          (let lp ((sub sub))
+            (match sub
+              ('i31 (memq super '(i31 eq any)))
+              (($ <sub-type> _ ((= resolve-type supers) ...) (= resolve-type type))
+               (or (and supers (memq super supers))
+                   (lp type)))
+              (($ <array-type> mutable? type)
+               (memq super '(array eq any)))
+              (($ <struct-type>)
+               (memq super '(struct eq any)))
+              (($ <func-sig>)
+               (eq? super 'func)))))))
   (define (is-subtype? sub super)
     (cond
      ((eq? sub super) #t)

@@ -1,32 +1,43 @@
-# Hoot
+# Guile Hoot
 
 ![Hoot logo](./hoot.png)
 
-This repo is for updates to "Hoot", the codename for the
-[Guile->WebAssembly
+Hoot is the codename for the [Guile->WebAssembly
 project](https://spritely.institute/news/guile-on-web-assembly-project-underway.html)
-launched by the [Spritely Institute](https://spritely.institute/).  As
-work on Hoot progresses, updates will be posted here!
+launched by the [Spritely Institute](https://spritely.institute/).  In
+addition to the compiler, Hoot contains a full WebAssembly toolchain
+with a WAT parser, an assembler, a disassembler, an interpreter, etc.
 
-## Project goals and time-frame
+## Project goals and timeframe
 
 Hoot aims to be an ahead-of-time compiler for all of [R7RS-small
-Scheme](https://small.r7rs.org/) to WebAssembly.  We are targetting the
-WebAssembly extensions that appear ready to ship in Q4 2023, notably
-including garbage collection and tail calls, and hope to reach our goal
-in July 2023.
+Scheme](https://small.r7rs.org/) to WebAssembly.  We are targetting
+the WebAssembly extensions that appear ready to ship in Q4 2023,
+notably including garbage collection and tail calls.
 
-Hoot is being developed here and in [Spritely's Guile development
-branches](https://gitlab.com/spritely/guile).  This repository is for
-tracking history and design decisions as the project progresses, and for
-experimentations.
-
-After completing R7RS support, we will move on to a full Guile port,
-including delimited continuations and so on.  We are keeping this
-end-goal in mind as we build the early deliverable.
+After completing R7RS-small support, we will move on to supporting all
+of Guile.  We are keeping this end-goal in mind as we build the early
+deliverable.
 
 Resulting code should all run on stock Guile.  We may need to upstream
 some patches to Guile, and will do so as it seems appropriate.
+
+## The shape of things
+
+In the end we expect to be able to compile Scheme programs to single
+WebAssembly files.  To deploy on web browsers there is an associated
+JavaScript module.  Some non-web targets are hosted by JavaScript
+implementations (e.g. node); those are similar to web browsers.
+Otherwise on WASI hosts we expect to have a WASI-specific support
+module eventually.
+
+The minimal compiled module size is some tens of kilobytes,
+uncompressed.  The auxiliary WebAssembly module to do impedance
+matching with JavaScript is about four kilobytes uncompressed, and the
+generic JS library is about 500 lines of unminified JS.  As we
+implement more of Scheme, we hope to preserve this "small programs
+compile to small files" property, rather than having every compiled
+program include the whole of Guile's standard library.
 
 ## But... why the name "Hoot"?
 
@@ -36,13 +47,13 @@ Lemmer-Webber had recently just drawn up this owl pixel art, and
 so it became the mascot.
 The name naturally flowed from there.
 
-## Updates
+## Project updates
 
 See the [log file](design/log.md).
 
-## Try it out
+## Building from source
 
-### Setting up your dev environment, guix edition
+### Easy path: Use Guix
 
 This is by far the easiest path because Guix does all the hard work
 for you.
@@ -66,85 +77,100 @@ make check
 
 Did everything pass?  Cool!  That means Hoot works on your machine!
 
-
-## Try it out (manual edition)
+### Advanced path: Build dependencies on your own
 
 Maybe you want to understand better what Hoot is actually doing, or
 maybe you want to hack on the version of Guile used for Hoot, or etc!
 This section is for you.
 
-You need Guile from the `wip-tailify` branch.  Then you check out this
-repo:
+First, you need to build Guile from the `main` branch.
+
+Then you can clone and build this repo:
 
 ```
 git clone https://gitlab.com/spritely/guile-hoot
 cd guile-hoot
-echo 42 > 42.scm
-GUILE_LOAD_PATH=`pwd`/module guild compile-wasm -o 42.wasm 42.scm
-wrote `42.wasm`
+./bootstrap.sh && ./configure && make
 ```
 
-You're done!  With the start of things, that is :)  To actually load the
-`42.wasm` you need a capable WebAssembly implementation.  By the end of
-2023 all common web browsers will have these capabilities, but currently
-we are on the bleeding edge and using development browsers.
-
-The generated WebAssembly doesn't depend on web browsers, but it does
-take some capabilities from the host system, notably the bignum
-implementation and weak maps.  For web browsers, these facilities are
-provided by [`reflect.js`](./js-runtime/reflect.js).  To help in
-adapting between JavaScript and the ABI of compiled Scheme code, there
-is an auxiliary WebAssembly module `reflect.wasm` that needs to be
-compiled from [`reflect.wat`](./js-runtime/reflect.wat).
-
-In `guile-hoot` type `make`:
-
-```
-make
-```
-
-Now, to load these files in V8, again you need a really recent V8.
-Probably anything since mid-March 2023 will do.  Building V8 is
-annoying.  You need to have `depot_tools` installed; see
-https://v8.dev/docs/source-code.  Once you have that see
-https://v8.dev/docs/build to build.  You will end up with a `d8` binary
-in `out/x64.release` (if you are on an x86-64 platform).
+To run the test suite against a production WASM host, you will need a
+recent version of V8.  Building V8 is annoying.  You need to have
+`depot_tools` installed; see https://v8.dev/docs/source-code.  Once
+you have that see https://v8.dev/docs/build to build.  You will end up
+with a `d8` binary in `out/x64.release` (if you are on an x86-64
+platform).
 
 If all that works you should be able to `make check`:
 
 ```
 make check
-============================================================================
-Testsuite summary for guile-hoot 0.1.0
-============================================================================
-# TOTAL: 3
-# PASS:  3
-# SKIP:  0
-# XFAIL: 0
-# FAIL:  0
-# XPASS: 0
-# ERROR: 0
-============================================================================
 ```
 
-## The shape of things
+If you want to skip the V8 stuff, you can run the test suite against
+our own WASM interpreter instead:
 
-In the end we expect to be able to compile Scheme programs to single
-WebAssembly files.  To deploy on web browsers there will be an
-associated JavaScript module.  Some  non-web targets are hosted by
-JavaScript implementations (e.g. node.js); those are similar to web
-browsers.  Otherwise on WASI hosts we expect to have a WASI-specific
-support module.
+```
+make check WASM_HOST=hoot
+```
 
-The minimal compiled module size is a little less than a kilobyte of
-wasm, uncompressed.  The auxiliary WebAssembly module to do impedance
-matching with JavaScript is another three kilobytes uncompressed, and
-the generic JS library is another 250 lines of unminified JS.  As we
-implement more of Scheme, we hope to preserve this "small programs
-compile to small files" property, rather than having every compiled
-program include the whole of Guile's standard library.
+## Try it out
 
-## GitLab CI
+Hoot is a self-contained system, so the easiest way to try it is from
+the Guile REPL:
+
+```
+./pre-inst-env guile
+```
+
+From the Guile prompt, enter the following to evaluate the program
+`42` in Hoot's built-in WASM interpreter:
+
+```
+scheme@(guile-user)> ,use (hoot reflect) (wasm parse)
+scheme@(guile-user)> (define reflect-wasm (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
+scheme@(guile-user)> (compile-value reflect-wasm 42)
+$5 = 42
+```
+
+More interestingly, Scheme procedures that live within the WASM guest
+module can be called from Scheme as if they were host procedures:
+
+```
+scheme@(guile-user)> (define hello (compile-value reflect-wasm '(lambda (x) (list "hello" x))))
+scheme@(guile-user)> hello
+$6 = #<hoot #<procedure>>
+scheme@(guile-user)> (hello "world")
+$7 = #<hoot ("hello" "world")>
+```
+
+Hoot also introduces the `guild compile-wasm` subcommand which can be
+used to compile a Scheme file to WASM via the CLI or a build script:
+
+```
+echo 42 > 42.scm
+./pre-inst-env guild compile-wasm -o 42.wasm 42.scm
+```
+
+To actually load `42.wasm` you could use the Hoot VM as mentioned
+above or use a production WebAssembly implementation such as a web
+browser.  By the end of 2023 all common web browsers will support the
+WASM capabilities Hoot is using, but currently Chrome Dev and Firefox
+Nightly are the browsers to use.
+
+The generated WebAssembly doesn't depend on a web browser/JavaScript,
+but it does take some capabilities from the host system, notably the
+bignum implementation and weak maps.  For web browsers, these
+facilities are provided by [`reflect.js`](./js-runtime/reflect.js).
+To help in adapting between JavaScript and the ABI of compiled Scheme
+code, there is an auxiliary WebAssembly module `reflect.wasm` that
+needs to be compiled from [`reflect.wat`](./js-runtime/reflect.wat).
+
+See the manual for a more in-depth tutorial and full API
+documentation!
+
+## Maintenance
+
+### GitLab CI
 
 Here's how to build a Docker image for use in GitLab CI.  Guix
 produces the actual image, but skopeo is required to upload it to the

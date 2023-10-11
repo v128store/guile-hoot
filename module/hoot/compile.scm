@@ -2572,7 +2572,7 @@
     (error "Only the Scheme language front-end is currently supported"))
   (let ((read (language-reader (lookup-language 'scheme))))
     (compile (let lp ()
-               (let ((expr (read port)))
+               (let ((expr (read port env)))
                  (if (eof-object? expr)
                      '()
                      (cons expr (lp)))))

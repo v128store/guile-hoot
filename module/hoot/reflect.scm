@@ -27,6 +27,8 @@
   #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
+  #:use-module (wasm canonical-types)
+  #:use-module (wasm types)
   #:use-module (wasm vm)
   #:export (hoot-object?
             hoot-complex?
@@ -541,6 +543,27 @@
          ($ <hoot-struct> _ obj))
      obj)))
 
+(define wasm-array-vector (@@ (wasm vm) wasm-array-vector))
+(define make-wasm-array (@@ (wasm vm) make-wasm-array))
+(define wasm-array-set! (@@ (wasm vm) wasm-array-set!))
+(define $wtf8 (canonicalize-type! (make-array-type #t 'i8)))
+
+(define (wtf8->string wtf8)
+  (let* ((vec (wasm-array-vector wtf8))
+         (bv (make-bytevector (vector-length vec))))
+    (do ((i 0 (+ i 1)))
+        ((= i (vector-length vec)))
+      (bytevector-u8-set! bv i (vector-ref vec i)))
+    (utf8->string bv)))
+
+(define (string->wtf8 str)
+  (let* ((bv (string->utf8 str))
+         (array (make-wasm-array $wtf8 (bytevector-length bv) 0)))
+    (do ((i 0 (+ i 1)))
+        ((= i (bytevector-length bv)))
+      (wasm-array-set! array i (bytevector-u8-ref bv i)))
+    array))
+
 (define (logsub a b)
   (logand a (lognot b)))
 
@@ -589,8 +612,8 @@
       ("facos" . ,acos)
       ("fatan" . ,atan)
       ("fatan2" . ,atan)
-      ("wtf8_to_string" . ,utf8->string)
-      ("string_to_wtf8" . ,string->utf8)
+      ("wtf8_to_string" . ,wtf8->string)
+      ("string_to_wtf8" . ,string->wtf8)
       ("die" . ,(lambda (key . args)
                   (apply throw (string->symbol key) args)))))
     ("io" .
@@ -625,7 +648,8 @@
         (make-hoot-module reflector instance))
       (let* ((instance (instantiate scheme-wasm %runtime-imports))
              (abi (make-abi-imports instance))
-             (reflector (make-reflector (instantiate reflector abi) abi)))
+             (imports (append %runtime-imports abi))
+             (reflector (make-reflector (instantiate reflector imports) abi)))
         (make-hoot-module reflector instance))))
 
 (define (hoot-call reflector f args)

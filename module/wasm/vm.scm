@@ -27,6 +27,7 @@
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
+  #:use-module (wasm canonical-types)
   #:use-module (wasm parse)
   #:use-module (wasm stack)
   #:use-module (wasm types)
@@ -749,126 +750,6 @@ binary, or an input port from which a WASM binary is read."
        (set-wasm-string-iterator-index! iter (+ i k))
        (max (- (min (+ i k) len) i) 0)))))
 
-;; A bit of global state for ref type canonicalization across modules.
-(define *canonical-groups* (make-hash-table))
-
-(define (canonicalize-types! types)
-  ;; Create a vector big enough to hold all of the resulting types.
-  (let ((canonical-vec (make-vector
-                        (fold (lambda (type sum)
-                                (match type
-                                  (($ <rec-group> types)
-                                   (+ sum (length types)))
-                                  (_ (+ sum 1))))
-                              0 types))))
-    (define (visit-group types group-start)
-      ;; Rolling up a type replaces indices outside of the type group
-      ;; with a canonical type descriptor and indices inside of the
-      ;; type group with relative indices.  This creates a new type
-      ;; that can be equal? tested against a type from another module.
-      (define (roll-up type group-start)
-        (match type
-          ((? symbol?) type)
-          ((? exact-integer? idx)
-           (if (< type group-start)
-               `(outer ,(vector-ref canonical-vec idx))
-               (- idx group-start)))
-          (($ <ref-type> nullable? heap-type)
-           (make-ref-type nullable? (roll-up heap-type group-start)))
-          (($ <func-sig> params results)
-           (make-func-sig (map (match-lambda
-                                 (($ <param> _ type)
-                                  (make-param #f (roll-up type group-start))))
-                               params)
-                          (map (lambda (type)
-                                 (roll-up type group-start))
-                               results)))
-          (($ <struct-type> fields)
-           (make-struct-type
-            (map (match-lambda
-                   (($ <field> _ mutable? type)
-                    (make-field #f mutable? (roll-up type group-start))))
-                 fields)))
-          (($ <array-type> mutable? type)
-           (make-array-type mutable? (roll-up type group-start)))
-          (($ <sub-type> final? supers type)
-           (make-sub-type final?
-                          (map (lambda (super)
-                                 (roll-up super group-start))
-                               supers)
-                          (roll-up type group-start)))))
-      ;; If a type group with identical structure has already been
-      ;; canonicalized, return the cached type descriptors.  Otherwise,
-      ;; generate new ones, cache them, and return them.
-      (let ((types* (map (lambda (t) (roll-up t group-start)) types)))
-        (match (hash-ref *canonical-groups* types*)
-          ;; Cache hit: Just copy 'em over.
-          ((? vector? cached-group)
-           (do ((i 0 (+ i 1)))
-               ((= i (vector-length cached-group)))
-             (vector-set! canonical-vec (+ group-start i)
-                          (vector-ref cached-group i)))
-           (+ group-start (vector-length cached-group)))
-          ;; Cache miss: Generate and cache new descriptors.
-          (#f
-           (let ((group-vec (make-vector (length types))))
-             (let loop ((types types*)
-                        (i 0))
-               ;; Unrolling a type replaces relative recursive type
-               ;; indices with canonical type references.
-               (define (unroll type)
-                 (match type
-                   ((? symbol?) type)
-                   ;; Types may have recursive references to other
-                   ;; types within the same group, so we're lazy about
-                   ;; it.
-                   ((? exact-integer? idx)
-                    (delay (vector-ref group-vec idx)))
-                   ;; Types from outside the group are already
-                   ;; unrolled so recursion stops.
-                   (('outer type) type)
-                   (($ <ref-type> nullable? heap-type)
-                    (make-ref-type nullable? (unroll heap-type)))
-                   (($ <func-sig> params results)
-                    (make-func-sig (map (match-lambda
-                                          (($ <param> _ type)
-                                           (make-param #f (unroll type))))
-                                        params)
-                                   (map unroll results)))
-                   (($ <struct-type> fields)
-                    (make-struct-type
-                     (map (match-lambda
-                            (($ <field> _ mutable? type)
-                             (make-field #f mutable? (unroll type))))
-                          fields)))
-                   (($ <array-type> mutable? type)
-                    (make-array-type mutable? (unroll type)))
-                   (($ <sub-type> final? supers type)
-                    (make-sub-type final?
-                                   (map unroll supers)
-                                   (unroll type)))))
-               (match types
-                 (()
-                  (hash-set! *canonical-groups* types* group-vec)
-                  (+ group-start i))
-                 ((type . rest)
-                  (let ((desc (unroll type)))
-                    (vector-set! group-vec i desc)
-                    (vector-set! canonical-vec (+ group-start i) desc)
-                    (loop rest (+ i 1)))))))))))
-    ;; Visit all the type groups and canonicalize them.  A type that
-    ;; is not in a recursive type group is treated as being in a group
-    ;; of one.
-    (let loop ((groups types)
-               (i 0))
-      (match groups
-        (() #t)
-        ((($ <rec-group> (($ <type> _ types) ...)) . rest)
-         (loop rest (visit-group types i)))
-        ((($ <type> _ type) . rest)
-         (loop rest (visit-group (list type) i)))))
-    canonical-vec))
-
 (define (default-for-type type)
   (match type
     ((or 'i8 'i16 'i32 'i64) 0)
@@ -971,7 +852,10 @@ binary, or an input port from which a WASM binary is read."
             (n-func-imports (count-imports 'func))
             (n-memory-imports (count-imports 'memory))
             (n-table-imports (count-imports 'table))
-            (type-vec (canonicalize-types! types))
+            ;; TODO: Canonicalization has already happened during
+            ;; validation!  <validated-wasm> should just store the
+            ;; canonicalized types so we aren't duplicating work here.
+            (type-vec (list->vector (map type-val (canonicalize-types! types))))
             (global-vec (make-vector (+ n-global-imports (length globals))))
             (func-vec (make-vector (+ n-func-imports (length funcs))))
             (memory-vec (make-vector (+ n-memory-imports (length memories))))

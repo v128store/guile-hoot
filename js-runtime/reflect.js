@@ -160,7 +160,13 @@ class Scheme {
 
     static async reflect(abi) {
         let { module, instance } =
-            await instantiate_streaming('js-runtime/reflect.wasm', { abi });
+            await instantiate_streaming('js-runtime/reflect.wasm', {
+              abi,
+              rt: {
+                  wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); },
+                  string_to_wtf8(str) { return string_to_wtf8(str); },
+              }
+            });
         return new Scheme(instance, abi);
     }
 
@@ -325,20 +331,20 @@ function flonum_to_string(f64) {
 let wtf8_helper;
 
 function wtf8_to_string(wtf8) {
-    let { string_iter, iter_next } = wtf8_helper.exports;
+    let { as_iter, iter_next } = wtf8_helper.exports;
     let codepoints = [];
-    let iter = string_iter(wtf8);
+    let iter = as_iter(wtf8);
     for (let cp = iter_next(iter); cp != -1; cp = iter_next(iter))
         codepoints.push(cp);
     return String.fromCodePoint(...codepoints);
 }
 
 function string_to_wtf8(str) {
-    let { make_builder, builder_push_codepoint, finish_builder } =
+    let { string_builder, builder_push_codepoint, finish_builder } =
         wtf8_helper.exports;
-    let builder = make_builder()
+    let builder = string_builder()
     for (let cp of str)
-        builder_push_codepoint(builder, cp);
+        builder_push_codepoint(builder, cp.codePointAt(0));
     return finish_builder(builder);
 }
 

@@ -17,6 +17,7 @@ SOURCES = 					\
   wasm/lower-globals.scm			\
   wasm/lower-stringrefs.scm			\
   wasm/parse.scm				\
+  wasm/canonical-types.scm			\
   wasm/stack.scm				\
   wasm/symbolify.scm				\
   wasm/vm.scm					\

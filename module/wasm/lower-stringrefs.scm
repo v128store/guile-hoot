@@ -200,8 +200,7 @@
    `((type $wtf8 (array (mut i8)))
      (type $stringview-iter
            (struct (field $wtf8 (ref $wtf8))
-                   (field $byte-offset (mut i32))
-                   (field $codepoint-offset (mut i32))))
+                   (field $pos (mut i32))))
 
      (func $wtf8->extern-string (import "rt" "wtf8_to_string")
            (param $wtf8 (ref null $wtf8))
@@ -214,12 +213,12 @@
      (data $wtf8-transitions ,%wtf8-transitions)
      (data $wtf8-states ,%wtf8-states)
      (global $wtf8-transitions (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-transitions
+             (array.new_data $immutable-bytes $wtf8-transitions
                              (i32.const 0)
                              (i32.const
                               ,(bytevector-length %wtf8-transitions))))
      (global $wtf8-states (ref $immutable-bytes)
-             (array.new_data $bytes $wtf8-states
+             (array.new_data $immutable-bytes $wtf8-states
                              (i32.const 0)
                              (i32.const
                               ,(bytevector-length %wtf8-states))))
@@ -275,12 +274,13 @@
                  (then (i32.const -1))
                  (else (i32.const 0)))))
 
+     (func $string.eq (param $a (ref $wtf8)) (param $b (ref $wtf8))
+           (result i32)
+           (i32.eqz (call $string.compare (local.get $a) (local.get $b))))
+
      (func $string.as_iter (param $wtf8 (ref $wtf8))
            (result (ref $stringview-iter))
-           (struct.new $stringview-iter
-                       (local.get $wtf8)
-                       (i32.const 0)
-                       (i32.const 0)))
+           (struct.new $stringview-iter (local.get $wtf8) (i32.const 0)))
      
      (func $stringview_iter.next
            (param $iter (ref $stringview-iter))
@@ -291,15 +291,12 @@
            (local $i i32)
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $i (struct.get $stringview-iter $byte-offset
+           (local.set $i (struct.get $stringview-iter $pos
                                      (local.get $iter)))
            (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
                (then (return (i32.const -1))))
            (loop $lp
-             (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
-                 ;; Bad WTF-8.
-                 (then (unreachable)))
              (call $decode-wtf8
                    (array.get_u $wtf8 (local.get $wtf8) (local.get $i))
                    (local.get $cp)
@@ -311,15 +308,13 @@
                  (then (unreachable)))
              (local.set $i (i32.add (local.get $i) (i32.const 1)))
              (if (i32.ne (local.get $state) (i32.const ,%wtf8-accept))
-                 (then (br $lp))))
-           (struct.set $stringview-iter $byte-offset
+                 (then
+                  (if (i32.ge_u (local.get $i) (array.len (local.get $wtf8)))
+                      ;; Bad WTF-8.
+                      (then (unreachable)))
+                  (br $lp))))
+           (struct.set $stringview-iter $pos
                        (local.get $iter) (local.get $i))
-           (struct.set $stringview-iter $codepoint-offset
-                       (local.get $stringview-iter)
-                       (i32.add (struct.get $stringview-iter
-                                            $codepoint-offset
-                                            (local.get $iter))
-                                (i32.const 1)))
            (local.get $cp))
 
      (func $stringview_iter.advance
@@ -331,8 +326,7 @@
            (local $advanced i32)
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $i (struct.get $stringview-iter $byte-offset
-                                     (local.get $iter)))
+           (local.set $i (struct.get $stringview-iter $pos (local.get $iter)))
            (local.set $state (i32.const ,%wtf8-accept))
            (if (i32.eqz (local.get $count))
                (then (return (i32.const 0))))
@@ -363,14 +357,7 @@
                   ;; Must be valid WTF-8!
                   (if (i32.ne (local.get $state) (i32.const ,%wtf8-accept))
                       (then (unreachable))))))
-           (struct.set $stringview-iter $byte-offset
-                       (local.get $iter) (local.get $i))
-           (struct.set $stringview-iter $codepoint-offset
-                       (local.get $stringview-iter)
-                       (i32.add (struct.get $stringview-iter
-                                            $codepoint-offset
-                                            (local.get $iter))
-                                (local.get $advanced)))
+           (struct.set $stringview-iter $pos (local.get $iter) (local.get $i))
            (local.get $advanced))
 
      (func $stringview_iter.slice
@@ -383,19 +370,15 @@
            (local $out (ref $wtf8))
            (local.set $wtf8 (struct.get $stringview-iter $wtf8
                                         (local.get $iter)))
-           (local.set $start (struct.get $stringview-iter $byte-offset
+           (local.set $start (struct.get $stringview-iter $pos
                                          (local.get $iter)))
-           (local.set $temp (struct.new $stringview-iter
-                                        (local.get $wtf8)
-                                        (local.get $start)
-                                        (struct.get $stringview-iter
-                                                    $codepoint-offset
-                                                    (local.get $iter))))
+           (local.set $temp (struct.new $stringview-iter (local.get $wtf8)
+                                        (local.get $start)))
            (call $stringview_iter.advance (local.get $temp)
                  (local.get $count))
            (drop)
            (local.set $len
-                      (i32.sub (struct.get $stringview-iter $byte-offset
+                      (i32.sub (struct.get $stringview-iter $pos
                                            (local.get $iter))
                                (local.get $start)))
            (local.set $out (array.new_default $wtf8 (local.get $len)))
@@ -421,10 +404,42 @@
            (local.set $out (array.new_default $wtf8 (local.get $len)))
            (array.copy $wtf8 $wtf8
                        (local.get $out) (i32.const 0)
-                       (local.get $wtf8) (local.get $start) (local.get $len))
-           (local.get $out)))))
+                       (local.get $buf) (local.get $start) (local.get $len))
+           (local.get $out))
 
-(define (lower-stringrefs/wtf8 wasm)
+     (func $string.measure_wtf16 (param $wtf8 (ref $wtf8)) (result i32)
+           (local $iter (ref $stringview-iter))
+           (local $cp i32)
+           (local $count i32)
+           (local.set $iter (call $string.as_iter (local.get $wtf8)))
+           (loop $lp
+             (local.set $cp (call $stringview_iter.next (local.get $iter)))
+             (if (i32.le_s (i32.const 0) (local.get $cp))
+                 (then
+                  (local.set $count
+                             (i32.add (i32.add (local.get $count)
+                                               (i32.const 1))
+                                      (i32.gt_u (local.get $cp)
+                                                (i32.const #xffff))))
+                  (br $lp))))
+           (local.get $count)))))
+
+;; Some imports and exports are to other wasm modules, and some are to
+;; the host.  Imports and exports to other wasm modules should be
+;; lowered to $wtf8, whereas "external" interfaces to the host should
+;; also be wrapped with wtf8-to-string.  The right way to know whether
+;; an import or export is internal or external is to use some kind of
+;; explicit information in a custom section.  For now, though, we just
+;; look at the name under which the function is imported or exported,
+;; because that's compatible with what the hoot compiler does.
+(define (import-is-external? mod name)
+  (not (string-prefix? "$" name)))
+(define (export-is-external? name)
+  (not (string-prefix? "$" name)))
+
+(define* (lower-stringrefs/wtf8 wasm #:key
+                                (import-is-external? import-is-external?)
+                                (export-is-external? export-is-external?))
   (define make-id
     (let ((counter 0))
       (lambda (stem)
@@ -614,25 +629,25 @@
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import param/result with stringview type unimplemented" type))
-         (_ type)))
-     (define (lower-extern-func-param type)
+          (error "extern param/result with stringview type unimplemented" type))
+         (_ (visit-val-type type))))
+     (define (lower-extern-val type)
        (match type
          (($ <ref-type> nullable? 'string)
           '((call $wtf8->extern-string)))
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import param with stringview type unimplemented" type))
+          (error "extern value with stringview type unimplemented" type))
          (_ '())))
-     (define (lift-extern-func-result type)
+     (define (lift-extern-val type)
        (match type
          (($ <ref-type> nullable? 'string)
           '((call $extern-string->wtf8)))
          (($ <ref-type> nullable? (or 'stringview_wtf8
                                       'stringview_wtf16
                                       'stringview_iter))
-          (error "import result with stringview type unimplemented" type))
+          (error "extern value with stringview type unimplemented" type))
          (_ '())))
      (define (lower-extern-func-type type)
        (match type
@@ -643,30 +658,68 @@
                           (map make-param pid
                                (map lower-extern-val-type ptype))
                           (map lower-extern-val-type rtype))))))
-     (define (lower-extern-func id wrapped-id type)
+     (define (lower-extern-func-import id wrapped-id type)
        (match type
          (($ <type-use> _ ($ <func-sig> (($ <param> _ params) ...) results))
-          (make-func
-           id
-           (visit-type-use type)
-           (map (lambda (type) (make-local #f type)) results)
-           (let lp ((params params) (i 0))
-             (match params
-               ((param . params)
-                `((local.ref ,i)
-                  ,@(lower-extern-func-param param)
-                  . ,(lp params (1+ i))))
-               (()
-                `((call ,wrapped-id)
-                  ,@(reverse (map (lambda (i) `(local.set ,i))
-                                  (iota (length results))))
-                  . ,(let lp ((results results) (i 0))
-                       (match results
-                         (() '())
-                         ((result . results)
-                          `((local.ref ,i)
-                            ,@(lift-extern-func-result result)
-                            . ,(lp results (1+ i))))))))))))))
+          (let ((param-count (length params)))
+            (make-func
+             id
+             (visit-type-use type)
+             (map (lambda (type) (make-local #f (lower-extern-val-type type)))
+                  results)
+             (let lp ((params params) (i 0))
+               (match params
+                 ((param . params)
+                  `((local.get ,i)
+                    ,@(lower-extern-val param)
+                    . ,(lp params (1+ i))))
+                 (()
+                  `((call ,wrapped-id)
+                    ,@(reverse (map (lambda (i) `(local.set ,i))
+                                    (iota (length results) param-count)))
+                    . ,(let lp ((results results) (i param-count))
+                         (match results
+                           (() '())
+                           ((result . results)
+                            `((local.get ,i)
+                              ,@(lift-extern-val result)
+                              . ,(lp results (1+ i)))))))))))))))
+     (define (lower-extern-func-export id wrapped-id type)
+       (match type
+         (($ <type-use> _ ($ <func-sig> (($ <param> _ params) ...) results))
+          (let ((param-count (length params)))
+            (make-func
+             id
+             (lower-extern-func-type type)
+             (map (lambda (type) (make-local #f (visit-val-type type)))
+                  results)
+             (let lp ((params params) (i 0))
+               (match params
+                 ((param . params)
+                  `((local.get ,i)
+                    ,@(lift-extern-val param)
+                    . ,(lp params (1+ i))))
+                 (()
+                  `((call ,wrapped-id)
+                    ,@(reverse (map (lambda (i) `(local.set ,i))
+                                    (iota (length results) param-count)))
+                    . ,(let lp ((results results) (i param-count))
+                         (match results
+                           (() '())
+                           ((result . results)
+                            `((local.get ,i)
+                              ,@(lower-extern-val result)
+                              . ,(lp results (1+ i)))))))))))))))
+
+     (define (lookup-func-type id)
+       (or (or-map (match-lambda
+                    (($ <import> mod name kind id' type)
+                     (and (eq? id id') type)))
+                   imports)
+           (or-map (match-lambda
+                    (($ <func> id' type locals body)
+                     (and (eq? id id') type)))
+                   funcs)))
 
      (let ((types (map (match-lambda
                         (($ <rec-group> (($ <type> id type) ...))
@@ -677,18 +730,42 @@
                        types))
            (imports (map
                      (match-lambda
-                      (($ <import> mod name kind id type)
-                       (let* ((type* (match kind
-                                       ('func (lower-extern-func-type type))
-                                       ('table (visit-table-type type))
-                                       ('memory type)
-                                       ('global (visit-global-type type))))
-                              (id* (and (eq? kind 'func)
-                                        (not (equal? type type*))
-                                        (make-id (symbol-append id '-stringref)))))
-                         (cons (and id* (lower-extern-func id id* type))
-                               (make-import mod name kind (or id* id) type*)))))
+                       (($ <import> mod name kind id type)
+                        (let* ((type* (match kind
+                                        ('func (if (import-is-external? mod name)
+                                                   (lower-extern-func-type type)
+                                                   (visit-type-use type)))
+                                        ('table (visit-table-type type))
+                                        ('memory type)
+                                        ('global (visit-global-type type))))
+                               (id* (and (eq? kind 'func)
+                                         (import-is-external? mod name)
+                                         (not (equal? type type*))
+                                         (make-id (symbol-append id '-stringref)))))
+                          (cons (and id* (lower-extern-func-import id id* type))
+                                (make-import mod name kind (or id* id) type*)))))
                      imports))
+           (exports (map
+                     (match-lambda
+                      ((and export ($ <export> name kind id))
+                       (cond
+                        ((and (eq? kind 'func)
+                              (export-is-external? name)
+                              (and=>
+                               (lookup-func-type id)
+                               (lambda (type)
+                                 (if (equal? type
+                                             (lower-extern-func-type type))
+                                     #f
+                                     type))))
+                         => (lambda (type)
+                              (let ((id* (make-id
+                                          (symbol-append id '-stringref))))
+                                (cons (lower-extern-func-export id* id type)
+                                      (make-export name kind id*)))))
+                        (else
+                         (cons #f export)))))
+                     exports))
            (funcs (map visit-func funcs))
            (tables (map (match-lambda
                          (($ <table> id type init)
@@ -734,11 +811,13 @@
          (add-stdlib
           (make-wasm types
                      (map cdr imports)
-                     (append (filter-map car imports) funcs)
+                     (append funcs
+                             (filter-map car imports)
+                             (filter-map car exports))
                      tables
                      memories
                      (append strings globals)
-                     exports
+                     (map cdr exports)
                      start
                      elems
                      (append wtf8 datas)

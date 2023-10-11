@@ -612,6 +612,8 @@
       ("facos" . ,acos)
       ("fatan" . ,atan)
       ("fatan2" . ,atan)
+      ("flog" . ,log)
+      ("fexp" . ,exp)
       ("wtf8_to_string" . ,wtf8->string)
       ("string_to_wtf8" . ,string->wtf8)
       ("die" . ,(lambda (key . args)

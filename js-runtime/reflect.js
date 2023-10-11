@@ -435,6 +435,8 @@ class SchemeModule {
         facos: Math.acos,
         fatan: Math.atan,
         fatan2: Math.atan2,
+        flog: Math.log,
+        fexp: Math.exp,
 
         // Wrap in functions to allow for lazy loading of the wtf8
         // module.

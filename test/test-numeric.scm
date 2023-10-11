@@ -105,4 +105,10 @@
 (test-call "2" (lambda (a) (denominator a)) 6/4)
 (test-call "2.0" (lambda (a) (denominator (inexact a))) 6/4)
 
+;; log and exp
+(test-call "0.0" (lambda (a) (log a)) 1)
+(test-call "2.0" (lambda (a b) (log a b)) 100 10)
+(test-call "1.0" (lambda (a) (exp (log a))) 1)
+(test-call "0.5" (lambda (a) (exp (log a))) 1/2)
+
 (test-end "test-numeric")

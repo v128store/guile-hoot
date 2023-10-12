@@ -353,14 +353,10 @@ $7 = 120
 
 The Hoot reflection in Guile is great for quickly iterating on code,
 but what we really want is to get our programs running in a web
-browser.  The rest of this tutorial will require a web server to host
-the necessary files.  How to run a web server is out-of-scope for this
-tutorial.
-
-We've compiled a couple of things to WASM now, but the resulting
-modules have stayed within the confines of the Guile process.  To make
-something that can be loaded by a web browser, we need to use the
-assembler to create a WASM binary:
+browser.  We've compiled a couple of things to WASM now, but the
+resulting modules have stayed within the confines of the Guile
+process.  To make something that can be loaded by a web browser, we
+need to use the assembler to create a WASM binary:
 
 @lisp
 @verbatim
@@ -370,24 +366,38 @@ scheme@(guile-user)> (define bin (assemble-wasm hello))
 @end verbatim
 @end lisp
 
-Then we can write the binary to disk:
+Now, create a new directory for this tutorial:
+
+@example
+mkdir hoot-tutorial
+@end example
+
+Write the binary to disk in that directory:
 
 @lisp
 @verbatim
 scheme@(guile-user)> ,use (ice-9 binary-ports)
-scheme@(guile-user)> (call-with-output-file "hello.wasm"
+scheme@(guile-user)> (call-with-output-file "/path/to/hoot-tutorial/hello.wasm"
                        (lambda (port)
                          (put-bytevector port bin)))
 @end verbatim
 @end lisp
 
-Upload @file{hello.wasm} to a web server.
+To inspect Scheme values from JavaScript, Hoot provides the
+@file{js-runtime/reflect.js} library.  Copy that file and its
+associated WASM helper modules, @file{js-runtime/reflect.wasm} and
+@file{js-runtime/wtf8.wasm}, to the @file{hoot-tutorial} directory:
 
-For Scheme reflection in JavaScript, Hoot provides the
-@code{js-runtime/reflect.js} library.  Upload that to the web server,
-too.
+@example
+cd /path/to/hoot-tutorial
+cp /path/to/guile-hoot/js-runtime/reflect.js .
+mkdir js-runtime
+cp /path/to/guile-hoot/js-runtime/reflect.wasm js-runtime/
+cp /path/to/guile-hoot/js-runtime/wtf8.wasm js-runtime/
+@end example
 
-To run @file{hello.wasm}, we need a little JavaScript glue code:
+To run @file{hello.wasm}, we need a little JavaScript glue code.
+Let's call this @file{hello.js}:
 
 @example
 @verbatim
@@ -399,7 +409,8 @@ window.addEventListener("load", load);
 @end verbatim
 @end example
 
-Finally, we need a minimal web page to bring it all together:
+We also need a minimal @file{index.html} web page to bring it all
+together:
 
 @example
 <!DOCTYPE html>
@@ -414,12 +425,73 @@ Finally, we need a minimal web page to bring it all together:
 </html>
 @end example
 
-Adjust the @code{src} attributes according to where the files are
-located on your web server.
+The file tree in @file{hoot-tutorial} should look like this:
 
-Visit this page in your web browser, and if it is new enough to have
-WASM GC and tail calls enabled, you should see the text ``Hello,
-world!'' printed in the developer console.
+@example
+./js-runtime
+./js-runtime/wtf8.wasm
+./js-runtime/reflect.wasm
+./reflect.js
+./hello.js
+./index.html
+./hello.wasm
+@end example
+
+Finally, we need a local web server to serve the files.  Fortunately,
+Guile includes all the building blocks we need to make a minimal one
+for the purposes of this tutorial.  Save the following to
+@file{web-server.scm}:
+
+@lisp
+(use-modules (ice-9 binary-ports) (ice-9 format) (ice-9 match)
+             (web server) (web request) (web response) (web uri))
+
+(define (extension file)
+  (match (string-split file #\.)
+    (() #f)
+    ((_ ... ext) ext)))
+
+(define (mime-type file-name)
+  (or (assoc-ref '(("js" . application/javascript)
+                   ("html" . text/html)
+                   ("wasm" . application/wasm))
+                 (extension file-name))
+      'text/plain))
+
+(define (render-file file-name)
+  (values `((content-type . (,(mime-type file-name))))
+          (call-with-input-file file-name get-bytevector-all)))
+
+(define (not-found path)
+  (values (build-response #:code 404) (string-append "Not found: " path)))
+
+(define (directory? file-name)
+  (eq? (stat:type (stat file-name)) 'directory))
+
+(define (serve-file path)
+  (let ((f (string-append (getcwd) (uri-decode path))))
+    (if (and (file-exists? f) (not (directory? f)))
+        (render-file f)
+        (not-found path))))
+
+(define (handle-request request body)
+  (let ((method (request-method request))
+        (path (uri-path (request-uri request))))
+    (format #t "~a ~a\n" method path)
+    (serve-file path)))
+
+(run-server handle-request 'http '(#:port 8080))
+@end lisp
+
+Start the web server like so:
+
+@example
+guile web-server.scm
+@end example
+
+Visit @url{http://localhost:8080/index.html} in your web browser, and
+if it is new enough to have WASM GC enabled, you should see the text
+``Hello, world!'' printed in the developer console.
 
 We hope this tutorial has helped you get started with Hoot!  Read on
 for full API documentation.

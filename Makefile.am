@@ -67,6 +67,15 @@ dvi: # Don't build dvi docs
 html-local:
 	$(GUILE) --no-auto-compile doc/build-html.scm
 
+jsdir = $(pkgdatadir)/js
+dist_js_DATA =					\
+  js-runtime/reflect.js
+
+jsruntimedir = $(pkgdatadir)/js/js-runtime
+dist_jsruntime_DATA = 				\
+  js-runtime/reflect.wasm			\
+  js-runtime/wtf8.wasm
+
 EXTRA_DIST = 					\
   $(WATS)					\
   $(TESTS)					\
@@ -80,7 +89,6 @@ EXTRA_DIST = 					\
   examples/README.md				\
   examples/test-lib.js				\
   hoot.png					\
-  js-runtime/reflect.js				\
   manifest.scm					\
   README.md					\
   test/basic-types.wasm				\

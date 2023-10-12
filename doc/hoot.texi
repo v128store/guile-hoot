@@ -62,7 +62,7 @@ of Scheme, for example, the lack of a tail call facility makes
 compiling tail-recursive Scheme code unpleasant.  At long last, thanks
 to WASM, it has become possible to use an alternative language with
 fewer compromises and better performance.  Hoot aims to bring Guile's
-``whole self'' to the web.
+``whole self'' to the web, as well as to other WASM GC runtimes.
 
 Hoot is being developed by the
 @url{https://spritely.institute,Spritely Institute} in collaboration
@@ -78,15 +78,18 @@ JavaScript at the same time, Spritely needs a Guile to WASM compiler!
 A secondary goal of Hoot is to advocate for all dynamic programming
 languages' (Python, Ruby, etc.) rightful place on the client-side web.
 The WASM 1.0 specification was not a habitable environment for
-implementing a language that requires a garbage collector.  The WASM
-GC proposal, among others, has made it possible for dynamic languages
-to target WASM in a real way.  However, such advances are not without
-their detractors.  Without the necessary support, a useful proposal
-will never to sail the seas of production.  Implementing and targeting
-emergent and useful WASM proposals helps those proposals find their
-way into the core specification.  A rising tide lifts all boats, as
-they say, and while we may be little schemers, we want our work to
-help advance the WASM standard for all dynamic languages.
+languages that require a garbage collector.  The WASM GC proposal,
+among others, has made it possible for dynamic languages to target
+WASM in a real way.  However, such advances are not without their
+detractors.  Without the necessary support, a useful proposal will
+never make it into the core specification.  For example, strings are a
+particularly controversial subject in the WebAssembly Community Group
+and proposals that would greatly benefit Hoot and other languages have
+not reached consensus.  Implementing and targeting emergent and useful
+WASM proposals helps those proposals find their way into the core
+specification.  A rising tide lifts all boats, as they say, and while
+we may be little schemers, we want our work to help advance the WASM
+standard for all dynamic languages.
 
 @menu
 * Status::                        What works.  What doesn't.

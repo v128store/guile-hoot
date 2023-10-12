@@ -743,11 +743,13 @@
 
 (define (floor/ x y) (error "unimplemented"))
 (define (floor-quotient x y) (error "unimplemented"))
-(define (floor-remainder x y) (error "unimplemented"))
+(define (floor-remainder x y) (modulo x y))
 
-(define (truncate/ x y) (error "unimplemented"))
-(define (truncate-quotient x y) (error "unimplemented"))
-(define (truncate-remainder x y) (error "unimplemented"))
+(define (truncate/ x y)
+  (values (truncate-quotient x y)
+          (truncate-remainder x y)))
+(define (truncate-quotient x y) (quotient x y))
+(define (truncate-remainder x y) (remainder x y))
 
 (define (%binary-gcd x y) (error "unimplemented"))
 (define-syntax %gcd

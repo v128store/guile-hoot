@@ -577,8 +577,8 @@
      (func $facos (import "rt" "facos") (param f64) (result f64))
      (func $fatan (import "rt" "fatan") (param f64) (result f64))
      (func $fatan2 (import "rt" "fatan2") (param f64 f64) (result f64))
-     (func $flog (import "rt" "flog") (param f64 f64) (result f64))
-     (func $fexp (import "rt" "fexp") (param f64 f64) (result f64))
+     (func $flog (import "rt" "flog") (param f64) (result f64))
+     (func $fexp (import "rt" "fexp") (param f64) (result f64))
 
      (func $die (import "rt" "die")
            (param (ref string) (ref eq)))
@@ -3758,6 +3758,10 @@
            ,(call-fmath '$fatan '(local.get $x)))
      (func $atan2 (param $x (ref eq)) (param $y (ref eq)) (result (ref eq))
            ,(call-fmath '$fatan2 '(local.get $x) '(local.get $y)))
+     (func $log (param $x (ref eq)) (result (ref eq))
+           ,(call-fmath '$flog '(local.get $x)))
+     (func $exp (param $x (ref eq)) (result (ref eq))
+           ,(call-fmath '$fexp '(local.get $x)))
 
      (func $u64->bignum (param $i64 i64) (result (ref eq))
            (struct.new $bignum

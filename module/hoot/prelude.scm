@@ -798,13 +798,23 @@
 (define (sqrt x) (%sqrt x))
 
 (define* (log x #:optional y)
+  (define (%log x)
+    (%inline-wasm
+     '(func (param $x (ref eq)) (result (ref eq))
+            (call $log (local.get $x)))
+     x))
   (if y
-      (/ (%flog (inexact x))
-         (%flog (inexact y)))
-      (%flog (inexact x))))
+      (/ (%log x)
+         (%log y))
+      (%log x)))
 
 (define (exp x)
-  (%fexp (inexact x)))
+  (define (%exp x)
+    (%inline-wasm
+     '(func (param $x (ref eq)) (result (ref eq))
+            (call $exp (local.get $x)))
+     x))
+  (%exp x))
 
 (define* (number->string n #:optional (radix 10))
   (cond

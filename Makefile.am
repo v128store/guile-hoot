@@ -89,7 +89,6 @@ EXTRA_DIST = 					\
   examples/README.md				\
   examples/test-lib.js				\
   hoot.png					\
-  manifest.scm					\
   README.md					\
   test/basic-types.wasm				\
   test/load-wasm-and-print.js			\

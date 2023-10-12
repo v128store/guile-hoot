@@ -111,7 +111,9 @@ Missing R7RS-small features include:
 @enumerate
 @item Libraries (@code{define-library}, @code{import}, etc.)
 @item Record types (@code{define-record-type})
-@item Complex numbers
+@item Complex numbers (constants are supported, math procedures are not)
+@item Bignum constants (bignums can be computed, however)
+@item Symbols/keywords (in secondary WASM modules with imported Scheme ABI)
 @item Mutable strings (@code{string-set!})
 @item Scheme reader (@code{read})
 @item Environments and evaluation (@code{environment}, @code{eval}, etc.)

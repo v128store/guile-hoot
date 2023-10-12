@@ -886,8 +886,31 @@
 
 (define (rationalize x y) (error "unimplemented"))
 (define (square x) (* x x))
-(define (expt x y) (error "unimplemented"))
-   
+
+(define (expt x y)
+  (unless (number? x)
+    (error "not a number" x))
+  (unless (number? y)
+    (error "not a number" y))
+  (cond
+   ((eqv? x 0)
+    (cond ((zero? y) (if (exact? y) 1 1.0))
+          ((positive? y) (if (exact? y) 0 0.0))
+          (else +nan.0)))
+   ((eqv? x 0.0)
+    (cond ((zero? y) 1.0)
+          ((positive? y) 0.0)
+          (else +nan.0)))
+   ((exact-integer? y)
+    (if (< y 0)
+        (/ 1 (expt x (abs y)))
+        (let lp ((y y)
+                 (result 1))
+          (if (= y 0)
+              result
+              (lp (1- y) (* x result))))))
+   (else (exp (* y (log x))))))
+
 ;; (scheme complex)
 (define (make-polar real imag) (error "unimplemented"))
 (define (magnitude z) (error "unimplemented"))

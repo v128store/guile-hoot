@@ -132,20 +132,21 @@ type) that are managed by the WASM runtime.  This allows Hoot to take
 advantage of production garbage collectors already present in web
 browsers, obviating the need to implement and ship our own which would
 be both inferior to the host's and a major source of binary bloat.  As
-of writing, support for these WASM proposals are transitioning from
-being gated by experimental feature flags to being generally available
-in all major web browsers.
+of writing, WASM GC and tail calls are transitioning from being gated
+by experimental feature flags to being generally available in all
+major web browsers.
 
 There's an additional WASM proposal that Hoot has been built on that
 has, unfortunately, not found its way into the core WASM
-specification: stringref.  To work around this, the compiler lowers
-stringref instructions to another form.  We really like stringref and
-hope that the proposal will reach acceptance in the future.
+specification: stringref.  We still emit stringref, but it is reduced
+to being an intermediate form.  A lowering pass replaces stringref
+instructions with something resembling the JS String Builtins
+proposal.
 
 Hoot's usability in the browser is a work-in-progress.  The
 @file{reflect.js} library is provided to allow JavaScript to call
 Scheme procedures and inspect Scheme values.  However, a foreign
-function interface to call JavaScript functions from Scheme is not yet
+function interface to call host functions from Scheme is not yet
 available.
 
 @node Installation

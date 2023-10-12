@@ -72,7 +72,7 @@
   (newline)
   (print-locals (wasm-runtime-error-locals e))
   (newline)
-  (print-location (wasm-module-wasm
+  (print-location (validated-wasm-ref
                    (wasm-instance-module
                     (wasm-runtime-error-instance e)))
                   (wasm-runtime-error-position e)))
@@ -231,11 +231,11 @@
 (define (->wasm x)
   (match x
     ((? wasm? wasm) wasm)
-    ((? wasm-module? mod) (wasm-module-wasm mod))
+    ((? validated-wasm? mod) (validated-wasm-ref mod))
     ((? wasm-instance? instance)
-     (wasm-module-wasm (wasm-instance-module instance)))
+     (validated-wasm-ref (wasm-instance-module instance)))
     ((? hoot-module? mod)
-     (wasm-module-wasm
+     (validated-wasm-ref
       (wasm-instance-module
        (hoot-module-instance mod))))))
 

@@ -99,11 +99,25 @@ help advance the WASM standard for all dynamic languages.
 
 Hoot is still in an early phase of active development and its API
 should be considered unstable and subject to change in future
-releases.  Hoot currently supports the R7RS-small Scheme
-specification, more or less, along with a small set of Guile-specific
-functionality such as @ref{Prompts,,,Guile Reference}.  Future
-releases will add support for more standard Scheme and Guile-specific
-features.
+releases.  Hoot currently supports a subset of the R7RS-small Scheme
+specification, along with a small set of Guile-specific functionality
+such as @ref{Prompts,,,Guile Reference}.
+
+Missing R7RS-small features include:
+
+@enumerate
+@item Libraries (@code{define-library}, @code{import}, etc.)
+@item Record types (@code{define-record-type})
+@item Complex numbers
+@item Mutable strings (@code{string-set!})
+@item Scheme reader (@code{read})
+@item Environments and evaluation (@code{environment}, @code{eval}, etc.)
+@item System interface (@code{get-environment-variable}, @code{current-jiffy}, etc.)
+@item Promises (@code{delay}, @code{force})
+@end enumerate
+
+Future releases will add support for all of R7RS-small and eventually
+full Guile-flavored Scheme.
 
 To compile Scheme to WASM, Hoot takes advantage of several new WASM
 proposals.  The most important of these new features are tail calls

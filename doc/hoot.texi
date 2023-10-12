@@ -500,30 +500,37 @@ for full API documentation.
 @chapter Compiling to WASM
 
 @menu
-* Compilation::                   Compiling a Hoot module.
-* Reflection::                    Using Hoot modules from the host environment.
-* Development::                   Developer tools.
+* Invoking the compiler::         Compiling a Hoot module.
+* High-level development tools::  Using Hoot modules from the host environment.
+* Low-level development tools::   Inspecting and debugging WASM.
 @end menu
 
-@node Compilation
-@section Compilation
+@node Invoking the compiler
+@section Invoking the compiler
 
-The @code{(hoot compile)} module provides the interface to the WASM
-compiler backend.  In Guile's compiler tower, Scheme code goes through
-several transformations before being compiled to VM bytecode.  Scheme
-is lowered to @ref{Tree-IL,,,Guile Reference}, which is then lowered
-to @ref{Continuation Passing Style,,,Guile Reference}(CPS), and then
+In Guile's compiler tower, Scheme code goes through several
+transformations before being compiled to VM bytecode.  Scheme is
+lowered to @ref{Tree-IL,,,Guile Reference}, which is then lowered to
+@ref{Continuation Passing Style,,,Guile Reference}(CPS), and then
 finally to @ref{Bytecode,,,Guile Reference}.  Hoot adds an additional
 backend that compiles CPS to WASM.
 
 Currently, Hoot does not use Guile's module system and instead peforms
 whole program compilation using a prelude that provides R7RS-small
-features (and also some Guile ones, like prompts.)
+features (and also some Guile ones, like prompts.)  Support for
+modules will be added in a future release.
 
-When compiling to the WASM target, a special form called
-@code{%inline-wasm} is available for when it is necessary or
-convenient to implement a section of code in WAT rather than Scheme.
-For example, here's how @code{port?} is implemented:
+For hooking the Hoot compiler up to a build system such as GNU Make,
+invoke the @command{guild compile-wasm} tool:
+
+@example
+guild compile-wasm -o foo.wasm foo.scm
+@end example
+
+When writing Scheme intended to be compiled to the WASM target, a
+special form called @code{%inline-wasm} is available for implementing
+a section of code in WAT rather than Scheme.  For example, here's how
+@code{port?} is implemented:
 
 @lisp
 (define (port? x)
@@ -540,6 +547,10 @@ An inline WASM form specifies a single function using WAT expressions
 whose parameters and result types are all @code{(ref eq)}, as well as
 the Scheme variables that map to the parameters.  The compiler then
 transforms and splices the function body into the procedure.
+
+Like Guile's built-in compiler, the Hoot compiler can also be invoked
+within Scheme.  The @code{(hoot compile)} module provides the
+interface to the WASM compiler backend.
 
 @deffn {Procedure} compile exp [#:import-abi? #f] [#:export-abi? #t] @
                    [#:from (current-language)] @
@@ -582,11 +593,12 @@ Like @code{compile}, but read the Scheme expression from
 @var{input-file}.
 @end deffn
 
-@node Reflection
-@section Reflection
+@node High-level development tools
+@section High-level development tools
 
 The @code{(hoot reflect)} module provides an interface for inspecting
-and manipulating Scheme values that live within WASM modules.
+and manipulating Scheme values that live within WASM modules.  This is
+the primary interface for testing compiler output directly from Guile.
 
 @deffn {Procedure} hoot-instantiate reflector scheme-wasm
 Instantiate and return a new Hoot module using the compiled Scheme
@@ -791,11 +803,16 @@ Return @code{#t} if @var{obj} is a Hoot port.
 Return @code{#t} if @var{obj} is a Hoot struct.
 @end deffn
 
-@node Development
-@section Development
+@node Low-level development tools
+@section Low-level development tools
 
 The @code{(hoot repl)} module provides a set of REPL commands to
-assist with inspecting and debugging WASM modules.
+assist with inspecting and debugging WASM modules.  As a matter of
+course, Hoot's Scheme compiler @emph{should not} cause low-level WASM
+runtime errors, but when it does, or when working with the WASM
+toolchain directly, these REPL tools may provide some assistance.
+
+To install the REPL commands, simply import the module:
 
 @lisp
 scheme@@(guile-user)> ,use (hoot repl)
@@ -806,6 +823,126 @@ To see a list of all the WASM commands, run:
 @lisp
 scheme@@(guile-user)> ,help wasm
 @end lisp
+
+To demonstrate the debugging features, let's create a trivial module
+with a buggy function:
+
+@lisp
+@verbatim
+scheme@(guile-user)> (define src
+                       '(module
+                         (func (export "main") (param $x i32) (result i32)
+                               (i32.add (local.get $x)
+                                        (unreachable)))))
+@end verbatim
+@end lisp
+
+When called, this function will hit the @code{unreachable} instruction
+and throw a runtime error.  Let's compile the WAT source, load it into
+the VM, and get a reference to the @code{main} function:
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,use (wasm resolve) (wasm vm) (wasm wat)
+scheme@(guile-user)> (define wasm (validate-wasm (resolve-wasm (wat->wasm src))))
+scheme@(guile-user)> (define instance (instantiate-wasm wasm))
+scheme@(guile-user)> (define main (wasm-instance-export-ref instance "main"))
+@end verbatim
+@end lisp
+
+To trap the WASM runtime error and open a WASM debugging REPL, the
+@command{wasm-catch} REPL command can be prefixed before an
+expression:
+
+@lisp
+@verbatim
+scheme@(guile-user)> ,wasm-catch (main 7)
+ice-9/boot-9.scm:1674:22: In procedure raise-exception:
+ERROR:
+  1. &wasm-runtime-error:
+      instruction: (unreachable)
+      position: (func 0 1)
+      instance: #<wasm-instance 140506559041920>
+      stack: #<<wasm-stack> items: (7)>
+      blocks: ((wasm-block))
+      locals: #(7)
+  2. &message: "WASM runtime error: unreachable"
+  3. &irritants: ()
+
+Entering WASM debug prompt. Type `,help wasm' for info or `,q' to continue.
+scheme@(guile-user) [1]>
+@end verbatim
+@end lisp
+
+Once in a WASM debug context, many of the other REPL commands become
+usable.  To highlight the instruction where execution has paused, use
+@command{wasm-pos}:
+
+@lisp
+@verbatim
+scheme@(guile-user) [1]> ,wasm-pos
+(func 0 (param $x i32) (result i32)
+  (local.get 0)
+  <<< (unreachable) >>>
+  (i32.add))
+@end verbatim
+@end lisp
+
+To print the contents of the values stack, use @command{wasm-stack}:
+
+@lisp
+@verbatim
+scheme@(guile-user) [1]> ,wasm-stack
+Value stack:
+  0:	7
+@end verbatim
+@end lisp
+
+To print the contents of the function locals, use @command{wasm-locals}:
+
+@lisp
+@verbatim
+scheme@(guile-user) [1]> ,wasm-locals
+Locals:
+  0:	7
+@end verbatim
+@end lisp
+
+To evaluate arbitary WASM instructions in the current context, either
+in an attempt to repair interpreter state or just for fun, use
+@command{wasm-eval}:
+
+@lisp
+@verbatim
+scheme@(guile-user) [1]> ,wasm-eval '(local.get 0)
+scheme@(guile-user) [1]> ,wasm-stack
+Value stack:
+  0:	7
+  1:	7
+@end verbatim
+@end lisp
+
+There are now two i32 values on the stack.  If we were to proceed with
+execution, the next instruction, @code{i32.add}, should add them
+together and return a result of 14.  To resume execution, use
+@command{wasm-continue}:
+
+@lisp
+@verbatim
+scheme@(guile-user) [1]> ,wasm-continue
+$5 = 14
+@end verbatim
+@end lisp
+
+Evaluating arbitrary WASM commands in a debugging context is very
+helpful when trying to understand the nature of a bug, but bear in
+mind that cursed things may happen during the process as there is no
+validation applied. This goes especially for when you try to resume
+execution.
+
+See @ref{Interpreter} for detailed information on running WASM within
+Guile and @ref{Toolchain reference} in general for working with WASM
+directly.
 
 @deffn {REPL Command} wasm-trace exp
 Evaluate @var{exp} with verbose WASM tracing enabled.  This will print
@@ -1659,7 +1796,8 @@ Parse the WASM binary data from @var{port} and return a WASM module.
 
 The @code{(wasm dump)} module provides the @code{dump-wasm} procedure
 for generating a detailed print-out of a WASM module's contents.  See
-also @ref{Development} for the @code{wasm-dump} REPL command.
+also @ref{Low-level development tools} for the @code{wasm-dump} REPL
+command.
 
 @deffn {Procedure} dump-wasm mod [#:port] [#:dump-func-defs? #t]
 Write a detailed inventory of the WASM module @var{mod} to @var{port}

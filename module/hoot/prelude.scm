@@ -1,5 +1,6 @@
 ;;; Hoot standard prelude
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.

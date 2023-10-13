@@ -1,4 +1,4 @@
-;;; WebAssembly assembler
+;;; Pass to lower stringref to JS string builtins
 ;;; Copyright (C) 2023 Igalia, S.L.
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
@@ -281,7 +281,7 @@
      (func $string.as_iter (param $wtf8 (ref $wtf8))
            (result (ref $stringview-iter))
            (struct.new $stringview-iter (local.get $wtf8) (i32.const 0)))
-     
+
      (func $stringview_iter.next
            (param $iter (ref $stringview-iter))
            (result i32)

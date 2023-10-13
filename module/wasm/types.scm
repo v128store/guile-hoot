@@ -1,5 +1,8 @@
-;;; WebAssembly assembler
+;;; WebAssembly data types
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 Christine Lemmer-Webber <christine@spritely.institute>
+;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,7 +18,8 @@
 
 ;;; Commentary:
 ;;;
-;;; Assembler for WebAssembly.
+;;; This module defines all of the data types that form a WebAssembly
+;;; module.
 ;;;
 ;;; Code:
 

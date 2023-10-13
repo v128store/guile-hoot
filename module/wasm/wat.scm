@@ -1,5 +1,7 @@
-;;; WebAssembly assembler
+;;; WebAssembly text format parser and unparser
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,7 +17,7 @@
 
 ;;; Commentary:
 ;;;
-;;; Assembler for WebAssembly.
+;;; Converts WAT to WASM and vice versa.
 ;;;
 ;;; Code:
 

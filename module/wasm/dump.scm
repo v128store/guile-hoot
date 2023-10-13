@@ -1,5 +1,6 @@
-;;; WebAssembly assembler
+;;; WebAssembly dumper
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
 
 ;;; Commentary:
 ;;;
-;;; Assembler for WebAssembly.
+;;; Print out details of WebAssembly modules.
 ;;;
 ;;; Code:
 

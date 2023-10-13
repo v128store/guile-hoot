@@ -1,5 +1,7 @@
-;;; WebAssembly assembler
+;;; WebAssembly resolver
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,7 +17,8 @@
 
 ;;; Commentary:
 ;;;
-;;; Assembler for WebAssembly.
+;;; Lowers WASM with human readable identifiers to WASM with only
+;;; index references.
 ;;;
 ;;; Code:
 
@@ -25,16 +28,6 @@
   #:use-module (srfi srfi-11)
   #:use-module (wasm types)
   #:export (resolve-wasm))
-
-;; to-do:
-;;  - support reftypes
-;;  - support bulk memory instructions
-;;  - tail calls
-;;  - stringref
-
-;; differences from standard: scheme comments / no block comments.
-;; strings have guile string syntax; bytevectors also for data.  could
-;; write standard-compliant parser instead (port from wassemble).
 
 (define (fold1 f l s0)
   (let lp ((l l) (s0 s0))
@@ -441,7 +434,7 @@
           `(table.copy ,(resolve-table dst) ,(resolve-table src)))
          (((and inst (or 'table.grow 'table.size 'table.fill)) table)
           `(,inst ,(resolve-table table)))
-         
+
          ;; Not yet implemented: simd mem ops, atomic mem ops.
 
          ((? symbol? op) `(,op))

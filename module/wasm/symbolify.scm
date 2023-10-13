@@ -1,4 +1,4 @@
-;;; WebAssembly assembler
+;;; Replace indices with symbolic identifiers
 ;;; Copyright (C) 2023 Igalia, S.L.
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
@@ -359,7 +359,7 @@
              `(table.copy ,(table-name dst) ,(table-name src)))
             (((and inst (or 'table.grow 'table.size 'table.fill)) table)
              `(,inst ,(table-name table)))
-         
+
             ;; Not yet implemented: simd mem ops, atomic mem ops.
 
             (inst inst)))

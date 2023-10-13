@@ -1,5 +1,6 @@
-;;; WebAssembly assembler
+;;; Stack effects for instruction validation
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,7 +16,8 @@
 
 ;;; Commentary:
 ;;;
-;;; Optimizer for WebAssembly.
+;;; Computes and applies stack effects for individual instructions for
+;;; the purposes of validation.
 ;;;
 ;;; Code:
 

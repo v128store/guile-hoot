@@ -26,16 +26,6 @@
   #:use-module (wasm types)
   #:export (assemble-wasm))
 
-;; to-do:
-;;  - support reftypes
-;;  - support bulk memory instructions
-;;  - tail calls
-;;  - stringref
-
-;; differences from standard: scheme comments / no block comments.
-;; strings have guile string syntax; bytevectors also for data.  could
-;; write standard-compliant parser instead (port from wassemble).
-
 (define (assemble-wasm wasm)
   (define (put-uleb port val)
     (let lp ((val val))

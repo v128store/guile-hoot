@@ -1,5 +1,6 @@
 ;;; WebAssembly reflection
 ;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
+;;; Copyright (C) 2023 Igalia, S.L.
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.

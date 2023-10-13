@@ -1,5 +1,7 @@
-;;; WebAssembly linker
+;;; WebAssembly compiler
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
+;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -15,8 +17,7 @@
 
 ;;; Commentary:
 ;;;
-;;; Linker for WebAssembly, to augment a wasm module by pulling in
-;;; missing definitions from a standard library.
+;;; Scheme to WebAssembly compiler.
 ;;;
 ;;; Code:
 
@@ -2052,7 +2053,7 @@
              (f64.sub)
              (f64.const 0)
              (f64.eq)))))
-         
+
       (define (compile-throw src op param args)
         ;; FIXME: Instead of dying, we need to implement exception
         ;; handling, as in Guile.

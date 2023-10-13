@@ -32,6 +32,8 @@
             srcdir
             use-d8?
             use-hoot-vm?
+            scope-file
+            call-with-compiled-wasm-file
             test-compilation
             test-call
             test-end*))
@@ -91,7 +93,7 @@
           (lp rest (cons file files) #f)))))))
 
 (define reflect-wasm
-  (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
+  (call-with-input-file (scope-file "js-runtime/reflect.wasm") parse-wasm))
 
 (define (call-with-printed-values thunk)
   (string-trim-both

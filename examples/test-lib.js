@@ -8,7 +8,7 @@ let readBinaryFile = (()=> {
 })();
 
 let Wtf8 = (() => {
-    let bytes = readBinaryFile(`${builddir}/js-runtime/wtf8.wasm`);
+    let bytes = readBinaryFile('js-runtime/wtf8.wasm');
     return new WebAssembly.Instance(new WebAssembly.Module(bytes));
 })();
 function wtf8_to_string(wtf8) {

@@ -52,5 +52,7 @@ async function runTest(wasmFile) {
     }
 }
 
-load(`${args[0]}/js-runtime/reflect.js`);
+var srcdir = args[0];
+os.chdir(srcdir);
+load('js-runtime/reflect.js');
 waitFor(runTest(args[1]));

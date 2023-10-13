@@ -33,33 +33,6 @@
 (define s32-overflow (@@ (wasm vm) s32-overflow))
 (define s64-overflow (@@ (wasm vm) s64-overflow))
 
-(define d8 (or (getenv "D8") "d8"))
-(define srcdir (or (getenv "SRCDIR") (getcwd)))
-
-(define (scope-file file-name)
-  (string-append srcdir "/" file-name))
-
-(define (unwind-protect body unwind)
-  (call-with-values
-      (lambda ()
-        (with-exception-handler
-         (lambda (exn)
-           (unwind)
-           (raise-exception exn))
-         body))
-    (lambda vals
-      (unwind)
-      (apply values vals))))
-
-(define (call-with-wasm-file wasm f)
-  (let* ((wasm-port (mkstemp "/tmp/tmp-wasm-XXXXXX"))
-         (wasm-file-name (port-filename wasm-port)))
-    (put-bytevector wasm-port (assemble-wasm wasm))
-    (close-port wasm-port)
-    (unwind-protect
-     (lambda () (f wasm-file-name))
-     (lambda () (delete-file wasm-file-name)))))
-
 (define (run-d8 read args)
   (let* ((args (cons* "--experimental-wasm-stringref" args))
          (port (apply open-pipe* OPEN_READ d8 args))
@@ -69,7 +42,7 @@
         (throw 'd8-error result))))
 
 (define (run-wasm-in-d8 wasm func read args)
-  (call-with-wasm-file
+  (call-with-compiled-wasm-file
    wasm
    (lambda (wasm-file-name)
      (run-d8 read
@@ -2034,9 +2007,4 @@
                                                 (("square" . ,square)))))))
     ((wasm-instance-export-ref inst-b "main") 4)))
 
-(when (and (batch-mode?)
-           (or (not (zero? (test-runner-fail-count (test-runner-get))))
-               (not (zero? (test-runner-xpass-count (test-runner-get))))))
-  (exit 1))
-
-(test-end "test-vm")
+(test-end* "test-vm")

@@ -10,7 +10,8 @@ if (typeof scriptArgs !== 'undefined') {
 
 srcdir = args[0] || '.';
 builddir = args[1] || '.';
-load(`${srcdir}/examples/test-lib.js`);
+os.chdir(srcdir);
+load('examples/test-lib.js');
 
 let scm = load_wasm(`${builddir}/examples/basic-types.wasm`);
 

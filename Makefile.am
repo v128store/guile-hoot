@@ -92,6 +92,8 @@ EXTRA_DIST = 					\
   README.md					\
   test/basic-types.wasm				\
   test/load-wasm-and-print.js			\
+  test/load-wasm-and-print-primitive.js		\
   test/test-call.js				\
+  test/utils.scm				\
   doc/build-html.scm				\
   doc/hoot.css

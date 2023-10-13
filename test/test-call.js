@@ -61,6 +61,8 @@ async function runTest(call) {
     }
 }
 
-load(`${args[0]}/js-runtime/reflect.js`);
+var srcdir = args[0];
+os.chdir(srcdir);
+load('js-runtime/reflect.js');
 args.shift();
 waitFor(runTest(args));

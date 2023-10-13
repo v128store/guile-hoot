@@ -38,6 +38,7 @@ SCM_TESTS = 					\
   test/test-constants.scm			\
   test/test-exceptions.scm			\
   test/test-flonums.scm				\
+  test/test-complex.scm				\
   test/test-fluids.scm				\
   test/test-fractions.scm			\
   test/test-inline-wasm.scm			\

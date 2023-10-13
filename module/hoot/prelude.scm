@@ -1193,10 +1193,63 @@
    (else (exp (* y (log x))))))
 
 ;; (scheme complex)
-(define (make-rectangular x y) (raise (%make-unimplemented-error 'make-rectangular)))
-(define (make-polar x y) (raise (%make-unimplemented-error 'make-polar)))
-(define (magnitude z) (raise (%make-unimplemented-error 'magnitude)))
-(define (angle z) (raise (%make-unimplemented-error 'angle)))
+;; Adapted from Guile's numbers.c
+(define (make-rectangular real imag)
+  (check-type real real? 'make-rectangular)
+  (check-type imag real? 'make-rectangular)
+  (if (eq? imag 0)
+      real
+      (%inline-wasm
+       '(func (param $real f64) (param $imag f64) (result (ref eq))
+              (struct.new $complex
+                          (i32.const 0)
+                          (local.get $real)
+                          (local.get $imag)))
+       (inexact real) (inexact imag))))
+(define (make-polar mag ang)
+  (check-type mag real? 'make-polar)
+  (check-type ang real? 'make-polar)
+  (cond
+   ((eq? mag 0) 0)
+   ((eq? ang 0) mag)
+   (else
+    (%inline-wasm
+     '(func (param $mag f64) (param $ang f64) (result (ref eq))
+            (local $f0 f64) (local $f1 f64)
+            (local.set $f0 (call $fcos (local.get $ang)))
+            (local.set $f1 (call $fsin (local.get $ang)))
+            ;; If sin/cos are NaN and magnitude is 0, return a complex
+            ;; zero.
+            (if (ref eq)
+                (i32.and (call $f64-is-nan (local.get $f0))
+                         (call $f64-is-nan (local.get $f1))
+                         (f64.eq (local.get $mag) (f64.const 0.0)))
+                (then (struct.new $complex
+                                  (i32.const 0)
+                                  (f64.const 0.0)
+                                  (f64.const 0.0)))
+                (else (struct.new $complex
+                                  (i32.const 0)
+                                  (f64.mul (local.get $mag) (local.get $f0))
+                                  (f64.mul (local.get $mag) (local.get $f1))))))
+     (inexact mag) (inexact ang)))))
+(define (magnitude z)
+  (cond
+   ((real? z) (abs z))
+   (else
+    (check-type z complex? 'magnitude)
+    (let ((r (real-part z))
+          (i (imag-part z)))
+      (sqrt (+ (* r r) (* i i)))))))
+(define (angle z)
+  (cond
+   ((real? z)
+    (if (negative? z)
+        (atan 0.0 -1.0)
+        0.0))
+   (else
+    (check-type z complex? 'angle)
+    (atan (imag-part z) (real-part z)))))
 (define (real-part z)
   (cond
    ((real? z) z)

@@ -982,7 +982,7 @@ binary, or an input port from which a WASM binary is read."
                     (if (eq? sig other-sig)
                         (vector-set! func-vec func-idx func)
                         (instance-error "imported function signature mismatch"
-                                        sig other-sig)))
+                                        mod name sig other-sig)))
                    (#f
                     (let ((wrap (make-import-closure mod name proc sig)))
                       (vector-set! func-vec func-idx (make-wasm-func wrap sig)))))

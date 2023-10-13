@@ -289,7 +289,7 @@
         (match instrs
           (() #t)
           ((instr . rest)
-           (validate-instr ctx instr))))))
+           (loop (validate-instr ctx instr) rest))))))
   (define (validate-global global idx)
     (match global
       (($ <global> id ($ <global-type> _ type) instrs)

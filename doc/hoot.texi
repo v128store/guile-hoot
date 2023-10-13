@@ -1170,23 +1170,22 @@ these primitives.
 The type hierarchy looks like this:
 
 @verbatim
-              ╭─────╮                         ╭───────╮     ╭─────────╮
-   .╌╌╌╌╌╌╌╌╌ │ any │ ╌╌╌╌╌╌╌╌╌╌╌╌.           │ func  │     │ extern  │
-   ┆          ╰─────╯             ┆           ╰───────╯     ╰─────────╯
+              .-----.                         .-------.     .---------.
+   .--------- | any | ------------.           | func  |     | extern  |
+   |          `-----'             |           `-------'     `---------'
    ↓             ↓                ↓               ↓              ↓
- ╭─────╮      ╭─────╮        ╭─────────╮    ╭───────────╮  ╭───────────╮
- │ i31 │      │ eq  │        │ struct  │    │ all funcs │  │ noextern  │
- ╰─────╯      ╰─────╯        ╰─────────╯    ╰───────────╯  ╰───────────╯
+ .-----.      .-----.        .---------.    .-----------.  .-----------.
+ | i31 |      | eq  |        | struct  |    | all funcs |  | noextern  |
+ `-----'      `-----'        `---------'    `-----------'  `-----------'
                  ↓                ↓               ↓
-          ╭─────────────╮  ╭─────────────╮   ╭─────────╮
-          │ all arrays  │  │ all structs │   │ nofunc  │
-          ╰─────────────╯  ╰─────────────╯   ╰─────────╯
+          .-------------.  .-------------.   .---------.
+          | all arrays  |  | all structs |   | nofunc  |
+          `-------------'  `-------------'   `---------'
                  ↓
-              ╭─────╮
-              │ any │
-              ╰─────╯
+              .-----.
+              | any |
+              `-----'
 @end verbatim
-
 
 A collection of type descriptor objects form a type table that
 describes all non-primitive types used within a module.  Type objects

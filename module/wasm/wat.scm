@@ -908,7 +908,12 @@
        ;; Types
        ,@(map (match-lambda
                 (($ <type> id val)
-                 `(type ,id ,(type-repr val))))
+                 `(type ,id ,(type-repr val)))
+                (($ <rec-group> types)
+                 `(rec ,@(map (match-lambda
+                               (($ <type> id val)
+                                `(type ,id ,(type-repr val))))
+                              types))))
               types)
        ;; Imports
        ,@(map (match-lambda

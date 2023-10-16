@@ -215,4 +215,8 @@
 (test-call "288.0" (lambda (a b) (lcm a b)) 32.0 -36)
 (test-call "1" (lambda () (lcm)))
 
+;; rationalize
+(test-call "1/3" (lambda (a b) (rationalize a b)) 3/10 1/10)
+(test-call "0.2" (lambda (a b) (rationalize a b)) 0.2 1/10)
+
 (test-end "test-numeric")

@@ -1734,9 +1734,9 @@ WASM module.
                   (local.get $b)))))
 @end lisp
 
-The return WASM module preserves named references, among other things,
-and is thus unsuitable as input to the assembler or interpreter.  To
-lower the module into a usable form for the assembler, see
+The returned WASM module preserves named references, among other
+things, and is thus unsuitable as input to the assembler or
+interpreter.  To lower the module into a usable form, see
 @code{resolve-wasm} in @ref{Resolver}.
 
 @end deffn
@@ -1748,7 +1748,7 @@ Disassemble @var{wasm} and return its symbolic WAT form.
 @node Resolver
 @section Resolver
 
-The @code{(wasm resolve)} module provides the @code{(resolve-wasm)}
+The @code{(wasm resolve)} module provides the @code{resolve-wasm}
 procedure which lowers WASM modules into a form that can be used by
 the assembler or interpreter.  The resolver replaces named references
 with their respective integer index values, fills out the type table,
@@ -1765,7 +1765,8 @@ interpreted.  Returns a new WASM module and does not modify @var{mod}.
 The @code{(wasm link)} module provides a means for extending a WASM
 module with the standard library that it needs at runtime.  Hoot uses
 the linker to add the Scheme runtime to the compiled form of user
-code.
+code.  The linker uses a form of tree-shaking to remove anything that
+is not used by the base module.
 
 @deffn {Procedure} add-stdlib wasm stdlib
 Return a new WASM module that is the combination of the WASM module

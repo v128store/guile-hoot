@@ -1,3 +1,11 @@
 #!/bin/sh
 
-exec @D8@ $@ -- "@abs_top_srcdir@" "@abs_top_builddir@"
+# Short-circuit JS tests if d8 was not found.
+if [ -z "@D8@" ]
+then
+    D8="true"
+else
+    D8="@D8@"
+fi
+
+exec $D8 $@ -- "@abs_top_srcdir@" "@abs_top_builddir@"

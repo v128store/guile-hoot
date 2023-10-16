@@ -17,3 +17,4 @@ Makefile.in
 /doc/hoot.info
 /doc/hoot.html/
 /js-runtime/wtf8.wasm
+/doc/.dirstamp

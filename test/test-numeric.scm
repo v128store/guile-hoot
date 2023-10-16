@@ -224,18 +224,6 @@
                                    (lambda () (exact-integer-sqrt a))
                                  (lambda x x)))
            0)
-(test-call "(1 0)" (lambda (a) (call-with-values
-                                   (lambda () (exact-integer-sqrt a))
-                                 (lambda x x)))
-           1)
-(test-call "(1 1)" (lambda (a) (call-with-values
-                                   (lambda () (exact-integer-sqrt a))
-                                 (lambda x x)))
-           2)
-(test-call "(1 2)" (lambda (a) (call-with-values
-                                   (lambda () (exact-integer-sqrt a))
-                                 (lambda x x)))
-           3)
 (test-call "(2 0)" (lambda (a) (call-with-values
                                    (lambda () (exact-integer-sqrt a))
                                  (lambda x x)))

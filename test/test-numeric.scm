@@ -181,6 +181,28 @@
 (test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
 
 ;; flooring division
+(test-call "2 1" (lambda (a b) (call-with-values
+                                   (lambda () (floor/ a b))
+                                 (lambda x x)))
+           5 2)
+(test-call "-3 1" (lambda (a b) (call-with-values
+                                    (lambda () (floor/ a b))
+                                  (lambda x x)))
+           -5 2)
+(test-call "-3 -1" (lambda (a b) (call-with-values
+                                     (lambda () (floor/ a b))
+                                   (lambda x x)))
+           5 -2)
+(test-call "2 -1" (lambda (a b) (call-with-values
+                                    (lambda () (floor/ a b))
+                                  (lambda x x)))
+           -5 -2)
+
+(test-call "2" (lambda (a b) (floor-quotient a b)) 5 2)
+(test-call "-3" (lambda (a b) (floor-quotient a b)) -5 2)
+(test-call "-3" (lambda (a b) (floor-quotient a b)) 5 -2)
+(test-call "2" (lambda (a b) (floor-quotient a b)) -5 -2)
+
 (test-call "1" (lambda (a b) (floor-remainder a b)) 5 2)
 (test-call "1" (lambda (a b) (floor-remainder a b)) -5 2)
 (test-call "-1" (lambda (a b) (floor-remainder a b)) 5 -2)

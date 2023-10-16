@@ -776,14 +776,40 @@
 (define (truncate-quotient x y) (quotient x y))
 (define (truncate-remainder x y) (remainder x y))
 
-(define (%binary-gcd x y) (error "unimplemented"))
+(define (%binary-gcd x y)
+  (unless (integer? x)
+    (error "expected integer" x))
+  (unless (integer? y)
+    (error "expected integer" y))
+  (let ((result
+         (%inline-wasm
+          '(func (param $x (ref eq)) (param $y (ref eq))
+                 (result (ref eq))
+                 (call $gcd (local.get $x) (local.get $y)))
+          (exact x)
+          (exact y))))
+    (if (or (inexact x) (inexact y))
+        (inexact result)
+        (result))))
 (define-syntax %gcd
   (syntax-rules ()
     ((_) 0)
     ((_ x) x)
     ((_ x y) (%binary-gcd x y))))
 
-(define (%binary-lcm x y) (error "unimplemented"))
+(define (%binary-lcm x y)
+  (unless (integer? x)
+    (error "expected integer" x))
+  (unless (integer? y)
+    (error "expected integer" y))
+  (let* ((exact-x (exact x))
+         (exact-y (exact y))
+         (result (if (and (eqv? x 0) (eqv? y 0))
+                     0
+                     (quotient (abs (* x y)) (gcd x y)))))
+    (if (or (inexact? x) (inexact? y))
+        (inexact result)
+        result)))
 (define-syntax %lcm
   (syntax-rules ()
     ((_) 1)

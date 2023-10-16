@@ -181,9 +181,42 @@
 (test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
 
 ;; flooring division
+(test-call "2 1" (lambda (a b) (call-with-values
+                                   (lambda () (floor/ a b))
+                                 (lambda x x)))
+           5 2)
+(test-call "-3 1" (lambda (a b) (call-with-values
+                                    (lambda () (floor/ a b))
+                                  (lambda x x)))
+           -5 2)
+(test-call "-3 -1" (lambda (a b) (call-with-values
+                                     (lambda () (floor/ a b))
+                                   (lambda x x)))
+           5 -2)
+(test-call "2 -1" (lambda (a b) (call-with-values
+                                    (lambda () (floor/ a b))
+                                  (lambda x x)))
+           -5 -2)
+
+(test-call "2" (lambda (a b) (floor-quotient a b)) 5 2)
+(test-call "-3" (lambda (a b) (floor-quotient a b)) -5 2)
+(test-call "-3" (lambda (a b) (floor-quotient a b)) 5 -2)
+(test-call "2" (lambda (a b) (floor-quotient a b)) -5 -2)
+
 (test-call "1" (lambda (a b) (floor-remainder a b)) 5 2)
 (test-call "1" (lambda (a b) (floor-remainder a b)) -5 2)
 (test-call "-1" (lambda (a b) (floor-remainder a b)) 5 -2)
 (test-call "-1" (lambda (a b) (floor-remainder a b)) -5 -2)
+
+;; gcd and lcm
+(test-call "4" (lambda (a b) (gcd a b)) 32 -36)
+(test-call "0" (lambda () (gcd)))
+(test-call "288" (lambda (a b) (lcm a b)) 32 -36)
+(test-call "288.0" (lambda (a b) (lcm a b)) 32.0 -36)
+(test-call "1" (lambda () (lcm)))
+
+;; rationalize
+(test-call "1/3" (lambda (a b) (rationalize a b)) 3/10 1/10)
+(test-call "0.2" (lambda (a b) (rationalize a b)) 0.2 1/10)
 
 (test-end "test-numeric")

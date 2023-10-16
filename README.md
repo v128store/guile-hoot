@@ -8,6 +8,10 @@ launched by the [Spritely Institute](https://spritely.institute/).  In
 addition to the compiler, Hoot contains a full WebAssembly toolchain
 with a WAT parser, an assembler, a disassembler, an interpreter, etc.
 
+For a fuller picture of project status, including known limitations,
+see the ["Status" section of our
+documentation.](https://spritely.institute/files/docs/guile-hoot/latest/Status.html).
+
 ## Project goals and timeframe
 
 Hoot aims to be an ahead-of-time compiler for all of [R7RS-small

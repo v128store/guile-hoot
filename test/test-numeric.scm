@@ -219,4 +219,34 @@
 (test-call "1/3" (lambda (a b) (rationalize a b)) 3/10 1/10)
 (test-call "0.2" (lambda (a b) (rationalize a b)) 0.2 1/10)
 
+;; exact-integer-sqrt
+(test-call "(0 0)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           0)
+(test-call "(1 0)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           1)
+(test-call "(1 1)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           2)
+(test-call "(1 2)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           3)
+(test-call "(2 0)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           4)
+(test-call "(2 1)" (lambda (a) (call-with-values
+                                   (lambda () (exact-integer-sqrt a))
+                                 (lambda x x)))
+           5)
+(test-call "(4294967296 1)"
+           (lambda () (call-with-values
+                          (lambda () (exact-integer-sqrt (1+ (expt 2 64))))
+                        (lambda x x))))
+
 (test-end "test-numeric")

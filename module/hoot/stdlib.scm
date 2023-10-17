@@ -581,6 +581,10 @@
      (func $flog (import "rt" "flog") (param f64) (result f64))
      (func $fexp (import "rt" "fexp") (param f64) (result f64))
 
+     (func $jiffies-per-second (import "rt" "jiffies_per_second") (result i32))
+     (func $current-jiffy (import "rt" "current_jiffy") (result i64))
+     (func $current-second (import "rt" "current_second") (result f64))
+
      (func $die (import "rt" "die")
            (param (ref string) (ref eq)))
 
@@ -2282,6 +2286,32 @@
                        (i32.const 0)
                        (call $bignum-from-i64
                              (i64.extend_i32_s (local.get $a)))))
+
+     (func $i64->fixnum (param $a i64) (result (ref i31))
+           (ref.i31 (i32.wrap_i64 (i64.shl (local.get $a) (i64.const 1)))))
+
+     (func $i64->bignum (param $a i64) (result (ref eq))
+           (struct.new $bignum
+                       (i32.const 0)
+                       (call $bignum-from-i64 (local.get $a))))
+
+     (func $i32->number (param $a i32) (result (ref eq))
+           (if (ref eq)
+               (i32.and (i32.le_s (i32.const #x-20000000)
+                                  (local.get $a))
+                        (i32.le_s (local.get $a)
+                                  (i32.const #x1FFFFFFF)))
+               (then (call $i32->fixnum (local.get $a)))
+               (else (call $i32->bignum (local.get $a)))))
+
+     (func $i64->number (param $a i64) (result (ref eq))
+           (if (ref eq)
+               (i32.and (i64.le_s (i64.const #x-20000000)
+                                  (local.get $a))
+                        (i64.le_s (local.get $a)
+                                  (i64.const #x1FFFFFFF)))
+               (then (call $i64->fixnum (local.get $a)))
+               (else (call $i64->bignum (local.get $a)))))
 
      (func $bignum->f64 (param $a (ref $bignum)) (result f64)
            (call $bignum-to-f64 (struct.get $bignum $val (local.get $a))))

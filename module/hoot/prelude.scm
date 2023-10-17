@@ -2298,9 +2298,9 @@
 (define (eval exp env) (error "eval unsupported"))
 (define* (load filename #:optional env) (error "load unsupported"))
 
-(define (command-line) (error "unimplemented"))
-(define (get-environment-variable name) (error "unimplemented"))
-(define (get-environment-variables) (error "unimplemented"))
+(define (command-line) '())
+(define (get-environment-variable name) #f)
+(define (get-environment-variables) '())
 (define* (emergency-exit #:optional status) (error "unimplemented"))
 (define* (exit #:optional status) (error "unimplemented"))
 

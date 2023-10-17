@@ -438,6 +438,10 @@ class SchemeModule {
         flog: Math.log,
         fexp: Math.exp,
 
+        jiffies_per_second() { return 1000; },
+        current_jiffy() { return BigInt(Math.floor(performance.now())); },
+        current_second() { return Date.now(); },
+
         // Wrap in functions to allow for lazy loading of the wtf8
         // module.
         wtf8_to_string(wtf8) { return wtf8_to_string(wtf8); },

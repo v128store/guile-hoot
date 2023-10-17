@@ -2406,9 +2406,22 @@
 (define* (write-simple datum #:optional (port (current-output-port)))
   (error "write unimplemented"))
 
-(define (jiffies-per-second) (error "unimplemented"))
-(define (current-jiffy) (error "unimplemented"))
-(define (current-second) (error "unimplemented"))
+(define (jiffies-per-second)
+  (%inline-wasm
+   '(func (result (ref eq))
+          (call $i32->number (call $jiffies-per-second)))))
+
+(define (current-jiffy)
+  (%inline-wasm
+   '(func (result (ref eq))
+          (call $i64->number (call $current-jiffy)))))
+
+(define (current-second)
+  (%inline-wasm
+   '(func (result (ref eq))
+          (struct.new $flonum
+                      (i32.const 0)
+                      (call $current-second)))))
 
 (define (standard-input-port)
     (%make-soft-port "stdin"

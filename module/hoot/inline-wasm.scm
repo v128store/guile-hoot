@@ -120,7 +120,7 @@
                    "inline-wasm: expected a single (func ...)")
      (match (wat->wasm (list code))
        ;; We expect a single func and no other definitions (types,
-       ;; tables, etc).
+       ;; tables, etc)...
        (($ <wasm> () ()
            ((and func ($ <func> id ($ <type-use> #f
                                       ($ <func-sig> params results))
@@ -138,4 +138,13 @@
               (let$ k* (n-valued-continuation src (length results) k))
               (build-term
                 ($continue k* src
-                  ($primcall 'inline-wasm func args)))))))))))
+                  ($primcall 'inline-wasm func args)))))))
+       ;; .. or a single import!
+       (($ <wasm> () ((and import ($ <import> mod name kind id type)))
+                  () () () () () #f () () () () ())
+        (unless (null? args)
+          (error "inline asm with incorrect number of args" code))
+        (with-cps cps
+          (let$ k* (n-valued-continuation src 0 k))
+          (build-term
+            ($continue k* src ($primcall 'inline-wasm import ())))))))))

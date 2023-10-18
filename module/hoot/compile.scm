@@ -230,6 +230,7 @@
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
+  (define imports '())
   (define strings '())
   (define heap-constants '())
   (define heap-constant-count 0)
@@ -720,47 +721,50 @@
            (match-primcall
             name param args
 
-            (('inline-wasm
-              ($ <func> id
-                 ($ <type-use> #f ($ <func-sig> params results))
-                 locals body)
-              . args)
-             (define local-name-map
-               (append
-                (map (lambda (param arg)
-                       (match param
-                         (($ <param> id type)
-                          (cons id (var-label arg)))))
-                     params args)
-                (map (lambda (local)
-                       (match local
-                         (($ <local> id type)
-                          (unless (equal? type (type-for-named-temporary id))
-                            (error "unexpected local type for name" id type))
-                          (cons id id))))
-                     locals)))
-             (define (rename-local id)
-               (or (assq-ref local-name-map id)
-                   (error "unexpected local" id)))
-             (define (rename-inst inst)
-               (match inst
-                 (((and inst (or 'block 'loop)) label type body)
-                  `(,inst ,label ,type ,(rename-expr body)))
-                 (('if label type consequent alternate)
-                  `(if ,label ,type
-                       ,(rename-expr consequent) ,(rename-expr alternate)))
-                 (('try label type body catches catch-all)
-                  `(try ,label ,type ,(rename-expr body)
-                        ,(map rename-expr catches)
-                        ,(and catch-all (rename-expr catch-all))))
-                 (('try_delegate label type body handler)
-                  `(try_delegate ,label ,type ,(rename-expr body) ,handler))
-                 (((and inst (or 'local.get 'local.set 'local.tee)) id)
-                  `(,inst ,(rename-local id)))
-                 (inst inst)))
-             (define (rename-expr expr)
-               (map rename-inst expr))
-             (rename-expr body))
+            (('inline-wasm param . args)
+             (match param
+               (($ <func> id
+                          ($ <type-use> #f ($ <func-sig> params results))
+                          locals body)
+                (define local-name-map
+                  (append
+                   (map (lambda (param arg)
+                          (match param
+                            (($ <param> id type)
+                             (cons id (var-label arg)))))
+                        params args)
+                   (map (lambda (local)
+                          (match local
+                            (($ <local> id type)
+                             (unless (equal? type (type-for-named-temporary id))
+                               (error "unexpected local type for name" id type))
+                             (cons id id))))
+                        locals)))
+                (define (rename-local id)
+                  (or (assq-ref local-name-map id)
+                      (error "unexpected local" id)))
+                (define (rename-inst inst)
+                  (match inst
+                    (((and inst (or 'block 'loop)) label type body)
+                     `(,inst ,label ,type ,(rename-expr body)))
+                    (('if label type consequent alternate)
+                     `(if ,label ,type
+                          ,(rename-expr consequent) ,(rename-expr alternate)))
+                    (('try label type body catches catch-all)
+                     `(try ,label ,type ,(rename-expr body)
+                           ,(map rename-expr catches)
+                           ,(and catch-all (rename-expr catch-all))))
+                    (('try_delegate label type body handler)
+                     `(try_delegate ,label ,type ,(rename-expr body) ,handler))
+                    (((and inst (or 'local.get 'local.set 'local.tee)) id)
+                     `(,inst ,(rename-local id)))
+                    (inst inst)))
+                (define (rename-expr expr)
+                  (map rename-inst expr))
+                (rename-expr body))
+               ((? import? import)
+                (set! imports (cons import imports))
+                '())))
 
             ;; These are the primcalls inserted by tailification to
             ;; handle stack-allocated return continuations.
@@ -2431,7 +2435,6 @@
          (start-func (compute-start-function funcs))
          (types (append (intmap-map->list make-closure-type closure-types)
                         (make-struct-types)))
-         (imports '())
          (tables '())
          (memories '())
          (globals (compute-globals))

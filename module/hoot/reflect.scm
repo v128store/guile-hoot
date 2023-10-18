@@ -498,7 +498,8 @@
     ("dynamic-state" (make-hoot-dynamic-state reflector x))
     ("syntax" (make-hoot-syntax reflector x))
     ("port" (make-hoot-port reflector x))
-    ("struct" (make-hoot-struct reflector x))))
+    ("struct" (make-hoot-struct reflector x))
+    ("extern-ref" (~ reflector "extern_value" x))))
 
 (define (guile->wasm reflector x)
   (match x

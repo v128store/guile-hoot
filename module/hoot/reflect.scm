@@ -639,16 +639,16 @@
                      (cons name (wasm-instance-export-ref instance name)))
                    (wasm-instance-export-names instance)))))
 
-(define (hoot-instantiate reflector scheme-wasm)
+(define* (hoot-instantiate reflector scheme-wasm #:optional (user-imports '()))
   (define debug-imports
     `(("debug" .
        (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
         ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
         ("debug_str_scm" . ,(lambda (x y)
                               (format #t "debug: ~s: ~s\n" x y)))))))
-  (define (instantiate wasm imports)
+  (define (instantiate wasm abi-imports)
     (instantiate-wasm (validate-wasm wasm)
-                      #:imports (append imports debug-imports)))
+                      #:imports (append user-imports abi-imports debug-imports)))
   ;; You can either pass an existing reflector and import its ABI, or
   ;; pass a parsed reflection WASM module and create a new reflector.
   (if (reflector? reflector)

@@ -50,6 +50,7 @@
                ('i64 's64)
                ('f64 'f64))
              results))))
+    ((import-wasm) '())
     (else (primcall-raw-representations name param))))
 
 (define *debug?* #f)

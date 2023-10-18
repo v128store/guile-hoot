@@ -32,7 +32,7 @@
   #:use-module (language cps with-cps)
   #:use-module (wasm types)
   #:use-module (wasm wat)
-  #:use-module ((hoot primitives) #:select (%inline-wasm))
+  #:use-module ((hoot primitives) #:select (%inline-wasm %wasm-import))
   #:export (install-inline-wasm!))
 
 (define install-inline-wasm!
@@ -47,7 +47,8 @@
       (save-module-excursion
        (lambda ()
          (set-current-module m)
-         (add-interesting-primitive! '%inline-wasm))))))
+         (add-interesting-primitive! '%inline-wasm)
+         (add-interesting-primitive! '%wasm-import))))))
 
 (define (n-valued-continuation cps src nvals k)
   (define (enumerate f n)
@@ -109,11 +110,12 @@
       (else
        (error "unexpected continuation for n-valued result" nvals))))))
 
-(define-custom-primcall-converter (%inline-wasm cps src args convert-args k)
-  (define-syntax-rule (assert-match x pat message)
+(define-syntax-rule (assert-match x pat message)
     (match x
       (pat #t)
       (_ (error message x))))
+
+(define-custom-primcall-converter (%inline-wasm cps src args convert-args k)
   (define (unpack-arg cps arg type have-arg)
     (match type
       (($ <ref-type> _ _)
@@ -210,3 +212,17 @@
                  (build-term
                    ($continue k** src
                      ($primcall 'inline-wasm func args)))))))))))))
+
+(define-custom-primcall-converter (%wasm-import cps src args convert-args k)
+  (match args
+    ((($ <const> _ code) . args)
+     (assert-match code ('func . _) "wasm-import: expected a single (func ...)")
+     (assert-match args () "wasm-import: expected 0 args")
+     (match (wat->wasm (list code))
+       ;; We expect only a single import.
+       (($ <wasm> () ((and import ($ <import> mod name kind id type)))
+           () () () () () #f () () () () ())
+        (with-cps cps
+                  (let$ k* (n-valued-continuation src 0 k))
+                  (build-term
+                   ($continue k* src ($primcall 'wasm-import import ())))))))))

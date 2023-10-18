@@ -262,6 +262,7 @@ class Scheme {
             syntax: () => new Syntax(this, scm),
             port: () => new Port(this, scm),
             struct: () => new Struct(this, scm),
+            'extern-ref': () => api.extern_value(scm)
         };
         let handler = handlers[descr];
         return handler ? handler() : scm;

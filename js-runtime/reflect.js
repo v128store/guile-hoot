@@ -181,13 +181,13 @@ class Scheme {
         let proc = new Procedure(this, mod.get_export('$load').value)
         return proc.call();
     }
-    static async load_main(path, abi) {
-        let mod = await SchemeModule.fetch_and_instantiate(path, abi);
+    static async load_main(path, abi, user_imports = {}) {
+        let mod = await SchemeModule.fetch_and_instantiate(path, abi, user_imports);
         let reflect = await mod.reflect();
         return reflect.#init_module(mod);
     }
-    async load_extension(path) {
-        let mod = await SchemeModule.fetch_and_instantiate(path, this.#abi);
+    async load_extension(path, user_imports = {}) {
+        let mod = await SchemeModule.fetch_and_instantiate(path, this.#abi, user_imports);
         return this.#init_module(mod);
     }
 
@@ -480,7 +480,7 @@ class SchemeModule {
             debug_str_scm(x, y) { console.log(`debug: ${x}: #<scm>`); },
         }
     }
-    static async fetch_and_instantiate(path, imported_abi) {
+    static async fetch_and_instantiate(path, imported_abi, user_imports = {}) {
         await load_wtf8_helper_module();
         let io = {
             write_stdout(str) { mod.#io_handler.write_stdout(str); },
@@ -492,7 +492,11 @@ class SchemeModule {
             debug_str_i32(x, y) { mod.#debug_handler.debug_str_i32(x, y); },
             debug_str_scm(x, y) { mod.#debug_handler.debug_str_scm(x, y); },
         }
-        let imports = { rt: SchemeModule.#rt, debug, io, abi: imported_abi }
+        let imports = {
+          rt: SchemeModule.#rt,
+          abi: imported_abi,
+          debug, io, ...user_imports
+        };
         let { module, instance } = await instantiate_streaming(path, imports);
         let mod = new SchemeModule(instance);
         return mod;

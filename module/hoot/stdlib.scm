@@ -2053,7 +2053,9 @@
                      '(else
                        (call $slow-<
                              (local.get $a)
-                             (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))))))
+                             (call $f64->exact
+                                   (call $flonum->f64
+                                         (ref.cast $flonum (local.get $b))))))))
                  '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))

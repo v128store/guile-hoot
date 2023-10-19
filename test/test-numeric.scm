@@ -66,12 +66,12 @@
 (test-call "#f" (lambda (a b) (= a b)) 1.0 1/2)
 (test-call "#f" (lambda (a b) (= a b)) -1.0 1/2)
 
-(test-call "#f" (lambda (a b) (= a b) 1/2 0.5))
-(test-call "#f" (lambda (a b) (= a b) 0.5 1/2))
-(test-call "#t" (lambda (a b) (<= a b) 1/2 0.5))
-(test-call "#t" (lambda (a b) (<= a b) 0.5 1/2))
-(test-call "#t" (lambda (a b) (= a b) 0.5 1/2))
-(test-call "#t" (lambda (a b) (= a b) 0.5 1/2))
+(test-call "#f" (lambda (a b) (= a b)) 1/2 0.5)
+(test-call "#f" (lambda (a b) (= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (<= a b)) 1/2 0.5)
+(test-call "#t" (lambda (a b) (<= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
 
 ;; exact
 (test-call "1" (lambda (a) (exact a)) 1)
@@ -87,16 +87,16 @@
 (test-call "#t" (lambda (a b) (eqv? a b)) 1 1)
 (test-call "#f" (lambda (a b) (eqv? a b)) 1 1.0)
 (test-call "#t" (lambda (a b) (eqv? a (+ b b))) 1/2 1/4)
-(test-call "#t" (lambda (a b) (eqv? +nan.0 +nan.0)))
-(test-call "#t" (lambda (a b) (eqv? +inf.0 +inf.0)))
-(test-call "#t" (lambda (a b) (eqv? -inf.0 -inf.0)))
+(test-call "#t" (lambda (a b) (eqv? a b)) +nan.0 +nan.0)
+(test-call "#t" (lambda (a b) (eqv? a b)) +inf.0 +inf.0)
+(test-call "#t" (lambda (a b) (eqv? a b)) -inf.0 -inf.0)
 
 (test-call "#t" (lambda (a b) (equal? a b)) 1 1)
 (test-call "#f" (lambda (a b) (equal? a b)) 1 1.0)
 (test-call "#t" (lambda (a b) (equal? a (+ b b))) 1/2 1/4)
-(test-call "#t" (lambda (a b) (equal? +nan.0 +nan.0)))
-(test-call "#t" (lambda (a b) (equal? +inf.0 +inf.0)))
-(test-call "#t" (lambda (a b) (equal? -inf.0 -inf.0)))
+(test-call "#t" (lambda (a b) (equal? a b)) +nan.0 +nan.0)
+(test-call "#t" (lambda (a b) (equal? a b)) +inf.0 +inf.0)
+(test-call "#t" (lambda (a b) (equal? a b)) -inf.0 -inf.0)
 
 ;; numerator and denominator
 (test-call "42" (lambda (a) (numerator a)) 42)
@@ -181,19 +181,19 @@
 (test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
 
 ;; flooring division
-(test-call "2 1" (lambda (a b) (call-with-values
+(test-call "(2 1)" (lambda (a b) (call-with-values
                                    (lambda () (floor/ a b))
                                  (lambda x x)))
            5 2)
-(test-call "-3 1" (lambda (a b) (call-with-values
+(test-call "(-3 1)" (lambda (a b) (call-with-values
                                     (lambda () (floor/ a b))
                                   (lambda x x)))
            -5 2)
-(test-call "-3 -1" (lambda (a b) (call-with-values
+(test-call "(-3 -1)" (lambda (a b) (call-with-values
                                      (lambda () (floor/ a b))
                                    (lambda x x)))
            5 -2)
-(test-call "2 -1" (lambda (a b) (call-with-values
+(test-call "(2 -1)" (lambda (a b) (call-with-values
                                     (lambda () (floor/ a b))
                                   (lambda x x)))
            -5 -2)

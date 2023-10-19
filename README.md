@@ -57,6 +57,48 @@ The name naturally flowed from there.
 
 See the [log file](design/log.md).
 
+## Installing Hoot's stable releases
+
+Note that at the time of writing, Hoot requires a development version
+of Guile.  This may not be the case at your time of reading!
+
+Below are system-specific instructions for installing Hoot.
+
+### On Guix
+
+Hoot is already available in [Guix](https://guix.gnu.org/):
+
+```
+guix shell --pure guile-next guile-hoot
+```
+
+### On Mac OS (homebrew)
+
+Hoot is
+[available in Mac OS thanks to to Alex Conchillo Flaqué](https://emacs.ch/@aconchillo/111257400576804393)
+(whose instructions we are repeating here)!
+
+Add the Guile Homebrew tap if you haven't already:
+
+```
+brew tap aconchillo/guile
+```
+
+If Guile is already installed with Homebrew, unlink it since we need a newer version:
+
+```
+brew unlink guile
+```
+
+Now, just install Hoot:
+
+```
+brew install guile-hoot
+```
+
+This will also install `guile-next`, a bleeding edge version of Guile,
+so it might take a while if there's no bottle available.
+
 ## Building from source
 
 ### Easy path: Use Guix

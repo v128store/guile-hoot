@@ -15,9 +15,11 @@ documentation.](https://spritely.institute/files/docs/guile-hoot/latest/Status.h
 ## Project goals and timeframe
 
 Hoot aims to be an ahead-of-time compiler for all of [R7RS-small
-Scheme](https://small.r7rs.org/) to WebAssembly.  We are targetting
-the WebAssembly extensions that appear ready to ship in Q4 2023,
-notably including garbage collection and tail calls.
+Scheme](https://small.r7rs.org/) to WebAssembly (aka WASM).  Hoot uses
+several WASM extensions such as tail calls and garbage collection.
+The good news is that these extensions are already available in
+nightly releases of major browsers and will soon be making their way
+into stable browser releases everywhere!
 
 After completing R7RS-small support, we will move on to supporting all
 of Guile.  We are keeping this end-goal in mind as we build the early

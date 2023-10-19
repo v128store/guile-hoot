@@ -49,7 +49,8 @@
                  raise-exception
                  eval-when
                  make-struct/simple struct? struct-vtable
-                 struct-ref struct-set!))
+                 struct-ref struct-set!
+                 gensym))
   #:use-module ((system syntax internal) #:select (syntax-local-binding))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
@@ -209,6 +210,7 @@
    identifier? generate-temporaries free-identifier=? bound-identifier=?
    with-syntax identifier-syntax syntax-local-binding
    syntax-violation procedure-property
+   gensym
    lambda* case-lambda* define*
 
    ;; R7RS control

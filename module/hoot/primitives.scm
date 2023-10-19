@@ -48,7 +48,8 @@
                  raise-exception
                  eval-when
                  make-struct/simple struct? struct-vtable
-                 struct-ref struct-set!))
+                 struct-ref struct-set!
+                 gensym))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
   ;; on interfaces that use interfaces.  For now, import the-eof-object
@@ -206,6 +207,7 @@
    syntax->datum datum->syntax
    identifier? generate-temporaries free-identifier=? bound-identifier=?
    with-syntax identifier-syntax
+   gensym
    lambda* case-lambda* define*
 
    ;; R7RS control

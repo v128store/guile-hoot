@@ -802,9 +802,10 @@
     (error "expected integer" y))
   (let* ((exact-x (exact x))
          (exact-y (exact y))
-         (result (if (and (eqv? x 0) (eqv? y 0))
+         (result (if (and (eqv? exact-x 0) (eqv? exact-y 0))
                      0
-                     (quotient (abs (* x y)) (gcd x y)))))
+                     (quotient (abs (* exact-x exact-y))
+                               (gcd exact-x exact-y)))))
     (if (or (inexact? x) (inexact? y))
         (inexact result)
         result)))

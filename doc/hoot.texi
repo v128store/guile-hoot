@@ -333,7 +333,7 @@ How about good ol' factorial?
 @lisp
 @verbatim
 scheme@(guile-user)> (define hoot-factorial
-                       (compile-value reflect-wasm
+                       (compile-value reflector
                                       '(let ()
                                          (define (factorial x result)
                                            (if (= x 1)

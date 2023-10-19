@@ -786,7 +786,7 @@
                  (call $gcd (local.get $x) (local.get $y)))
           (exact x)
           (exact y))))
-    (if (or (inexact x) (inexact y))
+    (if (or (inexact? x) (inexact? y))
         (inexact result)
         (result))))
 (define-syntax %gcd

@@ -276,6 +276,9 @@
   (func $extern-value (export "extern_value")
         (param $ext (ref $extern-ref)) (result (ref extern))
         (struct.get $extern-ref $val (local.get $ext)))
+  (func $scm-from-extern (export "scm_from_extern")
+        (param $ext (ref extern)) (result (ref eq))
+        (struct.new $extern-ref (i32.const 0) (local.get $ext)))
 
   (global $return-values (mut (ref null $raw-scmvector)) (ref.null $raw-scmvector))
 

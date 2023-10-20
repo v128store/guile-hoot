@@ -692,7 +692,9 @@
 (define (inexact x) (%inexact x))
 (define (exact x)
   (cond
-   ((and (rational? x) (inexact? x))
+   ((and (real? x)
+         (inexact? x)
+         (finite? x))
     (%inline-wasm
      '(func (param $x (ref eq))
             (result (ref eq))

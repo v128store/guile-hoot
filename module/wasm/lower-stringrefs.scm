@@ -272,7 +272,7 @@
              (if i32
                  (i32.lt_s (local.get $d) (i32.const 0))
                  (then (i32.const -1))
-                 (else (i32.const 0)))))
+                 (else (i32.const 1)))))
 
      (func $string.eq (param $a (ref $wtf8)) (param $b (ref $wtf8))
            (result i32)

@@ -216,7 +216,7 @@ class Scheme {
                                              this.#to_scm(js.denom));
             if (js instanceof Complex)
                 return api.scm_from_complex(js.real, js.imag);
-            throw new Error(`unhandled; ${typeof(js)}`);
+            return api.scm_from_extern(js);
         } else {
             throw new Error(`unexpected; ${typeof(js)}`);
         }

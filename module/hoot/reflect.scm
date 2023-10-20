@@ -543,7 +543,8 @@
          ($ <hoot-syntax> _ obj)
          ($ <hoot-port> _ obj)
          ($ <hoot-struct> _ obj))
-     obj)))
+     obj)
+    (_ (~ reflector "scm_from_extern" x))))
 
 (define wasm-array-vector (@@ (wasm vm) wasm-array-vector))
 (define make-wasm-array (@@ (wasm vm) make-wasm-array))

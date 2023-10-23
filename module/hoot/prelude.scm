@@ -2409,12 +2409,12 @@
 (define (jiffies-per-second)
   (%inline-wasm
    '(func (result (ref eq))
-          (call $i32->number (call $jiffies-per-second)))))
+          (call $s32->scm (call $jiffies-per-second)))))
 
 (define (current-jiffy)
   (%inline-wasm
    '(func (result (ref eq))
-          (call $i64->number (call $current-jiffy)))))
+          (call $s64->scm (call $current-jiffy)))))
 
 (define (current-second)
   (%inline-wasm

@@ -2287,32 +2287,6 @@
                        (call $bignum-from-i64
                              (i64.extend_i32_s (local.get $a)))))
 
-     (func $i64->fixnum (param $a i64) (result (ref i31))
-           (ref.i31 (i32.wrap_i64 (i64.shl (local.get $a) (i64.const 1)))))
-
-     (func $i64->bignum (param $a i64) (result (ref eq))
-           (struct.new $bignum
-                       (i32.const 0)
-                       (call $bignum-from-i64 (local.get $a))))
-
-     (func $i32->number (param $a i32) (result (ref eq))
-           (if (ref eq)
-               (i32.and (i32.le_s (i32.const #x-20000000)
-                                  (local.get $a))
-                        (i32.le_s (local.get $a)
-                                  (i32.const #x1FFFFFFF)))
-               (then (call $i32->fixnum (local.get $a)))
-               (else (call $i32->bignum (local.get $a)))))
-
-     (func $i64->number (param $a i64) (result (ref eq))
-           (if (ref eq)
-               (i32.and (i64.le_s (i64.const #x-20000000)
-                                  (local.get $a))
-                        (i64.le_s (local.get $a)
-                                  (i64.const #x1FFFFFFF)))
-               (then (call $i64->fixnum (local.get $a)))
-               (else (call $i64->bignum (local.get $a)))))
-
      (func $bignum->f64 (param $a (ref $bignum)) (result f64)
            (call $bignum-to-f64 (struct.get $bignum $val (local.get $a))))
 
@@ -3888,6 +3862,12 @@
                       (i32.shl (i32.wrap_i64 (local.get $a))
                                (i32.const 1))))
                (else (return_call $s64->bignum (local.get $a)))))
+     (func $s32->scm (param $a i32) (result (ref eq))
+           (if (ref eq)
+               (i32.and (i32.ge_s (local.get $a) (i32.const ,(ash -1 29)))
+                        (i32.lt_s (local.get $a) (i32.const ,(ash 1 29))))
+               (then (call $i32->fixnum (local.get $a)))
+               (else (return_call $s64->bignum (i64.extend_i32_s (local.get $a))))))
 
      (func $set-fluid-and-return-prev (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq))

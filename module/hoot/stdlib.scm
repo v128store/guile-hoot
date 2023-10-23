@@ -4121,6 +4121,23 @@
                       (i32.shl (i32.wrap_i64 (local.get $a))
                                (i32.const 1))))
                (else (return_call $s64->bignum (local.get $a)))))
+     (func $scm->s32 (param $a (ref eq)) (result i32)
+           (if i32
+               (call $fixnum? (local.get $a))
+               (then
+                (i32.shr_s (i31.get_s (ref.cast i31 (local.get $a)))
+                           (i32.const 1)))
+               (else
+                (if i32
+                    (ref.test $bignum (local.get $a))
+                    (then
+                     (i32.wrap_i64
+                      (call $bignum->s64
+                            (ref.cast $bignum (local.get $a)))))
+                    (else
+                     (call $die (string.const "$scm->s64 bad arg")
+                           (local.get $a))
+                     (unreachable))))))
      (func $s32->scm (param $a i32) (result (ref eq))
            (if (ref eq)
                (i32.and (i32.ge_s (local.get $a) (i32.const ,(ash -1 29)))

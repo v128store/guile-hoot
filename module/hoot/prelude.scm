@@ -494,7 +494,7 @@
       (let lp ((l l))
         (and (not (null? l))
              (let ((head (car l)))
-               (if (compare v head)
+               (if (compare v (car head))
                    head
                    (lp (cdr l)))))))))
 (define-member+assoc memq assq eq?)

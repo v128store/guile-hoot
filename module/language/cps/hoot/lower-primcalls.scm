@@ -30,7 +30,8 @@
   #:use-module (language cps with-cps)
   #:export (lower-primcalls))
 
-(define (hoot-fixnum? x) (<= (ash -1 29) x (1- (ash 1 29))))
+(define (hoot-fixnum? x) (and (exact-integer? x)
+                              (<= (ash -1 29) x (1- (ash 1 29)))))
 (define (not-hoot-fixnum? x) (not (hoot-fixnum? x)))
 
 (define (lower-primcalls cps)

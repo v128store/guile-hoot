@@ -29,6 +29,9 @@
 (test-call "536870954.0" (lambda (a b c) (+ (inexact a) (+ b c))) 42 536870911 1)
 (test-call "84.0" (lambda (a) (+ a (inexact a))) 42)
 (test-call "536870954.0" (lambda (a b c) (+ (+ a b) (inexact c))) 536870911 1 42)
+;; Arithmetic with a flonum constant should *not* lower to
+;; add/immediate and friends.
+(test-call "20.0" (lambda (a) (+ a 16.0)) 4.0)
 
 ;; Flonum subtraction
 (test-call "0.0" (lambda (a) (- (inexact a) (inexact a))) 42)

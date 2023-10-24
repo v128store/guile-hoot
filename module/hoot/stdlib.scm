@@ -356,6 +356,9 @@
                             (ref.i31 (i32.const 1))
                             (struct.get $proc $func (global.get $raise-exception))))
 
+     (func $string->bignum (import "rt" "bignum_from_string")
+           (param (ref string))
+           (result (ref extern)))
      (func $bignum-from-i32 (import "rt" "bignum_from_i32")
            (param i32)
            (result (ref extern)))

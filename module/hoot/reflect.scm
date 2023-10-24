@@ -573,7 +573,8 @@
 
 (define %runtime-imports
   `(("rt" .
-     (("bignum_from_i32" . ,identity)
+     (("bignum_from_string" . ,string->number)
+      ("bignum_from_i32" . ,identity)
       ("bignum_from_i64" . ,identity)
       ("bignum_from_u64" . ,identity)
       ("bignum_to_f64" . ,exact->inexact)

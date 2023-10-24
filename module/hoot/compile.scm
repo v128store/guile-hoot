@@ -326,8 +326,11 @@
       ((? number?)
        (if (exact? x)
            (if (integer? x)
-               ;; TODO: Implement bignum constants.
-               (error "bignum constants unsupported" x)
+               (intern! (make-ref-type #f '$bignum)
+                        `((i32.const 0)
+                          (string.const ,(number->string x))
+                          (call $string->bignum)
+                          (struct.new $bignum)))
                (intern! (make-ref-type #f '$fraction)
                         `((i32.const 0)
                           ,@(compile-constant (numerator x))
@@ -1414,9 +1417,12 @@
 
             ;; Misc.
             (('string->bignum #f x)
-             `(,(local.get x)
+             `((i32.const 0)
+               ,(local.get x)
                (ref.cast ,(make-ref-type #f '$string))
-               (call $string->bignum)))
+               (struct.get $string $str)
+               (call $string->bignum)
+               (struct.new $bignum)))
 
             (('string->symbol #f x)
              `(,(local.get x)

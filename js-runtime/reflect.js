@@ -359,6 +359,7 @@ class SchemeModule {
     #io_handler;
     #debug_handler;
     static #rt = {
+        bignum_from_string(str) { return BigInt(str); },
         bignum_from_i32(n) { return BigInt(n); },
         bignum_from_i64(n) { return n; },
         bignum_from_u64(n) { return n < 0n ? 0xffff_ffff_ffff_ffffn + (n + 1n) : n; },

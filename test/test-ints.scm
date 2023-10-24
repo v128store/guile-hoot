@@ -50,6 +50,9 @@
 (test-call "1073741824" (lambda (a b c) (* c (+ a b))) 536870911 1 2)
 (test-call "288230376151711744" (lambda (a b) (* (+ a b) (+ a b))) 536870911 1)
 
+;; Bignum literals
+(test-call "288230376151711745" 1+ 288230376151711744)
+
 ;; Integer division
 ;; Quotient
 (test-call "12" (lambda (a b) (quotient a b)) 123 10)

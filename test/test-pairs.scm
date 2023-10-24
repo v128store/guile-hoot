@@ -33,4 +33,6 @@
 (test-call "#f" (lambda (a b) (equal? a b)) '() '(1))
 (test-call "#f" (lambda (a b) (equal? a b)) '(1 2) '(2 1))
 
+(test-call "(2 3)" (lambda (k l) (memv k l)) 2 '(1 2 3))
+
 (test-end* "test-pairs")

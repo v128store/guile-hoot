@@ -424,8 +424,8 @@
   (func $scm-eof (export "scm_eof") (result (ref i31))
     (ref.i31 (i32.const 41)))
   (func $scm-from-char (export "scm_from_char") (param $ch i32) (result (ref i31))
-    (ref.i31 (i32.and (i32.const 3)
-                      (i32.shl (local.get $ch) (i32.const 2)))))
+    (ref.i31 (i32.or (i32.const 3)
+                     (i32.shl (local.get $ch) (i32.const 2)))))
   (func $scm-from-fraction (export "scm_from_fraction") (param (ref eq) (ref eq)) (result (ref $fraction))
     ;; FIXME: check types.
     (struct.new $fraction (i32.const 0) (local.get 0) (local.get 1)))

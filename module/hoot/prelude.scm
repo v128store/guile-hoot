@@ -488,7 +488,7 @@
       (let lp ((l l))
         (cond
          ((null? l) #f)
-         ((compare v (car l)) #t)
+         ((compare v (car l)) l)
          (else (lp (cdr l))))))
     (define* (assoc v l optarg ...)
       (let lp ((l l))

@@ -24,7 +24,9 @@
 (test-begin "test-keywords")
 
 (test-call "foo" keyword->symbol #:foo)
+(test-call "#:foo" symbol->keyword 'foo)
 (test-call "#t" eq? #:foo #:foo)
 (test-call "#f" eq? #:foo #:bar)
+(test-call "#t" (lambda (f) (eq? (f 'foo) #:foo)) symbol->keyword)
 
 (test-end* "test-keywords")

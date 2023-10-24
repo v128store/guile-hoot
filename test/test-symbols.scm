@@ -24,7 +24,9 @@
 (test-begin "test-symbols")
 
 (test-call "\"foo\"" symbol->string 'foo)
+(test-call "foo" string->symbol "foo")
 (test-call "#t" eq? 'foo 'foo)
 (test-call "#f" eq? 'foo 'bar)
+(test-call "#t" (lambda (f) (eq? (f "foo") 'foo)) string->symbol)
 
 (test-end* "test-symbols")

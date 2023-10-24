@@ -32,7 +32,7 @@
                  syntax->datum datum->syntax identifier?
                  generate-temporaries free-identifier=? bound-identifier=?
                  with-syntax identifier-syntax
-                 lambda* define*
+                 lambda* case-lambda* define*
 
                  call-with-prompt abort-to-prompt
                  ash logand logior logxor lognot logtest logbit?
@@ -205,7 +205,7 @@
    syntax->datum datum->syntax
    identifier? generate-temporaries free-identifier=? bound-identifier=?
    with-syntax identifier-syntax
-   lambda* define*
+   lambda* case-lambda* define*
 
    ;; R7RS control
    (dynamic-wind . %dynamic-wind)

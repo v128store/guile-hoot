@@ -72,6 +72,9 @@
                          (* n (fac (1- n))))))
            5)
 
+(test-call "42" (case-lambda ((a) a) ((a b) (+ a b))) 42)
+(test-call "52" (case-lambda ((a) a) ((a b) (+ a b))) 42 10)
+
 ;; (test-call "9227465" (lambda (n)
 ;;                        (let fib ((n n))
 ;;                          (if (<= n 1)

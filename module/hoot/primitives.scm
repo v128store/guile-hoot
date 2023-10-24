@@ -169,13 +169,15 @@
                  vector-set!
 
                  procedure?))
+  #:use-module ((scheme case-lambda)
+                #:select (case-lambda))
   #:use-module ((scheme inexact)
                 #:select (inexact sin cos tan asin acos atan sqrt))
   #:re-export
   ( ;; R7RS syntax
    _
    ... => else
-   lambda
+   lambda case-lambda
    define define-values let let* letrec letrec* let-values let*-values
    or and
    begin 

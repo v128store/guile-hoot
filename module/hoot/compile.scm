@@ -2172,11 +2172,12 @@
                     (($ $kclause)
                      ;; An arity-checking function; let the clause check
                      ;; the arity.
-                     (if (and self (var-used? self))
-                         `(,@(arg-ref 0)
-                           ,(local.set self)
-                           ,@(do-branch label kentry ctx))
-                         (do-tree kentry ctx)))
+                     (let ((tail (do-branch label kentry ctx)))
+                       (if (and self (var-used? self))
+                           `(,@(arg-ref 0)
+                             ,(local.set self)
+                             . ,tail)
+                           tail)))
                     (($ $kargs names vars _)
                      ;; A function whose callers all pass the expected
                      ;; number of arguments.
@@ -2189,7 +2190,6 @@
                          ,@(do-tree kentry ctx))))))
                  (($ $kclause ($ $arity req opt rest kw allow-other-keys?)
                      kbody kalt)
-                  (when kalt (error "case-lambda unimplemented"))
                   (when allow-other-keys? (error "allow-other-keys? unimplemented"))
                   (when (not (null? kw)) (error "kwargs unimplemented"))
                   (match (intmap-ref cps kbody)
@@ -2229,11 +2229,13 @@
                                  '()
                                  `(,@checks
                                    (if #f ,void-block-type
-                                       ((local.get $nargs)
-                                        (local.get $arg0)
-                                        (local.get $arg1)
-                                        (local.get $arg2)
-                                        (return_call $wrong-num-args))
+                                       ,(if kalt
+                                            (do-branch label kalt ctx)
+                                            '((local.get $nargs)
+                                              (local.get $arg0)
+                                              (local.get $arg1)
+                                              (local.get $arg2)
+                                              (return_call $wrong-num-args)))
                                        ()))))))
                        (define (init-positional min max)
                          (define (add-closure n) (if has-closure? (1+ n) n))

@@ -1371,7 +1371,8 @@ binary, or an input port from which a WASM binary is read."
     (('br l) (branch l))
     (('br_if l) (unless (= (pop) 0) (branch l)))
     (('br_table l* l)
-     (lets (n) (branch (if (< n (length l*)) (list-ref l* n) l))))
+     (let ((i (s32->u32 (pop))))
+       (branch (if (< i (length l*)) (list-ref l* i) l))))
     ;; Parametric:
     (('drop) (pop))
     (('select)

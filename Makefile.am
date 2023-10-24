@@ -35,6 +35,7 @@ SCM_TESTS = 					\
   test/test-fluids.scm				\
   test/test-fractions.scm			\
   test/test-ints.scm				\
+  test/test-keywords.scm			\
   test/test-lower.scm				\
   test/test-lower-globals.scm			\
   test/test-lower-stringrefs.scm		\
@@ -45,6 +46,7 @@ SCM_TESTS = 					\
   test/test-procedures.scm			\
   test/test-prompts.scm				\
   test/test-strings.scm				\
+  test/test-symbols.scm				\
   test/test-vectors.scm				\
   test/test-vm.scm				\
   test/test-wasm-assembler.scm			\

@@ -646,40 +646,6 @@
                 (return_call $heap-object-hashq
                              (ref.cast $heap-object (local.get $v))))))
 
-     ;; For now, the Java string hash function, except over codepoints
-     ;; rather than WTF-16 code units.
-     (func $string-hash (param $str (ref string)) (result i32)
-           (local $iter (ref stringview_iter))
-           (local $hash i32)
-           (local $codepoint i32)
-           (local.set $iter (string.as_iter (local.get $str)))
-           (block $done
-                  (loop $lp
-                    (local.set $codepoint (stringview_iter.next (local.get $iter)))
-                    (br_if $done (i32.eq (i32.const -1) (local.get $codepoint)))
-                    (local.set $hash
-                               (i32.add (i32.mul (local.get $hash) (i32.const 31))
-                                        (local.get $codepoint)))
-                    (br $lp)))
-           (local.get $hash))
-
-     ;; FIXME: Replace with version from basic-types.wat.
-     (func $string->symbol (param $str (ref string)) (result (ref $symbol))
-           (local.get 0) (call $string-hash) (call $finish-heap-object-hash)
-           (i32.const 0) (local.get 0) (struct.new $string)
-           (struct.new $symbol)
-           (call $intern-symbol!))
-
-     (func $intern-symbol! (param $sym (ref $symbol)) (result (ref $symbol))
-           ;; FIXME: Actually interning into symtab is unimplemented!
-           (local.get 0))
-
-     (func $symbol->keyword (param $sym (ref $symbol)) (result (ref $keyword))
-           ;; FIXME: intern into kwtab.
-           (local.get 0) (struct.get $symbol 0) (call $finish-heap-object-hash)
-           (local.get 0)
-           (struct.new $keyword))
-
      (func $grow-raw-stack
            ;; Grow the stack by at least 50% and at least the needed
            ;; space.  Trap if we fail to grow.
@@ -964,6 +930,120 @@
            (call $hashq-update (local.get $tab) (local.get $k)
                  (local.get $v) (ref.i31 (i32.const 0)))
            (drop))
+
+     ;; A specialized hash table, because it's not a hashq lookup.
+     (type $symtab-entry
+           (struct (field $sym (ref $symbol))
+                   (field $next (ref null $symtab-entry))))
+     (type $symtab (array (mut (ref null $symtab-entry))))
+     (global $the-symtab (ref $symtab)
+             (array.new $symtab (ref.null $symtab-entry) (i32.const 47)))
+
+     ,(cond
+       (import-abi?
+        '(func $intern-symbol! (import "abi" "$intern-symbol!")
+               (param $sym (ref $symbol)) (result (ref $symbol))))
+       (else
+        '(func $intern-symbol!
+               (param $sym (ref $symbol)) (result (ref $symbol))
+               (local $hash i32)
+               (local $idx i32)
+               (local $entry (ref null $symtab-entry))
+               (local.set $hash (struct.get $heap-object $hash (local.get $sym)))
+               (local.set $idx (i32.rem_u (local.get $hash)
+                                          (array.len (global.get $the-symtab))))
+               (local.set $entry
+                          (array.get $symtab (global.get $the-symtab)
+                                     (local.get $idx)))
+               (block
+                $insert
+                (loop $lp
+                  (br_if $insert (ref.is_null (local.get $entry)))
+                  (block
+                   $next
+                   (br_if $next
+                          (i32.ne (struct.get $symbol $hash
+                                              (struct.get $symtab-entry $sym
+                                                          (local.get $entry)))
+                                  (local.get $hash)))
+                   (br_if $next
+                          (i32.eqz
+                           (string.eq
+                            (struct.get $string $str
+                                        (struct.get $symbol $name
+                                                    (struct.get $symtab-entry $sym
+                                                                (local.get $entry))))
+                            (struct.get $string $str
+                                        (struct.get $symbol $name
+                                                    (local.get $sym))))))
+                   (return (struct.get $symtab-entry $sym (local.get $entry))))
+                  (local.set $entry
+                             (struct.get $symtab-entry $next (local.get $entry)))
+                  (br $lp)))
+               (array.set $symtab (global.get $the-symtab) (local.get $idx)
+                          (struct.new $symtab-entry
+                                      (local.get $sym)
+                                      (array.get $symtab (global.get $the-symtab)
+                                                 (local.get $idx))))
+               (local.get $sym))))
+
+     ;; For now, the Java string hash function, except over codepoints
+     ;; rather than WTF-16 code units.
+     (func $string-hash (param $str (ref string)) (result i32)
+           (local $iter (ref stringview_iter))
+           (local $hash i32)
+           (local $codepoint i32)
+           (local.set $iter (string.as_iter (local.get $str)))
+           (block $done
+                  (loop $lp
+                    (local.set $codepoint (stringview_iter.next (local.get $iter)))
+                    (br_if $done (i32.eq (i32.const -1) (local.get $codepoint)))
+                    (local.set $hash
+                               (i32.add (i32.mul (local.get $hash) (i32.const 31))
+                                        (local.get $codepoint)))
+                    (br $lp)))
+           (local.get $hash))
+
+     (func $string->symbol (param $str (ref $string)) (result (ref $symbol))
+           (call $intern-symbol!
+                 (struct.new $symbol
+                             (call $finish-heap-object-hash
+                                   (call $string-hash
+                                         (struct.get $string $str
+                                                     (local.get $str))))
+                             (local.get $str))))
+
+     (global $the-kwtab (ref $hash-table)
+             (struct.new $hash-table (i32.const 0) (i32.const 0)
+                         (array.new $raw-scmvector
+                                    (ref.i31 (i32.const 13)) (i32.const 47))))
+     ,(cond
+       (import-abi?
+        '(func $intern-keyword! (import "abi" "$intern-keyword!")
+               (param $sym (ref $keyword)) (result (ref $keyword))))
+       (else
+        '(func $intern-keyword! (param $kw (ref $keyword)) (result (ref $keyword))
+               (local $handle (ref null $pair))
+               (local.set $handle
+                          (call $hashq-lookup (global.get $the-kwtab)
+                                (struct.get $keyword $name (local.get $kw))))
+               (if (ref $keyword)
+                   (ref.is_null (local.get $handle))
+                   (then
+                    (call $hashq-insert (global.get $the-kwtab)
+                          (struct.get $keyword $name (local.get $kw))
+                          (local.get $kw))
+                    (local.get $kw))
+                   (else
+                    (ref.cast $keyword
+                              (struct.get $pair $cdr (local.get $handle))))))))
+
+     (func $symbol->keyword (param $sym (ref $symbol)) (result (ref $keyword))
+           (call $intern-keyword!
+                 (struct.new $keyword
+                             (call $finish-heap-object-hash
+                                   (struct.get $symbol $hash (local.get $sym)))
+                             (local.get $sym))))
 
      (func $push-dyn (param $dyn (ref $dyn))
            (local $dyn-sp i32)

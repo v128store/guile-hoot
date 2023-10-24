@@ -126,8 +126,8 @@
           (make-export "$scm-stack" 'table '$scm-stack)
           (make-export "$ret-stack" 'table '$ret-stack)
           (make-export "$dyn-stack" 'table '$dyn-stack)
-          (make-export "$string->symbol" 'func '$string->symbol)
-          (make-export "$symbol->keyword" 'func '$symbol->keyword)))
+          (make-export "$intern-symbol!" 'func '$intern-symbol!)
+          (make-export "$intern-keyword!" 'func '$intern-keyword!)))
   (define (add-export export exports)
     (cons export exports))
   (match wasm
@@ -295,27 +295,34 @@
                   (ref.func ,code)
                   (struct.new $proc))))
       ((? symbol?)
-       (when import-abi?
-         ;; We'd need instead to create this symbol during _start, along
-         ;; with any other constant that references it.
-         (error "symbol constants unsupported" x))
+       ;; We need to add the symbol to the symbol table.  In the case
+       ;; where we're not importing ABI, the actual global is known to
+       ;; be constant at compile-time, and we just emit a call to
+       ;; $intern-symbol!.  Otherwise we call $intern-symbol! as part of
+       ;; the initializer, and rely on lower-globals pass to move this
+       ;; non-constant initialization to start.
        (intern! (make-ref-type #f '$symbol)
                 `((i32.const ,(hashq-symbol x))
                   ,@(compile-constant (symbol->string x))
-                  (struct.new $symbol))
-                (lambda (name)
-                  `((call $intern-symbol! (global.get ,name))))))
+                  (struct.new $symbol)
+                  . ,(if import-abi? `((call $intern-symbol!)) '()))
+                (and (not import-abi?)
+                     (lambda (name)
+                       `((global.get ,name)
+                         (call $intern-symbol!)
+                         (drop))))))
       ((? keyword?)
-       (when import-abi?
-         ;; We'd need instead to create this keyword during _start, along
-         ;; with any other constant that references it.
-         (error "unsupported"))
+       ;; Same run-time interning considerations as symbols.
        (intern! (make-ref-type #f '$keyword)
                 `((i32.const ,(hashq-keyword x))
                   ,@(compile-constant (keyword->symbol x))
-                  (struct.new $keyword))
-                (lambda (name)
-                  `((call $intern-keyword! (global.get ,name))))))
+                  (struct.new $keyword)
+                  . ,(if import-abi? `((call $intern-keyword!)) '()))
+                (and (not import-abi?)
+                     (lambda (name)
+                       `((global.get ,name)
+                         (call $intern-keyword!)
+                         (drop))))))
       ((? number?)
        (if (exact? x)
            (if (integer? x)
@@ -2396,13 +2403,22 @@
       (match funcs
         ;; Assume that the first function is the "load" function.
         ((($ <func> id) . _) id)))
+    (define relocs
+      (fold1 (lambda (entry relocs)
+               (match entry
+                 (#(name type init-expr #f) relocs)
+                 (#(name type init-expr make-reloc)
+                  (append (make-reloc name) relocs))))
+             heap-constants
+             '()))
     (make-func '$start
                void-block-type
                '()
                `((i32.const 0)
                  (ref.func ,load-function-id)
                  (struct.new $proc)
-                 (global.set $load))))
+                 (global.set $load)
+                 . ,relocs)))
 
   (let* ((funcs
           (intmap-map->list lower-func (compute-reachable-functions cps 0)))

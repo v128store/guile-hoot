@@ -258,10 +258,10 @@
   (table $scm-stack (import "abi" "$scm-stack") 0 (ref null eq))
   (table $ret-stack (import "abi" "$ret-stack") 0 (ref null $kvarargs))
 
-  (func $string->symbol (import "abi" "$string->symbol")
-        (param $str (ref string)) (result (ref $symbol)))
-  (func $symbol->keyword (import "abi" "$symbol->keyword")
-        (param $str (ref $symbol)) (result (ref $keyword)))
+  (func $intern-symbol! (import "abi" "$intern-symbol!")
+        (param $sym (ref $symbol)) (result (ref $symbol)))
+  (func $intern-keyword! (import "abi" "$intern-keyword!")
+        (param $kw (ref $keyword)) (result (ref $keyword)))
 
   (func $abort (type $kvarargs) (unreachable))
 

@@ -2053,7 +2053,9 @@
                      '(else
                        (call $slow-<
                              (local.get $a)
-                             (call $f64->exact (call $flonum->f64 (ref.cast $flonum (local.get $a))))))))
+                             (call $f64->exact
+                                   (call $flonum->f64
+                                         (ref.cast $flonum (local.get $b))))))))
                  '(else
                    (call $die0 (string.const "$slow-<"))
                    (unreachable))))
@@ -2314,8 +2316,11 @@
                ,(arith-cond
                  'i32
                  `((ref.test $flonum (local.get $b))
-                   (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
-                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                   (i32.or
+                    (i32.and (call $f64-is-nan (struct.get $flonum $val (ref.cast $flonum (local.get $a))))
+                             (call $f64-is-nan (struct.get $flonum $val (ref.cast $flonum (local.get $a)))))
+                    (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                            (struct.get $flonum $val (ref.cast $flonum (local.get $b))))))
                  '(else
                    (i32.const 0))))
              `((ref.test $fraction (local.get $a))

@@ -692,9 +692,13 @@
 (define (inexact x) (%inexact x))
 (define (exact x)
   (cond
+   ;; FIXME: replace test with `(and (rational? x) (inexact? x))' once
+   ;; `rational?' can be used reliably
    ((and (real? x)
          (inexact? x)
-         (finite? x))
+         (not (eqv? x +inf.0))
+         (not (eqv? x -inf.0))
+         (= x x))
     (%inline-wasm
      '(func (param $x (ref eq))
             (result (ref eq))
@@ -788,7 +792,7 @@
                  (call $gcd (local.get $x) (local.get $y)))
           (exact x)
           (exact y))))
-    (if (or (inexact x) (inexact y))
+    (if (or (inexact? x) (inexact? y))
         (inexact result)
         (result))))
 (define-syntax %gcd
@@ -804,9 +808,10 @@
     (error "expected integer" y))
   (let* ((exact-x (exact x))
          (exact-y (exact y))
-         (result (if (and (eqv? x 0) (eqv? y 0))
+         (result (if (and (eqv? exact-x 0) (eqv? exact-y 0))
                      0
-                     (quotient (abs (* x y)) (gcd x y)))))
+                     (quotient (abs (* exact-x exact-y))
+                               (gcd exact-x exact-y)))))
     (if (or (inexact? x) (inexact? y))
         (inexact result)
         result)))
@@ -939,9 +944,16 @@
 
 ;; Adapted from the comments for scm_rationalize in libguile's numbers.c
 (define (rationalize x y)
-  (unless (rational? x)
+  ;; FIXME: use `(rational? x)' for type checks
+  (unless (and (real? x)
+               (not (eqv? x +inf.0))
+               (not (eqv? x -inf.0))
+               (= x x))
     (error "expected rational" x))
-  (unless (rational? y)
+  (unless (and (real? x)
+               (not (eqv? x +inf.0))
+               (not (eqv? x -inf.0))
+               (= x x))
     (error "expected rational" y))
   (define (exact-rationalize x eps)
     (let ((n1  (if (negative? x) -1 1))

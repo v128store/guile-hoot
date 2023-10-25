@@ -1866,9 +1866,9 @@
                             (call $i32->fixnum (i32.const 2))
                             (i64.mul (i64.const -1)
                                      (i64.extend_i32_s
-                                      (i32.sub
+                                      (i32.add
                                        (local.get $expt)
-                                       (i32.const -1)))))))
+                                       (i32.const 1)))))))
                ;; multiply $frac by 2**expt
                (else
                 (call $mul

@@ -18,3 +18,4 @@ Makefile.in
 /doc/hoot.html/
 /js-runtime/wtf8.wasm
 /doc/.dirstamp
+meta-repl/repl.wasm

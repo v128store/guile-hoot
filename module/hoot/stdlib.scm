@@ -1866,15 +1866,21 @@
                             (call $i32->fixnum (i32.const 2))
                             (i64.mul (i64.const -1)
                                      (i64.extend_i32_s
-                                      (local.get $expt))))))
+                                      (i32.sub
+                                       (local.get $expt)
+                                       (i32.const -1)))))))
                ;; multiply $frac by 2**expt
                (else
                 (call $mul
                       (call $s64->bignum (local.get $frac))
                       (call $lsh
                             (call $i32->fixnum (i32.const 2))
-                            (i64.extend_i32_s (local.get $expt)))))))
+                            (i64.extend_i32_s
+                             (i32.add (local.get $expt)
+                                      (i32.const 1))))))))
 
+     ;; Callers must ensure that the argument is a rational float (not
+     ;; an infinity or NaN)
      (func $f64->exact (param $x f64) (result (ref eq))
            (local $bits i64)
            (local $raw-frac i64)        ; raw significand
@@ -1884,8 +1890,11 @@
            (local $sign i32)
 
            ;; Split $X into three parts:
-           ;; - the fraction [Knuth] or significand (52 bits with an implicit leading 1 bit),
-           ;; - the exponent (usually interpreted with an offset of 1023),
+           ;; - the fraction [Knuth] or significand (52 bits, with an
+           ;; implicit leading 1 bit),
+           ;; - the exponent (with an offset of 1023; here, since we
+           ;; represent the significand as an integer, the offset is
+           ;; increased by 52 bits to 1075),
            ;; - and a sign bit.
            ;; Special cases:
            ;; (a) E = 0, F = 0 => (signed) zero;
@@ -1908,35 +1917,37 @@
                              (i64.shr_u (local.get $bits) (i64.const 63))))
 
            (if (ref eq)
-               (i32.and (i32.eqz (local.get $expt))
-                        (i64.eqz (local.get $frac)))
+               (i32.and (i32.eqz (local.get $raw-expt))
+                        (i64.eqz (local.get $raw-frac)))
                (then                    ; zero (E = 0, F = 0)
                 (call $i32->fixnum (i32.const 0)))
                (else
                 (if (ref eq)
-                    (i32.eqz (local.get $expt))
+                    (i32.eqz (local.get $raw-expt))
                     (then               ; subnormal (E = 0, F /= 0)
                      (local.set $frac (local.get $raw-frac))
                      (local.set $expt (i32.const -1074))
-                     (return (call $decode-f64
-                                   (local.get $frac)
-                                   (local.get $expt)
-                                   (local.get $sign))))
+                     (call $decode-f64
+                           (local.get $frac)
+                           (local.get $expt)
+                           (local.get $sign)))
                     (else
                      (if (ref eq)
-                         (i32.eqz (i32.eq (local.get $expt)
+                         (i32.eqz (i32.eq (local.get $raw-expt)
                                           (i32.const #x7FF)))
                          (then          ; normal (E /= 0, F /= #xFF)
+                          ;; set "hidden" bit of significand
                           (local.set $frac
                                      (i64.or (local.get $raw-frac)
-                                             (i64.const #x10000000000000)))
+                                             (i64.const ,(ash 1 52))))
                           (local.set $expt
-                                     (i32.sub (local.get $expt) (i32.const 1023)))
-                          (return (call $decode-f64
-                                        (local.get $frac)
-                                        (local.get $expt)
-                                        (local.get $sign))))
-                         (else          ; non-finite (inf or NaN)
+                                     (i32.sub (local.get $raw-expt)
+                                              (i32.const 1075)))
+                          (call $decode-f64
+                                (local.get $frac)
+                                (local.get $expt)
+                                (local.get $sign)))
+                         (else          ; nonrational (inf or NaN)
                           (call $die
                                 (string.const "$decode-float bad arg")
                                 (struct.new $flonum

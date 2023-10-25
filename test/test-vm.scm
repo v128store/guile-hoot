@@ -1426,6 +1426,19 @@
                  (i32.const 21)
                  (i32.add))))
 
+(test-vm "br_table with negative i"
+         42
+         '(module
+           (func (export "main") (result i32)
+                 (block $foo (result i32)
+                        (block $bar (result i32)
+                               (i32.const 21)
+                               (i32.const -1)
+                               (br_table $bar $foo))
+                        (unreachable))
+                 (i32.const 21)
+                 (i32.add))))
+
 (test-vm "inner function call"
          11
          '(module

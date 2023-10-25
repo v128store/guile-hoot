@@ -94,7 +94,7 @@
             (letk kcomp-real ($kargs () ()
                                ($continue kreal-finite? src
                                  ($primcall 'compnum-real #f (x)))))
-            (letk kimag-finite? ($kargs () ()
+            (letk kimag-finite? ($kargs ('imag) (imag)
                                   ($branch kf kcomp-real src 'f64-finite? #f (imag))))
             (letk kcomp ($kargs () ()
                           ($continue kimag-finite? src

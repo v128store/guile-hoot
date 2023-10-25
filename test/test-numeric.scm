@@ -19,7 +19,8 @@
 ;;;
 ;;; Code:
 
-(use-modules (srfi srfi-64)
+(use-modules (ice-9 format)
+             (srfi srfi-64)
              (test utils))
 
 (test-begin "test-numeric")
@@ -54,14 +55,14 @@
 (test-call "#f" (lambda (a b) (= a b)) 1/2 +nan.0)
 
 ;; ...with ordinary flonums
-;;(test-call "#t" (lambda (a b) (< a b)) 1/2 1.0)
+(test-call "#t" (lambda (a b) (< a b)) 1/2 1.0)
 (test-call "#f" (lambda (a b) (< a b)) 1/2 -1.0)
-;;(test-call "#f" (lambda (a b) (< a b)) 1.0 1/2)
+(test-call "#f" (lambda (a b) (< a b)) 1.0 1/2)
 (test-call "#t" (lambda (a b) (< a b)) -1.0 1/2)
 
-;;(test-call "#t" (lambda (a b) (<= a b)) 1/2 1.0)
+(test-call "#t" (lambda (a b) (<= a b)) 1/2 1.0)
 (test-call "#f" (lambda (a b) (<= a b)) 1/2 -1.0)
-;;(test-call "#f" (lambda (a b) (<= a b)) 1.0 1/2)
+(test-call "#f" (lambda (a b) (<= a b)) 1.0 1/2)
 (test-call "#t" (lambda (a b) (<= a b)) -1.0 1/2)
 
 (test-call "#f" (lambda (a b) (= a b)) 1/2 1.0)
@@ -69,22 +70,26 @@
 (test-call "#f" (lambda (a b) (= a b)) 1.0 1/2)
 (test-call "#f" (lambda (a b) (= a b)) -1.0 1/2)
 
-(test-call "#f" (lambda (a b) (= a b)) 1/2 0.5)
-(test-call "#f" (lambda (a b) (= a b)) 0.5 1/2)
-;;(test-call "#t" (lambda (a b) (<= a b)) 1/2 0.5)
+(test-call "#t" (lambda (a b) (= a b)) 1/2 0.5)
+(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (<= a b)) 1/2 0.5)
 (test-call "#t" (lambda (a b) (<= a b)) 0.5 1/2)
-;;(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
-;;(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
+(test-call "#t" (lambda (a b) (= a b)) 0.5 1/2)
 
 ;; exact
 (test-call "1" (lambda (a) (exact a)) 1)
 (test-call "1/2" (lambda (a) (exact a)) 1/2)
 (test-call "0" (lambda (a) (exact a)) 0.0)
 (test-call "0" (lambda (a) (exact a)) -0.0)
-;;(test-call "1/2" (lambda (a) (exact a)) 0.5)
-;;(test-call "-1/2" (lambda (a) (exact a)) -0.5)
-;;(test-call "9999" (lambda (a) (exact a)) 9999.0)
-;;(test-call "-9999" (lambda (a) (exact a)) -9999.0)
+(test-call "1/2" (lambda (a) (exact a)) 0.5)
+(test-call "-1/2" (lambda (a) (exact a)) -0.5)
+(test-call "9999" (lambda (a) (exact a)) 9999.0)
+(test-call "-9999" (lambda (a) (exact a)) -9999.0)
+;; subnormal conversion
+(test-call (format #f "~d/~d" #xcccccccccccd (ash 2 1072))
+           (lambda (a) (exact a))
+           2.2250738585072014e-309)
 
 ;; numeric equivalence
 (test-call "#t" (lambda (a b) (eqv? a b)) 1 1)
@@ -106,7 +111,7 @@
 (test-call "1" (lambda (a) (denominator a)) 42)
 (test-call "3" (lambda (a) (numerator a)) 6/4)
 (test-call "2" (lambda (a) (denominator a)) 6/4)
-;;(test-call "2.0" (lambda (a) (denominator (inexact a))) 6/4)
+(test-call "2.0" (lambda (a) (denominator (inexact a))) 6/4)
 
 ;; log and exp
 (test-call "0.0" (lambda (a) (log a)) 1)

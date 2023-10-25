@@ -22,8 +22,9 @@
 
 (define-module (hoot stdlib)
   #:use-module (wasm wat)
+  #:use-module (ice-9 match)
   #:use-module (ice-9 receive)
-  #:export (compute-stdlib))
+  #:export ((compute-stdlib/memoized . compute-stdlib)))
 
 (define (arith-cond . clauses)
   (receive (type clauses)
@@ -4053,3 +4054,15 @@
              ,@maybe-init-i31-zero)
      (global ,@(maybe-import '$default-prompt-tag) (mut (ref eq))
              ,@maybe-init-i31-zero))))
+
+(define (memoize f)
+  (define cache (make-hash-table))
+  (lambda args
+    (match (hash-ref cache args)
+      (#f (call-with-values (lambda () (apply f args))
+            (lambda res
+              (hash-set! cache args res)
+              (apply values res))))
+      (res (apply values res)))))
+
+(define compute-stdlib/memoized (memoize compute-stdlib))

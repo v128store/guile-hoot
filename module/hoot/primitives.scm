@@ -46,7 +46,9 @@
                  inf? nan?
                  error
                  raise-exception
-                 eval-when))
+                 eval-when
+                 make-struct/simple struct? struct-vtable
+                 struct-ref struct-set!))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
   ;; on interfaces that use interfaces.  For now, import the-eof-object
@@ -90,7 +92,7 @@
                  define-syntax let-syntax letrec-syntax
                  syntax-rules syntax-error
                  parameterize
-                 guard define-record-type
+                 guard
 
                  ;; R7RS control
                  dynamic-wind
@@ -190,7 +192,6 @@
    syntax-rules syntax-error
    ;; FIXME: These two need Hoot support.
    ;; guard
-   ;; define-record-type
 
    ;; Most primitives can only appear in primcalls, so we expose them as
    ;; %foo instead of foo, relying on the prelude to wrap them in
@@ -333,7 +334,6 @@
    (atomic-box-set! . %atomic-box-set!)
    (atomic-box-swap! . %atomic-box-swap!)
    (atomic-box-compare-and-swap! . %atomic-box-compare-and-swap!)
-   ; make-variable variable-ref variable-set!
    (bytevector-s8-ref . %bytevector-s8-ref)
    (bytevector-s8-set! . %bytevector-s8-set!)
    (bytevector-u16-native-ref . %bytevector-u16-native-ref)
@@ -355,7 +355,12 @@
    (the-eof-object . %the-eof-object)
    (make-variable . %make-box)
    (variable-ref . %box-ref)
-   (variable-set! . %box-set!))
+   (variable-set! . %box-set!)
+   (make-struct/simple . %make-struct)
+   (struct? . %struct?)
+   (struct-vtable . %struct-vtable)
+   (struct-ref . %struct-ref)
+   (struct-set! . %struct-set!))
   #:export (%inline-wasm)
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)

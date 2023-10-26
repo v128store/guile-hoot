@@ -357,6 +357,28 @@
               ;; #(key subr message irritants)
               (field $vals (ref $raw-scmvector)))))
 
+     (global $root-vtable (ref $vtable-vtable) (call $make-root-vtable))
+
+     (global $empty-vector (ref $vector)
+             (struct.new $vector
+                         (i32.const 0) (array.new_fixed $raw-scmvector 0)))
+     (func $make-root-vtable (result (ref $vtable-vtable))
+           (local $ret (ref $vtable-vtable))
+           (local.set $ret
+                      (struct.new $vtable-vtable
+                                  (i32.const 0)
+                                  (ref.null $vtable)
+                                  (ref.i31 (i32.const ,(ash vtable-nfields 1)))
+                                  (ref.i31 (i32.const 1)) ; printer
+                                  (ref.i31 (i32.const 1)) ; name
+                                  (ref.i31 (i32.const 1)) ; constructor
+                                  (ref.i31 (i32.const 13)) ; properties
+                                  (global.get $empty-vector) ; parents
+                                  (ref.i31 (i32.const 0))))  ; mutable-fields
+           (struct.set $vtable-vtable $vtable (local.get $ret) (local.get $ret))
+           ;; Rely on Scheme to initialize printer, name, etc...
+           (local.get $ret))
+
      (func $make-throw-exn (param $key (ref $symbol)) (param $args (ref eq))
            (result (ref $simple-exception))
            (struct.new $simple-exception (i32.const 0)

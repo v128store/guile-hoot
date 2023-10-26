@@ -73,7 +73,7 @@
            (('struct.new_default _) #t)
            (('array.new _) #t)
            (('array.new_default _) #t)
-           (('array.new_fixed _) #t)
+           (('array.new_fixed _ _) #t)
            (('extern.externalize) #t)
            (('extern.internalize) #t)
            (('ref.i31) #t)

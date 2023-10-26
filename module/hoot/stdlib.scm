@@ -78,6 +78,27 @@
                       (i32.const 0)
                       (array.new $raw-scmvector (ref.i31 (i32.const 13))
                                  (i32.const 47))))))
+  (define (struct-name nfields)
+    (if (zero? nfields)
+        '$struct
+        (string->symbol (format #f "$struct/~a" nfields))))
+  (define (struct-definition nfields)
+    (define (field-name i) (string->symbol (format #f "$field~a" i)))
+    `(struct
+      (field $hash (mut i32))
+      (field $vtable (mut (ref null $vtable)))
+      ,@(map (lambda (i)
+               `(field ,(field-name i) (mut (ref eq))))
+             (iota nfields))))
+  (define vtable-fields
+    '((field $nfields (mut (ref eq)))
+      (field $printer (mut (ref eq)))
+      (field $name (mut (ref eq)))
+      (field $constructor (mut (ref eq)))
+      (field $properties (mut (ref eq)))
+      (field $parents (mut (ref eq)))
+      (field $mutable-fields (mut (ref eq)))))
+  (define vtable-nfields (length vtable-fields))
 
   (wat->wasm
    `((type $kvarargs
@@ -263,15 +284,23 @@
                ;; Vtable link is mutable so that we can tie the knot for top
                ;; types.
                (field $vtable (mut (ref null $vtable))))))
+      ,@(map (lambda (nfields)
+               `(type ,(struct-name nfields)
+                      (sub ,(struct-name (1- nfields))
+                           ,(struct-definition nfields))))
+             (iota vtable-nfields 1))
       (type $vtable
-            (sub $struct
-              (struct
-               (field $hash (mut i32))
-               (field $vtable (mut (ref null $vtable)))
-               (field $field0 (mut (ref eq)))
-               (field $field1 (mut (ref eq)))
-               (field $field2 (mut (ref eq)))
-               (field $field3 (mut (ref eq))))))
+            (sub ,(struct-name vtable-nfields)
+                 (struct
+                  (field $hash (mut i32))
+                  (field $vtable (mut (ref null $vtable)))
+                  ,@vtable-fields)))
+      (type $vtable-vtable
+            (sub $vtable
+                 (struct
+                  (field $hash (mut i32))
+                  (field $vtable (mut (ref null $vtable)))
+                  ,@vtable-fields)))
       (type $parameter
             (sub $proc
               (struct

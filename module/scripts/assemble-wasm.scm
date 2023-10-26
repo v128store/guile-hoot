@@ -26,13 +26,16 @@
 
 (define-module (scripts assemble-wasm)
   #:use-module (ice-9 binary-ports)
+  #:use-module (ice-9 eval-string)
   #:use-module (ice-9 format)
   #:use-module (ice-9 match)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-26)
   #:use-module (srfi srfi-37)
   #:use-module ((wasm assemble) #:select ((assemble-wasm . wasm:assemble-wasm)))
+  #:use-module (wasm link)
   #:use-module (wasm lower)
+  #:use-module (wasm types)
   #:use-module (wasm wat)
   #:export (assemble-wasm))
 
@@ -53,7 +56,12 @@
                   (show-version)
                   (exit 0)))
 
-	(option '(#\o "output") #t #f
+	(option '("stdlib") #t #f
+		(lambda (opt name arg result)
+                  (when (assoc-ref result 'stdlib)
+                    (fail "`--stdlib' option cannot be specified more than once"))
+                  (alist-cons 'stdlib arg result)))
+        (option '(#\o "output") #t #f
 		(lambda (opt name arg result)
 		  (if (assoc-ref result 'output-file)
 		      (fail "`-o' option cannot be specified more than once")
@@ -97,17 +105,28 @@ There is NO WARRANTY, to the extent permitted by law.~%"))
              '()
              (cons datum (lp (read port)))))))))
 
+(define load-stdlib
+  (let ((module (current-module)))
+    (lambda (str)
+      (let ((val (eval-string str #:module module)))
+        (unless (wasm? val)
+          (fail "loaded stdlib not a wasm object" val))
+        val))))
+
 (define (assemble-wasm . args)
   (let* ((options         (parse-args args))
          (help?           (assoc-ref options 'help?))
          (input-files     (assoc-ref options 'input-files))
-	 (output-file     (assoc-ref options 'output-file)))
+	 (output-file     (assoc-ref options 'output-file))
+         (stdlib-expr     (assoc-ref options 'stdlib)))
     (when (or help? (null? input-files))
       (format #t "Usage: assemble-wasm [OPTION] FILE
 Compile the WAT source file FILE into a WebAssembly module file.
 
   -h, --help           print this help message
 
+  --stdlib=EXPR        evaluate EXPR to produce a wasm module which
+                       should provide any definitions missing in FILE
   -o, --output=OFILE   write output to OFILE
 
 Report bugs to <~A>.~%"
@@ -125,13 +144,20 @@ Report bugs to <~A>.~%"
                (lambda args
                  (fail "interrupted by the user")))
 
+    (define link-stdlib
+      (if stdlib-expr
+          (let ((stdlib (load-stdlib stdlib-expr)))
+            (lambda (wasm) (add-stdlib wasm stdlib)))
+          (lambda (wasm) wasm)))
+
     (match input-files
       (() (fail "missing input file"))
       ((input-file)
        (let ((expr (call-with-input-file input-file read-wat)))
          (call-with-output-file output-file
            (cut put-bytevector <>
-                (wasm:assemble-wasm (lower-wasm (wat->wasm expr))))))
+                (wasm:assemble-wasm
+                 (lower-wasm (link-stdlib (wat->wasm expr)))))))
        (format #t "wrote `~A'\n" output-file))
       (_ (fail "multiple input files not supported")))))
 

@@ -17,6 +17,11 @@ SUFFIXES = .wat .wasm
 	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
 	  $(top_builddir)/pre-inst-env $(GUILD) assemble-wasm -o "$@" "$<"
 
+$(top_builddir)/js-runtime/reflect.wasm: js-runtime/reflect.wat module/hoot/stdlib.scm
+	$(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
+	  $(top_builddir)/pre-inst-env $(GUILD) assemble-wasm \
+	    --stdlib="((@ (hoot stdlib) compute-stdlib) #t)" -o "$@" "$<"
+
 TEST_EXTENSIONS = .js .scm
 SCM_LOG_COMPILER = $(top_builddir)/pre-inst-env $(GUILE)
 AM_SCM_LOG_FLAGS = --no-auto-compile -L $(top_srcdir)

@@ -940,7 +940,132 @@
                    "/"
                    (number->string (imag-part n) radix)
                    "i"))))
-(define (string->number n) (error "unimplemented"))
+(define* (string->number str #:optional (radix 10))
+  (cond
+    ((or (string-=? str "+nan.0")
+         (string-=? str "-nan.0"))
+     +nan.0)
+    ((string-=? str "+inf.0") +inf.0)
+    ((string-=? str "-inf.0") -inf.0)
+    (else
+     (let ((port (open-input-string str)))
+       (define (read-bin-digit)
+         (case (peek-char port)
+           ((#\0 #\1)
+            (- (char->integer (read-char port)) (char->integer #\0)))
+           (else #f)))
+       (define (read-oct-digit)
+         (case (peek-char port)
+           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)
+            (- (char->integer (read-char port)) (char->integer #\0)))
+           (else #f)))
+       (define (read-dec-digit)
+         (case (peek-char port)
+           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+            (- (char->integer (read-char port)) (char->integer #\0)))
+           (else #f)))
+       (define (read-hex-digit)
+         (case (peek-char port)
+           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+            (- (char->integer (read-char port)) (char->integer #\0)))
+           ((#\a #\b #\c #\d #\e #\f)
+            (+ 10 (- (char->integer (read-char port)) (char->integer #\a))))
+           ((#\A #\B #\C #\D #\E #\F)
+            (+ 10 (- (char->integer (read-char port)) (char->integer #\A))))
+           (else #f)))
+       (define (read-digits read-digit)
+         (let loop ((digits '()))
+           (let ((n (read-digit)))
+             (if n
+                 (loop (cons n digits))
+                 digits))))
+       (define (reader-for-radix radix)
+         (case radix
+           ((2) read-bin-digit)
+           ((8) read-oct-digit)
+           ((10) read-dec-digit)
+           ((16) read-hex-digit)
+           (else #f)))
+       (define (read-unsigned-int radix)
+         (let ((read-digit (reader-for-radix radix)))
+           (and read-digit
+                (match (read-digits read-digit)
+                  (() #f)
+                  (digits
+                   (let loop ((mag 0) (digits digits))
+                     (match digits
+                       (() 0)
+                       ((digit . rest)
+                        (+ (* digit (expt radix mag)) (loop (+ mag 1) rest))))))))))
+       (define (read-sign)
+         (let ((ch (peek-char port)))
+           (cond
+            ((eof-object? ch) #f)
+            ((eqv? ch #\-)
+             (read-char port)
+             -1)
+            ((eqv? ch #\+)
+             (read-char port)
+             1)
+            (else 1))))
+       (define (read-int radix)
+         (let ((sign (read-sign)))
+           (and sign
+                (let ((n (read-unsigned-int radix)))
+                  (and n (* sign n))))))
+       (define (read-int-or-float radix)
+         (let ((n (read-int radix)))
+           (and n
+                (let ((ch (peek-char port)))
+                  (cond
+                   ;; TODO: Parse fractional part of float.
+                   ((eqv? ch #\.) #f)
+                   (else n))))))
+       (define (read-number radix)
+         (let ((n (read-int-or-float radix)))
+           (and n
+                (let ((ch (peek-char port)))
+                  (cond
+                   ((eqv? ch #\e)
+                    (read-char port)
+                    (let ((exp (read-int radix)))
+                      (and exp (* n (inexact (expt radix exp))))))
+                   (else n))))))
+       ;; Composite as in it could be a fraction or complex number
+       ;; which is a combination of two numbers.
+       (define (read-composite-number radix)
+         (let ((n (read-number radix)))
+           (and n
+                (let ((ch (peek-char port)))
+                  (cond
+                   ((eof-object? ch) n)
+                   ((eqv? ch #\/)
+                    (read-char port)
+                    (and (exact-integer? n)
+                         (let ((d (read-unsigned-int radix)))
+                           (and d (/ n d)))))
+                   ((eqv? ch #\+)
+                    ;; TODO: needs make-rectangular.
+                    #f)
+                   (else #f))))))
+       (define (read-composite-number-with-radix)
+         (let ((ch (read-char port)))
+           (cond
+            ((eof-object? ch) #f)
+            ((eqv? ch #\b) (read-composite-number 2))
+            ((eqv? ch #\o) (read-composite-number 8))
+            ((eqv? ch #\d) (read-composite-number 10))
+            ((eqv? ch #\x) (read-composite-number 16))
+            (else #f))))
+       ;; The string may specify the radix, otherwise use the radix
+       ;; provided by the caller.
+       (let ((ch (peek-char port)))
+         (cond
+          ((eof-object? ch) #f)
+          ((eqv? ch #\#)
+           (read-char port)
+           (read-composite-number-with-radix))
+          (else (read-composite-number radix))))))))
 
 ;; Adapted from the comments for scm_rationalize in libguile's numbers.c
 (define (rationalize x y)

@@ -4128,6 +4128,8 @@
                (then (call $i32->fixnum (local.get $a)))
                (else (return_call $s64->bignum (i64.extend_i32_s (local.get $a))))))
 
+     (func $extern->scm (param $a (ref extern)) (result (ref eq))
+           (struct.new $extern-ref (i32.const 0) (local.get $a)))
      (func $set-fluid-and-return-prev (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq))
            (param $arg2 (ref eq))

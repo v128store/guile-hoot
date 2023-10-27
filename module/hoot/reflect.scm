@@ -650,6 +650,11 @@
        (("debug_str" . ,debug-str)
         ("debug_str_i32" . ,debug-str-i32)
         ("debug_str_scm" . ,debug-str-scm)))))
+  (define (procedure->function obj)
+    (wasm->guile reflector obj))
+  (define ffi-imports
+    `(("ffi" .
+       (("procedure_to_function" . ,procedure->function)))))
   (define (instantiate wasm abi-imports)
     (instantiate-wasm (validate-wasm wasm)
                       #:imports (append user-imports abi-imports debug-imports)))
@@ -692,8 +697,8 @@
      (let* (($load (wasm-instance-export-ref instance "$load")))
        ((wasm->guile reflector (wasm-global-ref $load)))))))
 
-(define (compile-value reflect-wasm exp)
-  (hoot-load (hoot-instantiate reflect-wasm (compile exp))))
+(define* (compile-value reflect-wasm exp #:key (imports '()))
+  (hoot-load (hoot-instantiate reflect-wasm (compile exp) imports)))
 
 (define (compile-call reflect-wasm proc-exp . arg-exps)
   (let* ((proc-module (hoot-instantiate reflect-wasm (compile proc-exp)))

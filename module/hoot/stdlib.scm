@@ -654,6 +654,9 @@
      (func $debug-str-scm (import "debug" "debug_str_scm")
            (param (ref string) (ref eq)))
 
+     (func $procedure->function (import "ffi" "procedure_to_function")
+           (param (ref eq)) (result (ref extern)))
+
      (func $die0 (param $reason (ref string))
            (call $die (local.get 0) (ref.i31 (i32.const 1))))
 

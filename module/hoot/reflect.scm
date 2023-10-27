@@ -605,7 +605,7 @@
       ("string_upcase" . ,string-upcase)
       ("string_downcase" . ,string-downcase)
       ("make_weak_map" . ,make-weak-key-hash-table)
-      ("weak_map_get" . ,hash-ref)
+      ("weak_map_get" . ,(lambda (t k) (hash-ref t k 1)))
       ("weak_map_set" . ,hash-set!)
       ("weak_map_delete" . ,hash-remove!)
       ("fsqrt" . ,sqrt)

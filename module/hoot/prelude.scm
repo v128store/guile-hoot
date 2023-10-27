@@ -2878,6 +2878,51 @@
                                       #'(call import-name lower ...)))
                   pname ...)))))))))
 
+;; Hash tables
+;; TODO: Regular hash tables
+(define-record-type <weak-key-hash-table>
+  (wrap-weak-map extern)
+  weak-key-hash-table?
+  (extern unwrap-weak-map))
+(define (make-weak-key-hash-table)
+  (wrap-weak-map
+   (%inline-wasm
+    '(func (result (ref eq))
+           (struct.new $weak-table
+                       (i32.const 0)
+                       (call $make-weak-map))))))
+(define (hashq-ref table key)
+  (unless (weak-key-hash-table? table)
+    (error "expected hash table" table))
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq)) (result (ref eq))
+          (call $weak-map-get
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key)))
+   (unwrap-weak-map table) key))
+(define (hashq-set! table key value)
+  (unless (weak-key-hash-table? table)
+    (error "expected hash table" table))
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq)) (param $val (ref eq))
+          (call $weak-map-set
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key)
+                (local.get $val)))
+   (unwrap-weak-map table) key value))
+(define (hashq-remove! table key)
+  (unless (weak-key-hash-table? table)
+    (error "expected hash table" table))
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq))
+          (call $weak-map-delete
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key)))
+   (unwrap-weak-map table) key))
+
 (cond-expand
  (hoot-main
   (define current-input-port

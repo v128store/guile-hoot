@@ -149,6 +149,38 @@
 (test-call "+inf.0" (lambda (a b) (expt a b)) +inf.0 +inf.0)
 (test-call "0.0" (lambda (a b) (expt a b)) +inf.0 -inf.0)
 
+;; quotient, remainder and modulus with a flonum argument
+(test-call "12.0" (lambda (a b) (quotient a b)) 123.0 10.0)
+(test-call "12.0" (lambda (a b) (quotient a b)) 123.0 10)
+(test-call "12.0" (lambda (a b) (quotient a b)) 123 10.0)
+(test-call "53687091.0" (lambda (a b) (quotient a b)) 536870912.0 10.0)
+(test-call "53687091.0" (lambda (a b) (quotient a b)) 536870912.0 10)
+(test-call "53687091.0" (lambda (a b) (quotient a b)) 536870912 10.0)
+
+(test-call "3.0" (lambda (a b) (remainder a b)) 123.0 10.0)
+(test-call "3.0" (lambda (a b) (remainder a b)) 123.0 10)
+(test-call "3.0" (lambda (a b) (remainder a b)) 123 10.0)
+(test-call "2.0" (lambda (a b) (remainder a b)) 536870912.0 10.0)
+(test-call "2.0" (lambda (a b) (remainder a b)) 536870912.0 10)
+(test-call "2.0" (lambda (a b) (remainder a b)) 536870912 10.0)
+
+(test-call "3.0" (lambda (a b) (modulo a b)) 123.0 10.0)
+(test-call "3.0" (lambda (a b) (modulo a b)) 123.0 10)
+(test-call "3.0" (lambda (a b) (modulo a b)) 123 10.0)
+(test-call "2.0" (lambda (a b) (modulo a b)) 536870912.0 10.0)
+(test-call "2.0" (lambda (a b) (modulo a b)) 536870912.0 10)
+(test-call "2.0" (lambda (a b) (modulo a b)) 536870912 10.0)
+
+;; Checks the different-sign adjustment in $mod's fixnum-fixnum case,
+;; currently used only for modulo with a flonum argument (which calls
+;; $mod directly, bypassing the fixnum fast path in `(hoot compile)').
+(test-call "-7.0" (lambda (a b) (modulo a b)) 123.0 -10.0)
+(test-call "-7.0" (lambda (a b) (modulo a b)) 123.0 -10)
+(test-call "-7.0" (lambda (a b) (modulo a b)) 123 -10.0)
+(test-call "7.0" (lambda (a b) (modulo a b)) -123.0 10.0)
+(test-call "7.0" (lambda (a b) (modulo a b)) -123.0 10)
+(test-call "7.0" (lambda (a b) (modulo a b)) -123 10.0)
+
 ;; truncating division
 (test-call "(2 1)"
            (lambda (a b) (call-with-values
@@ -170,23 +202,23 @@
                              (lambda () (truncate/ a b))
                            (lambda x x)))
            -5 -2)
-;; (test-call "(2.0 -1.0)"
-;;            (lambda (a b) (call-with-values
-;;                              (lambda () (truncate/ a b))
-;;                            (lambda x x)))
-;;            -5.0 -2)
+(test-call "(2.0 -1.0)"
+           (lambda (a b) (call-with-values
+                             (lambda () (truncate/ a b))
+                           (lambda x x)))
+           -5.0 -2)
 
 (test-call "2" (lambda (a b) (truncate-quotient a b)) 5 2)
 (test-call "-2" (lambda (a b) (truncate-quotient a b)) -5 2)
 (test-call "-2" (lambda (a b) (truncate-quotient a b)) 5 -2)
 (test-call "2" (lambda (a b) (truncate-quotient a b)) -5 -2)
-;;(test-call "2.0" (lambda (a b) (truncate-quotient a b)) -5.0 -2)
+(test-call "2.0" (lambda (a b) (truncate-quotient a b)) -5.0 -2)
 
 (test-call "1" (lambda (a b) (truncate-remainder a b)) 5 2)
 (test-call "-1" (lambda (a b) (truncate-remainder a b)) -5 2)
 (test-call "1" (lambda (a b) (truncate-remainder a b)) 5 -2)
 (test-call "-1" (lambda (a b) (truncate-remainder a b)) -5 -2)
-;;(test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
+(test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
 
 ;; flooring division
 (test-call "(2 1)" (lambda (a b) (call-with-values

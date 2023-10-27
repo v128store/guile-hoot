@@ -4109,6 +4109,8 @@
                         (i32.lt_s (local.get $a) (i32.const ,(ash 1 29))))
                (then (call $i32->fixnum (local.get $a)))
                (else (return_call $s64->bignum (i64.extend_i32_s (local.get $a))))))
+     (func $f32->scm (param $a f32) (result (ref eq))
+           (struct.new $flonum (i32.const 0) (f64.promote_f32 (local.get $a))))
 
      (func $extern->scm (param $a (ref extern)) (result (ref eq))
            (struct.new $extern-ref (i32.const 0) (local.get $a)))

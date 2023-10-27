@@ -4130,6 +4130,13 @@
 
      (func $extern->scm (param $a (ref extern)) (result (ref eq))
            (struct.new $extern-ref (i32.const 0) (local.get $a)))
+     (func $null-extern->scm (param $a (ref null extern)) (result (ref eq))
+           (if (ref eq)
+               (ref.is_null (local.get $a))
+               (then (ref.i31 (i32.const 1)))
+               (else (struct.new $extern-ref (i32.const 0)
+                                 (ref.as_non_null (local.get $a))))))
+
      (func $set-fluid-and-return-prev (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq))
            (param $arg2 (ref eq))

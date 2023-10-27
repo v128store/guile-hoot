@@ -750,10 +750,10 @@
   (values (floor-quotient x y) (floor-remainder x y)))
 ;; Adapted from the SRFI-141 reference implementation
 (define (floor-quotient x y)
-  (unless (exact-integer? x)
-    (error "expected exact integer" x))
-  (unless (exact-integer? y)
-    (error "expected exact integer" y))
+  (unless (integer? x)
+    (error "expected integer" x))
+  (unless (integer? y)
+    (error "expected integer" y))
   (cond
    ((and (negative? x) (negative? y))
     (quotient (- x) (- y)))

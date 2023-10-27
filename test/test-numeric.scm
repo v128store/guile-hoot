@@ -111,6 +111,7 @@
 (test-call "1" (lambda (a) (denominator a)) 42)
 (test-call "3" (lambda (a) (numerator a)) 6/4)
 (test-call "2" (lambda (a) (denominator a)) 6/4)
+(test-call "3.0" (lambda (a) (numerator (inexact a))) 6/4)
 (test-call "2.0" (lambda (a) (denominator (inexact a))) 6/4)
 
 ;; log and exp
@@ -206,19 +207,33 @@
            (lambda (a b) (call-with-values
                              (lambda () (truncate/ a b))
                            (lambda x x)))
+           -5.0 -2.0)
+(test-call "(2.0 -1.0)"
+           (lambda (a b) (call-with-values
+                             (lambda () (truncate/ a b))
+                           (lambda x x)))
            -5.0 -2)
+(test-call "(2.0 -1.0)"
+           (lambda (a b) (call-with-values
+                             (lambda () (truncate/ a b))
+                           (lambda x x)))
+           -5 -2.0)
 
 (test-call "2" (lambda (a b) (truncate-quotient a b)) 5 2)
 (test-call "-2" (lambda (a b) (truncate-quotient a b)) -5 2)
 (test-call "-2" (lambda (a b) (truncate-quotient a b)) 5 -2)
 (test-call "2" (lambda (a b) (truncate-quotient a b)) -5 -2)
+(test-call "2.0" (lambda (a b) (truncate-quotient a b)) -5.0 -2.0)
 (test-call "2.0" (lambda (a b) (truncate-quotient a b)) -5.0 -2)
+(test-call "2.0" (lambda (a b) (truncate-quotient a b)) -5 -2.0)
 
 (test-call "1" (lambda (a b) (truncate-remainder a b)) 5 2)
 (test-call "-1" (lambda (a b) (truncate-remainder a b)) -5 2)
 (test-call "1" (lambda (a b) (truncate-remainder a b)) 5 -2)
 (test-call "-1" (lambda (a b) (truncate-remainder a b)) -5 -2)
+(test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2.0)
 (test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5.0 -2)
+(test-call "-1.0" (lambda (a b) (truncate-remainder a b)) -5 -2.0)
 
 ;; flooring division
 (test-call "(2 1)" (lambda (a b) (call-with-values
@@ -237,16 +252,34 @@
                                     (lambda () (floor/ a b))
                                   (lambda x x)))
            -5 -2)
+(test-call "(2.0 -1.0)" (lambda (a b) (call-with-values
+                                          (lambda () (floor/ a b))
+                                        (lambda x x)))
+           -5.0 -2.0)
+(test-call "(2.0 -1.0)" (lambda (a b) (call-with-values
+                                          (lambda () (floor/ a b))
+                                        (lambda x x)))
+           -5.0 -2)
+(test-call "(2.0 -1.0)" (lambda (a b) (call-with-values
+                                          (lambda () (floor/ a b))
+                                        (lambda x x)))
+           -5 -2.0)
 
 (test-call "2" (lambda (a b) (floor-quotient a b)) 5 2)
 (test-call "-3" (lambda (a b) (floor-quotient a b)) -5 2)
 (test-call "-3" (lambda (a b) (floor-quotient a b)) 5 -2)
 (test-call "2" (lambda (a b) (floor-quotient a b)) -5 -2)
+(test-call "2.0" (lambda (a b) (floor-quotient a b)) -5.0 -2.0)
+(test-call "2.0" (lambda (a b) (floor-quotient a b)) -5.0 -2)
+(test-call "2.0" (lambda (a b) (floor-quotient a b)) -5 -2.0)
 
 (test-call "1" (lambda (a b) (floor-remainder a b)) 5 2)
 (test-call "1" (lambda (a b) (floor-remainder a b)) -5 2)
 (test-call "-1" (lambda (a b) (floor-remainder a b)) 5 -2)
 (test-call "-1" (lambda (a b) (floor-remainder a b)) -5 -2)
+(test-call "-1.0" (lambda (a b) (floor-remainder a b)) -5.0 -2.0)
+(test-call "-1.0" (lambda (a b) (floor-remainder a b)) -5.0 -2)
+(test-call "-1.0" (lambda (a b) (floor-remainder a b)) -5 -2.0)
 
 ;; gcd and lcm
 ;;(test-call "4" (lambda (a b) (gcd a b)) 32 -36)
@@ -257,6 +290,8 @@
 
 ;; rationalize
 (test-call "1/3" (lambda (a b) (rationalize a b)) 3/10 1/10)
-;;(test-call "0.2" (lambda (a b) (rationalize a b)) 0.2 1/10)
+(test-call "1/4" (lambda (a b) (rationalize a b)) 2/10 1/10)
+(test-call "0.25" (lambda (a b) (rationalize a b)) 0.2 1/10)
+(test-call "0.25" (lambda (a b) (rationalize a b)) 2/10 0.1)
 
 (test-end* "test-numeric")

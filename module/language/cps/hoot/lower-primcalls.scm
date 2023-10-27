@@ -120,7 +120,7 @@
             (letk kcomp-real ($kargs () ()
                                ($continue kreal-int? src
                                  ($primcall 'compnum-real #f (x)))))
-            (letk kimag-int? ($kargs () ()
+            (letk kimag-int? ($kargs ('imag) (imag)
                                   ($branch kf kcomp-real src 'f64-int? #f (imag))))
             (letk kcomp ($kargs () ()
                           ($continue kimag-int? src

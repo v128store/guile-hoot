@@ -1931,7 +1931,9 @@
                                       (i32.const 1))))))))
 
      ;; Callers must ensure that the argument is a rational float (not
-     ;; an infinity or NaN)
+     ;; an infinity or NaN).
+     ;; TODO: Optimize for conversion of $X to an integer.
+     ;; (at least when it can be represeted with an i32 or i64).
      (func $f64->exact (param $x f64) (result (ref eq))
            (local $bits i64)
            (local $raw-frac i64)        ; raw significand
@@ -2440,6 +2442,33 @@
 
      (func $bignum->f64 (param $a (ref $bignum)) (result f64)
            (call $bignum-to-f64 (struct.get $bignum $val (local.get $a))))
+
+     (func $f64-integer? (param $a f64) (result i32)
+           ;; Adapted from the f64-int test in (hoot compile). The
+           ;; subtraction here detects infinities: (f64.trunc ±inf.0)
+           ;; returns an infinity, and the subtraction then produces a
+           ;; NaN. (This also detects NaNs correctly, as (f64.trunc
+           ;; +nan.0) returns a NaN.)
+           (f64.eq
+            (f64.sub
+             (f64.trunc (local.get $a))
+             (local.get $a))
+            (f64.const 0)))
+
+     ;; Callers must check that $A is an integer.
+     (func $f64->integer (param $a f64) (result (ref eq))
+           (call $f64->exact (local.get $a)))
+
+     (func $flonum-integer? (param $a (ref eq)) (result i32)
+           (call $f64-integer?
+                 (struct.get $flonum $val
+                             (ref.cast $flonum (local.get $a)))))
+
+     ;; Callers must check that $A is an integer.
+     (func $flonum->integer (param $a (ref eq)) (result (ref eq))
+           (call $f64->integer
+                 (struct.get $flonum $val
+                             (ref.cast $flonum (local.get $a)))))
 
      (func $scm->f64 (param $a (ref eq)) (result f64)
            ,(arith-cond 'f64
@@ -3379,10 +3408,17 @@
                                                          (call $fixnum->i32
                                                                (ref.cast i31 (local.get $a)))))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$quo/fixnum-flonum"))
-                   (unreachable))))
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $quo
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$quo/fixnum-flonum"))
+                        (unreachable))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
@@ -3399,31 +3435,40 @@
                                  (call $bignum-quo*
                                        (ref.cast $bignum (local.get $a))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$quo/bignum-flonum"))
-                   (unreachable))))
-             ;; TODO: integer flonums
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $quo
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$quo/bignum-flonum"))
+                        (unreachable))))))
              `((ref.test $flonum (local.get $a))
-               ,(arith-cond
-                 '((call $fixnum? (local.get $b))
-                   (call $die0 (string.const "$quo/flonum-fixnum"))
-                   (unreachable))
-                 '((ref.test $bignum (local.get $b))
-                   (call $die0 (string.const "$quo/flonum-bignum"))
-                   (unreachable))
-                 '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$quo/flonum-flonum"))
-                   (unreachable))))))
+               (if (ref eq)
+                   (call $flonum-integer? (local.get $a))
+                   (then
+                    (call $inexact
+                          (call $quo
+                                (call $flonum->integer (local.get $a))
+                                (local.get $b))))
+                   (else
+                    (call $die0 (string.const "$quo/flonum"))
+                    (unreachable))))))
 
      (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
            ,(arith-cond
              `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
+                 ;; Adapted from the `rem' fixnum fast path in (hoot compile).
                  '((call $fixnum? (local.get $b))
-                   (call $die0 (string.const "$rem/fixnum-fixnum"))
-                   (unreachable))
+                   (call $i32->fixnum
+                         (i32.rem_s
+                          (call $fixnum->i32 (ref.cast i31 (local.get $a)))
+                          (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
                  '((ref.test $bignum (local.get $b))
                    (return (call $normalize-bignum
                                  (call $bignum-rem*
@@ -3433,10 +3478,17 @@
                                                          (call $fixnum->i32
                                                                (ref.cast i31 (local.get $a)))))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$rem/fixnum-flonum"))
-                   (unreachable))))
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $rem
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$rem/fixnum-flonum"))
+                        (unreachable))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
@@ -3453,31 +3505,56 @@
                                  (call $bignum-rem*
                                        (ref.cast $bignum (local.get $a))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$rem/bignum-flonum"))
-                   (unreachable))))
-             ;; TODO: integer flonums
-             `((ref.test $flonum (local.get $a))
-               ,(arith-cond
-                 '((call $fixnum? (local.get $b))
-                   (call $die0 (string.const "$rem/flonum-fixnum"))
-                   (unreachable))
-                 '((ref.test $bignum (local.get $b))
-                   (call $die0 (string.const "$rem/flonum-bignum"))
-                   (unreachable))
-                 '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$rem/flonum-flonum"))
-                   (unreachable))))))
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $rem
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$rem/bignum-flonum"))
+                        (unreachable))))))
+             '((ref.test $flonum (local.get $a))
+               (if (ref eq)
+                   (call $flonum-integer? (local.get $a))
+                   (then
+                    (call $inexact
+                          (call $rem
+                                (call $flonum->integer (local.get $a))
+                                (local.get $b))))
+                   (else
+                    (call $die0 (string.const "$rem/flonum"))
+                    (unreachable))))))
 
      (func $mod (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (local $a-i32 i32)
+           (local $b-i32 i32)
+           (local $tem i32)
            ,(arith-cond
              `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; TODO: signal overflow error ($b = 0)
+                 ;; Adapted from the `mod' fixnum fast path in (hoot compile).
                  '((call $fixnum? (local.get $b))
-                   (call $die0 (string.const "$mod/fixnum-fixnum"))
-                   (unreachable))
+                   (local.set $a-i32 (call $fixnum->i32
+                                           (ref.cast i31 (local.get $a))))
+                   (local.set $b-i32 (call $fixnum->i32
+                                           (ref.cast i31 (local.get $b))))
+                   (local.set $tem
+                              (i32.rem_s (local.get $a-i32)
+                                         (local.get $b-i32)))
+                   ;; If $B and the remainder have different signs,
+                   ;; adjust the remainder by adding $B.
+                   (if (i32.or
+                        (i32.and (i32.lt_s (local.get $tem) (i32.const 0))
+                                 (i32.gt_s (local.get $b-i32) (i32.const 0)))
+                        (i32.and (i32.gt_s (local.get $tem) (i32.const 0))
+                                 (i32.lt_s (local.get $b-i32) (i32.const 0))))
+                       (then (local.set $tem (i32.add (local.get $tem)
+                                                      (local.get $b-i32)))))
+                   (call $i32->fixnum (local.get $tem)))
                  '((ref.test $bignum (local.get $b))
                    (return (call $normalize-bignum
                                  (call $bignum-mod*
@@ -3487,10 +3564,17 @@
                                                          (call $fixnum->i32
                                                                (ref.cast i31 (local.get $a)))))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$mod/fixnum-flonum"))
-                   (unreachable))))
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $mod
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$mod/fixnum-flonum"))
+                        (unreachable))))))
              `((ref.test $bignum (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
@@ -3507,22 +3591,28 @@
                                  (call $bignum-mod*
                                        (ref.cast $bignum (local.get $a))
                                        (ref.cast $bignum (local.get $b))))))
-                 ;; TODO: integer flonums
                  '((ref.test $flonum (local.get $b))
-                   (call $die0 (string.const "$mod/flonum-flonum"))
-                   (unreachable))))
-             ;; TODO: integer flonums
-             `((ref.test $flonum (local.get $a))
-               ,(arith-cond
-                 '((call $fixnum? (local.get $b))
-                   (call $die0 (string.const "$mod/flonum-fixnum"))
-                   (unreachable))
-                 '((ref.test $bignum (local.get $b))
-                   (call $die0 (string.const "$mod/flonum-bignum"))
-                   (unreachable))
-                 '((ref.test $flonum (local.get $b))
-                                      (call $die0 (string.const "$mod/flonum-flonum"))
-                   (unreachable))))))
+                   (if (ref eq)
+                       (call $flonum-integer? (local.get $b))
+                       (then
+                        (call $inexact
+                              (call $mod
+                                    (local.get $a)
+                                    (call $flonum->integer (local.get $b)))))
+                       (else
+                        (call $die0 (string.const "$mod/bignum-flonum"))
+                        (unreachable))))))
+             '((ref.test $flonum (local.get $a))
+               (if (ref eq)
+                   (call $flonum-integer? (local.get $a))
+                   (then
+                    (call $inexact
+                          (call $mod
+                                (call $flonum->integer (local.get $a))
+                                (local.get $b))))
+                   (else
+                    (call $die0 (string.const "$mod/flonum"))
+                    (unreachable))))))
 
      ;; Bitwise operators and shifts
 

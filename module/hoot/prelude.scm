@@ -2745,6 +2745,139 @@
                       str))
                    #f #f))
 
+;; FFI
+(define (external? obj)
+  (%inline-wasm
+   '(func (param $obj (ref eq)) (result (ref eq))
+          (ref.i31
+           (if i32
+               (ref.test $extern-ref (local.get $obj))
+               (then (i32.const 17))
+               (else (i32.const 1)))))
+   obj))
+
+(define (procedure->host-function proc)
+  (unless (procedure? proc)
+    (error "expected procedure" proc))
+  (%inline-wasm
+   '(func (param $f (ref eq)) (result (ref eq))
+          (struct.new $extern-ref
+                      (i32.const 0)
+                      (call $procedure->function
+                            (ref.cast $proc (local.get $f)))))
+   proc))
+
+(define-syntax define-foreign
+  (lambda (x)
+    (define eq? %eq?)
+    (define cons %cons)
+    (define car %car)
+    (define cdr %cdr)
+    (define null? %null?)
+    (define pair? %pair?)
+    (define (eql? a b)
+      (cond
+       ((eq? a b) #t)
+       ((and (pair? a) (pair? b))
+        (and (eql? (car a) (car b))
+             (eql? (cdr a) (cdr b))))
+       (else #f)))
+    (define (type-check-exp exp)
+      (let* ((param (car exp))
+             (type (syntax->datum (cdr exp))))
+        (cond
+         ((or (eq? type 'i32) (eq? type 'i64))
+          #`(unless (exact-integer? #,param)
+              (error "expected exact integer" #,param)))
+         ((or (eq? type 'f32) (eq? type 'f64))
+          #`(unless (and (number? #,param)
+                         (inexact? #,param)
+                         (rational? #,param))
+              (error "expected inexact rational" #,param)))
+         ((eql? type '(ref eq)) #t)
+         ((eql? type '(ref extern))
+          #`(unless (external? #,param)
+              (error "expected external reference" #,param)))
+         ((eql? type '(ref string))
+          #`(unless (string? #,param)
+              (error "expected string" #,param)))
+         (else
+          (error "unsupported param type" type)))))
+    (define (lower-exp exp)
+      (let* ((param (%car exp))
+             (type (syntax->datum (%cdr exp)))
+             (get #`(local.get #,param)))
+        (cond
+         ((eq? type 'i32)
+          #`(call $scm->s32 #,get))
+         ((eq? type 'i64)
+          #`(call $scm->s64 #,get))
+         ((eq? type 'f32)
+          #`(f32.demote_f64
+             (struct.get $flonum $val (ref.cast $flonum #,get))))
+         ((eq? type 'f64)
+          #`(struct.get $flonum $val (ref.cast $flonum #,get)))
+         ((eql? type '(ref eq)) get)
+         ((eql? type '(ref extern))
+          #`(struct.get $extern-ref $val (ref.cast $extern-ref #,get)))
+         ((eql? type '(ref string))
+          #`(struct.get $string $str (ref.cast $string #,get)))
+         (else
+          (error "unsupported param type" type)))))
+    (define (raise-exp type exp)
+      (let ((type (syntax->datum type)))
+        (cond
+         ((eq? type 'none)
+          exp)
+         ((eq? type 'i32)
+          #`(call $s32->scm #,exp))
+         ((eq? type 'i64)
+          #`(call $s64->scm #,exp))
+         ((eq? type 'f32)
+          #`(call $f32->scm #,exp))
+         ((eq? type 'f64)
+          #`(call $f64->scm #,exp))
+         ((eql? type '(ref extern))
+          #`(call $extern->scm #,exp))
+         ((eql? type '(ref null extern))
+          #`(call $null-extern->scm #,exp))
+         ((eql? type '(ref string))
+          #`(struct.new $string (i32.const 0) #,exp))
+         (else
+          (error "unsupported return type" type)))))
+    ;; No 'map' at expansion time!? OK...
+    (define (map proc lst)
+      (if (null? lst)
+          '()
+          (cons (proc (car lst)) (map proc (cdr lst)))))
+    (define (fresh-id prefix)
+      (datum->syntax x (gensym prefix)))
+    (syntax-case x (->)
+      ((_ proc-name mod name ptype ... -> rtype)
+       (with-syntax ((import-name (fresh-id "$import-"))
+                     ((pname ...)
+                      (map (lambda _ (fresh-id "$param-")) #'(ptype ...))))
+         (with-syntax (((type-check ...)
+                        (map type-check-exp #'((pname . ptype) ...)))
+                       ((lower ...) (map lower-exp #'((pname . ptype) ...))))
+           #`(begin
+               (%inline-wasm
+                '(func import-name (import mod name)
+                       (param ptype) ...
+                       #,@(if (eq? (syntax->datum #'rtype) 'none)
+                              #'()
+                              #'((result rtype)))))
+               (define (proc-name pname ...)
+                 type-check ...
+                 (%inline-wasm
+                  '(func (param pname (ref eq)) ...
+                         #,@(if (eq? (syntax->datum #'rtype) 'none)
+                                #'()
+                                #'((result (ref eq))))
+                         #,(raise-exp #'rtype
+                                      #'(call import-name lower ...)))
+                  pname ...)))))))))
+
 (cond-expand
  (hoot-main
   (define current-input-port

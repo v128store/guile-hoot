@@ -1,3 +1,4 @@
+// -*- js2-basic-offset: 4 -*-
 class Char {
     constructor(codepoint) {
         this.codepoint = codepoint;
@@ -178,7 +179,15 @@ class Scheme {
                 console.log(`debug: ${x}: ${repr(this.#to_js(y))}`);
             },
         });
-        let proc = new Procedure(this, mod.get_export('$load').value)
+        mod.set_ffi_handler({
+            procedure_to_extern: (obj) => {
+                const proc = this.#to_js(obj);
+                return (...args) => {
+                    return proc.call(...args);
+                };
+            }
+        });
+        let proc = new Procedure(this, mod.get_export('$load').value);
         return proc.call();
     }
     static async load_main(path, abi, user_imports = {}) {
@@ -359,6 +368,7 @@ class SchemeModule {
     #instance;
     #io_handler;
     #debug_handler;
+    #ffi_handler;
     static #rt = {
         bignum_from_string(str) { return BigInt(str); },
         bignum_from_i32(n) { return BigInt(n); },
@@ -492,10 +502,15 @@ class SchemeModule {
             debug_str_i32(x, y) { mod.#debug_handler.debug_str_i32(x, y); },
             debug_str_scm(x, y) { mod.#debug_handler.debug_str_scm(x, y); },
         }
+        let ffi = {
+            procedure_to_extern(proc) {
+                return mod.#ffi_handler.procedure_to_extern(proc);
+            }
+        };
         let imports = {
           rt: SchemeModule.#rt,
           abi: imported_abi,
-          debug, io, ...user_imports
+          debug, io, ffi, ...user_imports
         };
         let { module, instance } = await instantiate_streaming(path, imports);
         let mod = new SchemeModule(instance);
@@ -503,6 +518,7 @@ class SchemeModule {
     }
     set_io_handler(h) { this.#io_handler = h; }
     set_debug_handler(h) { this.#debug_handler = h; }
+    set_ffi_handler(h) { this.#ffi_handler = h; }
     all_exports() { return this.#instance.exports; }
     exported_abi() {
         let abi = {}

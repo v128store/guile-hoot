@@ -2061,8 +2061,8 @@
              `((ref.test $flonum (local.get $a))
                ,(arith-cond 'i32
                  `((call $fixnum? (local.get $b))
-                   (f64.lt (call $fixnum->f64 (ref.cast i31 (local.get $a)))
-                           (struct.get $flonum $val (ref.cast $flonum (local.get $b)))))
+                   (f64.lt (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (call $fixnum->f64 (ref.cast i31 (local.get $b)))))
                  `((ref.test $bignum (local.get $b))
                    (call $lt-flo-big
                          (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
@@ -2181,8 +2181,8 @@
              `((ref.test $flonum (local.get $a))
                ,(arith-cond 'i32
                  `((call $fixnum? (local.get $b))
-                   (i32.le_s (i31.get_s (ref.cast i31 (local.get $a)))
-                             (i31.get_s (ref.cast i31 (local.get $a)))))
+                   (f64.le (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (call $fixnum->f64 (ref.cast i31 (local.get $b)))))
                  `((ref.test $bignum (local.get $b))
                    (call $le-flo-big
                          (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
@@ -2299,8 +2299,8 @@
              `((ref.test $flonum (local.get $a))
                ,(arith-cond 'i32
                  `((call $fixnum? (local.get $b))
-                   (i32.eq (i31.get_s (ref.cast i31 (local.get $a)))
-                           (i31.get_s (ref.cast i31 (local.get $a)))))
+                   (f64.eq (struct.get $flonum $val (ref.cast $flonum (local.get $a)))
+                           (call $fixnum->f64 (ref.cast i31 (local.get $b)))))
                  `((ref.test $bignum (local.get $b))
                    (call $eq-flo-big
                          (struct.get $flonum $val (ref.cast $flonum (local.get $a)))

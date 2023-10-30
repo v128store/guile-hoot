@@ -1135,14 +1135,6 @@
 (define (real-part z) (error "unimplemented"))
 (define (imag-part z) (error "unimplemented"))
 
-;; promises
-(define (make-promise x) (error "unimplemented"))
-(define (promise? x) (error "unimplemented"))
-(define (force x) (error "unimplemented"))
-(define-syntax-rule (delay expr) (make-promise (lambda () expr)))
-;; FIXME: implement properly.
-(define-syntax-rule (delay-force expr) (delay (force expr)))
-
 (define (char->integer x) (%char->integer x))
 (define (integer->char x) (%integer->char x))
 (define (char? x) (%char? x))
@@ -2133,6 +2125,33 @@
   (match (%struct-ref (%struct-vtable record) printer-field)
     (#f (write-string "#<record with no printer!>" port))
     (print (print record port))))
+
+;; promises
+(define-record-type <promise>
+  #:opaque? #t
+  (%%make-promise value)
+  promise?
+  (value %promise-value %set-promise-value!))
+(define (%make-promise eager? val)
+  (%%make-promise (cons eager? val)))
+(define (make-promise x)
+  (if (promise? x) x (%make-promise #t x)))
+(define (force promise)
+  (match (%promise-value promise)
+    ((#t . val) val)
+    ((#f . thunk)
+     (let ((promise* (thunk)))
+       (match (%promise-value promise)
+         ((and value (#f . _))
+          (match (%promise-value promise*)
+            ((eager? . data)
+             (set-car! value eager?)
+             (set-cdr! value data)
+             (%set-promise-value! promise* value)
+             (force promise))))
+         ((#t . val) val))))))
+(define-syntax-rule (delay-force expr) (%make-promise #f (lambda () expr)))
+(define-syntax-rule (delay expr) (delay-force (%make-promise #t expr)))
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))

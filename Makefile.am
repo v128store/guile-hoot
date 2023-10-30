@@ -50,6 +50,7 @@ SCM_TESTS = 					\
   test/test-pairs.scm				\
   test/test-ports.scm				\
   test/test-procedures.scm			\
+  test/test-promises.scm			\
   test/test-prompts.scm				\
   test/test-records.scm				\
   test/test-strings.scm				\

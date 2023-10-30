@@ -3291,7 +3291,14 @@
                                        (i32.const 0)
                                        (f64.mul
                                         (call $flonum->f64 (ref.cast $flonum (local.get $a)))
-                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))
+                 '((ref.test $fraction (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $a)))
+                                        (call $flonum->f64
+                                              (call $inexact (local.get $b)))))))))
              `((ref.test $fraction (local.get $a))
                ,(arith-cond
                  '((call $fixnum? (local.get $b))
@@ -3302,6 +3309,13 @@
                    (return (call $mul-fracnum-bignum
                                  (ref.cast $fraction (local.get $a))
                                  (ref.cast $bignum (local.get $b)))))
+                 '((ref.test $flonum (local.get $b))
+                   (return (struct.new $flonum
+                                       (i32.const 0)
+                                       (f64.mul
+                                        (call $flonum->f64
+                                              (call $inexact (local.get $a)))
+                                        (call $flonum->f64 (ref.cast $flonum (local.get $b)))))))
                  '((ref.test $fraction (local.get $b))
                    (return (call $mul-fracnum-fracnum
                                  (ref.cast $fraction (local.get $a))

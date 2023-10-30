@@ -1955,7 +1955,7 @@
           (apply values vals))))))
 
 (define (%make-vtable nfields printer name constructor properties
-                      parents mutable-fields)
+                      parents mutable-fields compare)
   (%inline-wasm
    '(func (param $nfields (ref eq))
           (param $printer (ref eq))
@@ -1964,6 +1964,7 @@
           (param $properties (ref eq))
           (param $parents (ref eq))
           (param $mutable-fields (ref eq))
+          (param $compare (ref eq))
           (result (ref eq))
           (struct.new $vtable
                       (i32.const 0)
@@ -1974,8 +1975,9 @@
                       (local.get $constructor)
                       (local.get $properties)
                       (local.get $parents)
-                      (local.get $mutable-fields)))
-    nfields printer name constructor properties parents mutable-fields))
+                      (local.get $mutable-fields)
+                      (local.get $compare)))
+    nfields printer name constructor properties parents mutable-fields compare))
 
 (define-syntax define-record-type
   (lambda (stx)
@@ -2089,7 +2091,22 @@
                 #,(syntax-case parent ()
                     (#f #'#())
                     (#t (error "record subtyping unimplemented")))
-                #,(compute-mutable-fields #'(setter ...))))
+                #,(compute-mutable-fields #'(setter ...))
+                #,(syntax-case opaque? ()
+                    (#t
+                     #`(lambda (x y equal?) #f))
+                    (#f
+                     #`(lambda (x y equal?)
+                         (and (eq? (%struct-vtable x) #,id)
+                              (eq? (%struct-vtable y) #,id)
+                              #,@(let lp ((fields #'(field ...))
+                                          (i 0))
+                                   (syntax-case fields ()
+                                     (() #'())
+                                     ((f . fields)
+                                      #`((equal? (%struct-ref x #,i)
+                                                 (%struct-ref y #,i))
+                                         . #,(lp #'fields (1+ i))))))))))))
              (define (predicate x)
                (and (%struct? x)
                     #,(syntax-case extensible? ()
@@ -2195,6 +2212,13 @@
                       (and (eqv? (bitvector-ref x i)
                                  (bitvector-ref y i))
                            (lp (+ i 1)))))))))
+   ((record? x)
+    (define (record-type-compare vtable)
+      (%struct-ref vtable 7))
+    (and (record? y)
+         (match (record-type-compare (%struct-vtable x))
+           (#f #f)
+           (compare (compare x y equal?)))))
    (else #f)))
 
 (define (not x) (if x #f #t))

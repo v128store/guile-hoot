@@ -99,7 +99,8 @@
       (field $constructor (mut (ref eq)))
       (field $properties (mut (ref eq)))
       (field $parents (mut (ref eq)))
-      (field $mutable-fields (mut (ref eq)))))
+      (field $mutable-fields (mut (ref eq)))
+      (field $compare (mut (ref eq)))))
   (define vtable-nfields (length vtable-fields))
 
   (wat->wasm
@@ -376,7 +377,8 @@
                                   (ref.i31 (i32.const 1)) ; constructor
                                   (ref.i31 (i32.const 13)) ; properties
                                   (global.get $empty-vector) ; parents
-                                  (ref.i31 (i32.const 0))))  ; mutable-fields
+                                  (ref.i31 (i32.const 0))  ; mutable-fields
+                                  (ref.i31 (i32.const 0))))  ; compare
            (struct.set $vtable-vtable $vtable (local.get $ret) (local.get $ret))
            ;; Rely on Scheme to initialize printer, name, etc...
            (local.get $ret))

@@ -398,7 +398,7 @@
   (define (make-struct-types)
     ;; The first few struct types are part of the rec block, because
     ;; vtables are structs.  See vtable-fields in stdlib.scm.
-    (define vtable-nfields 7)
+    (define vtable-nfields 8)
     (let lp ((n (1+ vtable-nfields)))
       (if (<= n max-struct-nfields)
           (let ((name (struct-type-name n))

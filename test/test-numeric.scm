@@ -282,10 +282,10 @@
 (test-call "-1.0" (lambda (a b) (floor-remainder a b)) -5 -2.0)
 
 ;; gcd and lcm
-;;(test-call "4" (lambda (a b) (gcd a b)) 32 -36)
+(test-call "4" (lambda (a b) (gcd a b)) 32 -36)
 (test-call "0" (lambda () (gcd)))
-;;(test-call "288" (lambda (a b) (lcm a b)) 32 -36)
-;;(test-call "288.0" (lambda (a b) (lcm a b)) 32.0 -36)
+(test-call "288" (lambda (a b) (lcm a b)) 32 -36)
+(test-call "288.0" (lambda (a b) (lcm a b)) 32.0 -36)
 (test-call "1" (lambda () (lcm)))
 
 ;; rationalize

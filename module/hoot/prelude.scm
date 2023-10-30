@@ -794,7 +794,7 @@
           (exact y))))
     (if (or (inexact? x) (inexact? y))
         (inexact result)
-        (result))))
+        result)))
 (define-syntax %gcd
   (syntax-rules ()
     ((_) 0)

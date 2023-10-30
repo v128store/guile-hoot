@@ -51,6 +51,7 @@ SCM_TESTS = 					\
   test/test-ports.scm				\
   test/test-procedures.scm			\
   test/test-prompts.scm				\
+  test/test-records.scm				\
   test/test-strings.scm				\
   test/test-symbols.scm				\
   test/test-vectors.scm				\

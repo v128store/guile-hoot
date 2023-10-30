@@ -90,6 +90,8 @@
       ,@(map (lambda (i)
                `(field ,(field-name i) (mut (ref eq))))
              (iota nfields))))
+  ;; If you change the field count, also update vtable-nfields in
+  ;; compile.scm.
   (define vtable-fields
     '((field $nfields (mut (ref eq)))
       (field $printer (mut (ref eq)))

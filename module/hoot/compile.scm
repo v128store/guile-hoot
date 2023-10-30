@@ -394,9 +394,12 @@
      (else
       (when (< max-struct-nfields nfields)
         (set! max-struct-nfields nfields))
-      (string->symbol (format #f "$struct~a" nfields)))))
+      (string->symbol (format #f "$struct/~a" nfields)))))
   (define (make-struct-types)
-    (let lp ((n 1))
+    ;; The first few struct types are part of the rec block, because
+    ;; vtables are structs.  See vtable-fields in stdlib.scm.
+    (define vtable-nfields 7)
+    (let lp ((n (1+ vtable-nfields)))
       (if (<= n max-struct-nfields)
           (let ((name (struct-type-name n))
                 (parent (struct-type-name (1- n))))

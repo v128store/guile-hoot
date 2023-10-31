@@ -31,7 +31,8 @@ SOURCES = 					\
   scripts/compile-wasm.scm
 
 NOCOMP_SOURCES = 				\
-  hoot/prelude.scm
+  hoot/prelude.scm				\
+  hoot/generate-char-prelude.scm
 
 SUFFIXES = .scm .go
 GOBJECTS = $(SOURCES:%.scm=%.go)

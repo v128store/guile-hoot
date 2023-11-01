@@ -639,12 +639,17 @@
                    (wasm-instance-export-names instance)))))
 
 (define* (hoot-instantiate reflector scheme-wasm #:optional (user-imports '()))
+  (define (debug-str str)
+    (format #t "debug: ~a\n" str))
+  (define (debug-str-i32 str x)
+    (format #t "debug: ~a: ~s\n" str x))
+  (define (debug-str-scm str x)
+    (format #t "debug: ~a: ~s\n" str (wasm->guile reflector x)))
   (define debug-imports
     `(("debug" .
-       (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
-        ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
-        ("debug_str_scm" . ,(lambda (x y)
-                              (format #t "debug: ~s: ~s\n" x y)))))))
+       (("debug_str" . ,debug-str)
+        ("debug_str_i32" . ,debug-str-i32)
+        ("debug_str_scm" . ,debug-str-scm)))))
   (define (instantiate wasm abi-imports)
     (instantiate-wasm (validate-wasm wasm)
                       #:imports (append user-imports abi-imports debug-imports)))
@@ -656,8 +661,8 @@
         (make-hoot-module reflector instance))
       (let* ((instance (instantiate scheme-wasm %runtime-imports))
              (abi (make-abi-imports instance))
-             (imports (append %runtime-imports abi))
-             (reflector (make-reflector (instantiate reflector imports) abi)))
+             (imports (append %runtime-imports abi)))
+        (set! reflector (make-reflector (instantiate reflector imports) abi))
         (make-hoot-module reflector instance))))
 
 (define (hoot-call reflector f args)

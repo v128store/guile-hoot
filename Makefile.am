@@ -60,7 +60,7 @@ SCM_TESTS = 					\
   test/test-wasm-assembler.scm			\
   test/test-disassemble.scm			\
   test/test-write.scm				\
-  #
+  test/test-ffi.scm
 
 JS_TESTS = 					\
   examples/basic-types.js

@@ -1202,11 +1202,21 @@
                   ((< val 10) val)
                   (else (lp (1+ mid) end)))))))))
 
-(define (char-ci<? ch1 ch2 . ch*) (error "unimplemented"))
-(define (char-ci<=? ch1 ch2 . ch*) (error "unimplemented"))
-(define (char-ci=? ch1 ch2 . ch*) (error "unimplemented"))
-(define (char-ci>=? ch1 ch2 . ch*) (error "unimplemented"))
-(define (char-ci>? ch1 ch2 . ch*) (error "unimplemented"))
+(define (char-ci<? ch1 ch2 . ch*)
+  (apply char<?
+         (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
+(define (char-ci<=? ch1 ch2 . ch*)
+  (apply char<=?
+         (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
+(define (char-ci=? ch1 ch2 . ch*)
+  (apply char=?
+         (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
+(define (char-ci>=? ch1 ch2 . ch*)
+  (apply char>=?
+         (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
+(define (char-ci>? ch1 ch2 . ch*)
+  (apply char>?
+         (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
 
 (define (string-upcase str)
   (unless (string? str) (error "expected a string" str))

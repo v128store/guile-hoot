@@ -22,18 +22,6 @@
              (ice-9 format)
              (test utils))
 
-(define-syntax-rule (define-char-prelude-procedures (name name*) ...)
-  (define-values (name* ...)
-    (let ()
-      (include-from-path "hoot/char-prelude.scm")
-      (values name ...))))
-
-(define-char-prelude-procedures
-  (char-upcase char-upcase*)
-  (char-downcase char-downcase*)
-  (char-upper-case? char-upper-case?*)
-  (char-lower-case? char-lower-case?*))
-
 (define (unary-char-procs-same? reference proc)
   (define success #t)
   (char-set-for-each
@@ -47,13 +35,25 @@
 
 (test-begin "test-char-prelude")
 
-(test-assert "char-upcase"
-             (unary-char-procs-same? char-upcase char-upcase*))
-(test-assert "char-downcase"
-             (unary-char-procs-same? char-downcase char-downcase*))
-(test-assert "char-upper-case?"
-             (unary-char-procs-same? char-upper-case? char-upper-case?*))
-(test-assert "char-lower-case?"
-             (unary-char-procs-same? char-lower-case? char-lower-case?*))
+(define-syntax-rule (define-char-prelude-procedures (name name*) ...)
+  (define-values (name* ...)
+    (let ()
+      (include-from-path "hoot/char-prelude.scm")
+      (values name ...))))
+
+(define-syntax-rule (test-char-prelude-procedures (name name*) ...)
+  (begin
+    (define-char-prelude-procedures (name name*) ...)
+    (test-assert 'name (unary-char-procs-same? name name*))
+    ...))
+
+(test-char-prelude-procedures
+  (char-upcase char-upcase*)
+  (char-downcase char-downcase*)
+  (char-upper-case? char-upper-case?*)
+  (char-lower-case? char-lower-case?*)
+  (char-alphabetic? char-alphabetic?*)
+  (char-numeric? char-numeric?*)
+  (char-whitespace? char-whitespace?*))
 
 (test-end* "test-char-prelude")

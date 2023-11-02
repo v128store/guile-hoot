@@ -1166,16 +1166,11 @@
       char
       (char-downcase (char-upcase char))))
 (define (digit-value char) (error "unimplemented"))
-(define (char-alphabetic? char) (error "unimplemented"))
 (define (char-ci<? ch1 ch2 . ch*) (error "unimplemented"))
 (define (char-ci<=? ch1 ch2 . ch*) (error "unimplemented"))
 (define (char-ci=? ch1 ch2 . ch*) (error "unimplemented"))
 (define (char-ci>=? ch1 ch2 . ch*) (error "unimplemented"))
 (define (char-ci>? ch1 ch2 . ch*) (error "unimplemented"))
-(define (char-lower-case? char) (error "unimplemented"))
-(define (char-upper-case? char) (error "unimplemented"))
-(define (char-whitespace? char) (error "unimplemented"))
-(define (char-numeric? char) (error "unimplemented"))
 (define (string-upcase str)
   (unless (string? str) (error "expected a string" str))
   (%inline-wasm

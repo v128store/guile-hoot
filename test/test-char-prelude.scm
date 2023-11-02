@@ -22,10 +22,10 @@
              (ice-9 format)
              (test utils))
 
-(define-values (char-upcase* char-downcase* char-titlecase*)
+(define-values (char-upcase* char-downcase*)
   (let ()
     (include-from-path "hoot/char-prelude.scm")
-    (values char-upcase char-downcase char-titlecase)))
+    (values char-upcase char-downcase)))
 
 (define (unary-char-procs-same? reference proc)
   (define success #t)
@@ -44,7 +44,5 @@
              (unary-char-procs-same? char-upcase char-upcase*))
 (test-assert "char-downcase"
              (unary-char-procs-same? char-downcase char-downcase*))
-(test-assert "char-titlecase"
-             (unary-char-procs-same? char-titlecase char-titlecase*))
 
 (test-end* "test-char-prelude")

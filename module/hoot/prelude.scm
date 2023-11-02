@@ -1160,8 +1160,7 @@
       (%nan? z)))
 
 ;; (scheme char) procedures; mostly we should punt to ICU via the host
-(define (char-downcase char) (error "unimplemented"))
-(define (char-upcase char) (error "unimplemented"))
+(include-from-path "hoot/char-prelude")
 (define (char-foldcase char)
   (if (or (eqv? char #\460) (eqv? char #\461))
       char

@@ -34,11 +34,17 @@ NOCOMP_SOURCES = 				\
   hoot/prelude.scm				\
   hoot/generate-char-prelude.scm
 
+GENERATED_NOCOMP_SOURCES = 			\
+  hoot/char-prelude.scm
+
+hoot/char-prelude.scm: hoot/generate-char-prelude.scm
+	$(AM_V_GEN)$(top_builddir)/pre-inst-env $(GUILE) $< > "$@"
+
 SUFFIXES = .scm .go
 GOBJECTS = $(SOURCES:%.scm=%.go)
 CLEANFILES = $(GOBJECTS)
 EXTRA_DIST = $(SOURCES) $(NOCOMP_SOURCES)
-nobase_mod_DATA = $(SOURCES) $(NOCOMP_SOURCES)
+nobase_mod_DATA = $(SOURCES) $(NOCOMP_SOURCES) $(GENERATED_NOCOMP_SOURCES)
 nobase_go_DATA = $(GOBJECTS)
 
 # Make sure source files are installed first, so that the mtime of

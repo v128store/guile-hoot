@@ -34,6 +34,7 @@ SCM_TESTS = 					\
   test/test-atomics.scm				\
   test/test-bitwise.scm				\
   test/test-bytevectors.scm			\
+  test/test-char-prelude.scm			\
   test/test-constants.scm			\
   test/test-exceptions.scm			\
   test/test-flonums.scm				\

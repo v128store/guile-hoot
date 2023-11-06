@@ -211,17 +211,13 @@
                 x))
              (define (parameter-fluid x)
                (%inline-wasm
-                '(func (param $param (ref eq)) (result (ref eq))
-                       (struct.get $parameter $fluid
-                                   (ref.cast $parameter
-                                             (local.get $param))))
+                '(func (param $param (ref $parameter)) (result (ref eq))
+                       (struct.get $parameter $fluid (local.get $param)))
                 x))
              (define (parameter-convert x)
                (%inline-wasm
-                '(func (param $param (ref eq)) (result (ref eq))
-                       (struct.get $parameter $convert
-                                   (ref.cast $parameter
-                                             (local.get $param))))
+                '(func (param $param (ref $parameter)) (result (ref eq))
+                       (struct.get $parameter $convert (local.get $param)))
                 x))
              (unless (parameter? p)
                (error "not a parameter" p))

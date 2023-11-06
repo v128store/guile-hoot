@@ -1179,26 +1179,20 @@
 (define (string-upcase str)
   (unless (string? str) (error "expected a string" str))
   (%inline-wasm
-   '(func (param $str (ref eq))
+   '(func (param $str (ref string))
           (result (ref eq))
-          (struct.new
-           $string
-           (i32.const 0)
-           (call $string-upcase
-                 (struct.get $string $str
-                             (ref.cast $string (local.get $str))))))
+          (struct.new $string
+                      (i32.const 0)
+                      (call $string-upcase (local.get $str))))
    str))
 (define (string-downcase str)
   (unless (string? str) (error "expected a string" str))
   (%inline-wasm
-   '(func (param $str (ref eq))
+   '(func (param $str (ref string))
           (result (ref eq))
-          (struct.new
-           $string
-           (i32.const 0)
-           (call $string-downcase
-                 (struct.get $string $str
-                             (ref.cast $string (local.get $str))))))
+          (struct.new $string
+                      (i32.const 0)
+                      (call $string-downcase (local.get $str))))
    str))
 (define (string-foldcase str)
   (string-downcase (string-upcase str)))

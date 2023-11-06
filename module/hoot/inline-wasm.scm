@@ -114,6 +114,69 @@
     (match x
       (pat #t)
       (_ (error message x))))
+  (define (unpack-arg cps arg type have-arg)
+    (match type
+      (($ <ref-type> _ _)
+       (have-arg cps arg))
+      ((or 'i32 'i64)
+       (with-cps cps
+         (letv val)
+         (let$ cont (have-arg val))
+         (letk kval ($kargs ('val) (val) ,cont))
+         (build-term
+           ($continue kval src ($primcall 'scm->u64/truncate #f (arg))))))
+      ((or 'f32 'f64)
+       (with-cps cps
+         (letv val)
+         (let$ cont (have-arg val))
+         (letk kval ($kargs ('val) (val) ,cont))
+         (build-term
+           ($continue kval src ($primcall 'scm->f64 #f (arg))))))
+      (_
+       (error "invalid param type for inline wasm" type))))
+  (define (unpack-args cps args types have-args)
+    (match args
+      (() (have-args cps '()))
+      ((arg . args)
+       (match types
+         ((type . types)
+          (unpack-arg cps arg type
+                     (lambda (cps arg)
+                       (unpack-args cps args types
+                                   (lambda (cps args)
+                                     (have-args cps (cons arg args)))))))))))
+  (define (pack-result cps result type have-result)
+    (match type
+      (($ <ref-type> #f 'eq)
+       (have-result cps result))
+      ('i64
+       (with-cps cps
+         (letv val)
+         (let$ cont (have-result val))
+         (letk kval ($kargs ('val) (val) ,cont))
+         (build-term
+           ($continue kval src ($primcall 's64->scm #f (result))))))
+      ('f64
+       (with-cps cps
+         (letv val)
+         (let$ cont (have-result val))
+         (letk kval ($kargs ('val) (val) ,cont))
+         (build-term
+           ($continue kval src ($primcall 'f64->scm #f (result))))))
+      (_
+       (error "invalid result type for inline wasm" type))))
+  (define (pack-results cps results types have-results)
+    (match results
+      (() (have-results cps '()))
+      ((result . results)
+       (match types
+         ((type . types)
+          (pack-result
+           cps result type
+           (lambda (cps result)
+             (pack-results cps results types
+                           (lambda (cps results)
+                             (have-results cps (cons result results)))))))))))
   (match args
     ((($ <const> _ code) . args)
      (assert-match code ('func . _)
@@ -126,16 +189,24 @@
                                       ($ <func-sig> params results))
                          locals body)))
            () () () () #f () () () () ())
-        (assert-match params (($ <param> id ($ <ref-type> #f 'eq)) ...)
-                      "inline asm requires all params to be (ref eq)")
-        (assert-match results (($ <ref-type> #f 'eq) ...)
-                      "inline asm requires all results to be (ref eq)")
         (unless (= (length params) (length args))
           (error "inline asm with incorrect number of args" code))
         (convert-args cps args
           (lambda (cps args)
-            (with-cps cps
-              (let$ k* (n-valued-continuation src (length results) k))
-              (build-term
-                ($continue k* src
-                  ($primcall 'inline-wasm func args)))))))))))
+            (unpack-args
+             cps args (map param-type params)
+             (lambda (cps args)
+               (define result-names (map (lambda (_) #f) results))
+               (define result-vars (map (lambda (_) (fresh-var)) results))
+               (with-cps cps
+                 (let$ k* (n-valued-continuation src (length results) k))
+                 (let$ pack (pack-results
+                             result-vars results
+                             (lambda (cps vars)
+                               (with-cps cps
+                                 (build-term
+                                   ($continue k* src ($values vars)))))))
+                 (letk k** ($kargs result-names result-vars ,pack))
+                 (build-term
+                   ($continue k** src
+                     ($primcall 'inline-wasm func args)))))))))))))

@@ -31,6 +31,7 @@
   #:use-module (language cps hoot lower-primcalls)
   #:use-module (language cps hoot tailify)
   #:use-module (language cps hoot unify-returns)
+  #:use-module (wasm types)
   #:export (hoot-primcall-raw-representations
             make-lowerer
             available-optimizations))
@@ -39,6 +40,16 @@
   (case name
     ((restore) param) ;; param is list of representations.
     ((flonum->f64 compnum-real compnum-imag) '(f64))
+    ((inline-wasm)
+     (match param
+       (($ <func> id
+           ($ <type-use> #f ($ <func-sig> params results))
+           locals body)
+        (map (match-lambda
+               (($ <ref-type> #f 'eq) 'scm)
+               ('i64 's64)
+               ('f64 'f64))
+             results))))
     (else (primcall-raw-representations name param))))
 
 (define *debug?* #f)

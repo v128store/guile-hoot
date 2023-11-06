@@ -4106,7 +4106,7 @@
                (i64.extend_i32_u
                 (call $fixnum->i32 (ref.cast i31 (local.get $a)))))
              '((ref.test $bignum (local.get $a))
-               (call $bignum-get-u64
+               (call $bignum-get-i64
                      (struct.get $bignum $val (ref.cast $bignum (local.get $a)))))
              '((i32.const 0)
                (call $die

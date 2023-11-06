@@ -2467,12 +2467,9 @@
   (define %exception-handler (make-fluid #f))
   (define (fluid-ref* fluid depth)
     (%inline-wasm
-     '(func (param $fluid (ref eq)) (param $depth (ref eq))
+     '(func (param $fluid (ref $fluid)) (param $depth i32)
             (result (ref eq))
-            (call $fluid-ref*
-                  (ref.cast $fluid (local.get $fluid))
-                  (i32.shr_s (i31.get_s (ref.cast i31 (local.get $depth)))
-                             (i32.const 1))))
+            (call $fluid-ref* (local.get $fluid) (local.get $depth)))
      fluid depth))
   ;; FIXME: Use #:key instead
   (define* (with-exception-handler handler thunk
@@ -2525,12 +2522,10 @@
                  ;; FIXME: Raise &non-continuable.
                  (error "non-continuable")))))))))
   (%inline-wasm
-   '(func (param $with-exception-handler (ref eq))
-          (param $raise-exception (ref eq))
-          (global.set $with-exception-handler
-                      (ref.cast $proc (local.get $with-exception-handler)))
-          (global.set $raise-exception
-                      (ref.cast $proc (local.get $raise-exception))))
+   '(func (param $with-exception-handler (ref $proc))
+          (param $raise-exception (ref $proc))
+          (global.set $with-exception-handler (local.get $with-exception-handler))
+          (global.set $raise-exception (local.get $raise-exception)))
    with-exception-handler
    raise-exception))
  (hoot-aux

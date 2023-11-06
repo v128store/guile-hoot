@@ -2677,20 +2677,17 @@
 
 (define (jiffies-per-second)
   (%inline-wasm
-   '(func (result (ref eq))
-          (call $s32->scm (call $jiffies-per-second)))))
+   '(func (result i64)
+          (i64.extend_i32_u (call $jiffies-per-second)))))
 
 (define (current-jiffy)
   (%inline-wasm
-   '(func (result (ref eq))
-          (call $s64->scm (call $current-jiffy)))))
+   '(func (result i64)
+          (i64.extend_i32_u (call $current-jiffy)))))
 
 (define (current-second)
   (%inline-wasm
-   '(func (result (ref eq))
-          (struct.new $flonum
-                      (i32.const 0)
-                      (call $current-second)))))
+   '(func (result f64) (call $current-second))))
 
 (define (standard-input-port)
     (%make-soft-port "stdin"

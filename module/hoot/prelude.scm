@@ -2366,26 +2366,18 @@
   (unless (and (exact-integer? end) (<= start end (vector-length v)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $src (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+   '(func (param $src (ref $vector)) (param $start i32) (param $end i32)
           (result (ref eq))
           (local $i0 i32)
-          (local $i1 i32)
           (local $v0 (ref $raw-scmvector))
-          (local.set $i0 (i32.shr_u
-                          (i31.get_u (ref.cast i31 (local.get $start)))
-                          (i32.const 1)))
-          (local.set $i1 (i32.sub
-                          (i32.shr_u
-                           (i31.get_u (ref.cast i31 (local.get $end)))
-                           (i32.const 1))
-                          (local.get $i0)))
+          (local.set $i0 (i32.sub (local.get $end)
+                                  (local.get $start)))
           (local.set $v0 (array.new $raw-scmvector (ref.i31 (i32.const 0))
-                                    (local.get $i1)))
+                                    (local.get $i0)))
           (array.copy $raw-scmvector $raw-scmvector
                       (local.get $v0) (i32.const 0)
-                      (struct.get $vector $vals
-                                  (ref.cast $vector (local.get $src)))
-                      (local.get $i0) (local.get $i1))
+                      (struct.get $vector $vals (local.get $src))
+                      (local.get $start) (local.get $i0))
           (struct.new $mutable-vector (i32.const 0) (local.get $v0)))
    v start end))
 (define* (vector-copy! to at from #:optional (start 0) (end (vector-length from)))
@@ -2398,24 +2390,14 @@
   (unless (and (exact-integer? end) (<= start end (vector-length from)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $to (ref eq)) (param $at (ref eq))
-          (param $from (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+   '(func (param $to (ref $mutable-vector)) (param $at i32)
+          (param $from (ref $vector)) (param $start i32) (param $end i32)
           (array.copy $raw-scmvector $raw-scmvector
-                      (struct.get $mutable-vector $vals
-                                  (ref.cast $mutable-vector (local.get $to)))
-                      (i32.shr_u
-                       (i31.get_u (ref.cast i31 (local.get $at)))
-                       (i32.const 1))
-                      (struct.get $vector $vals
-                                  (ref.cast $vector (local.get $from)))
-                      (i32.shr_u
-                       (i31.get_u (ref.cast i31 (local.get $start)))
-                       (i32.const 1))
-                      (i32.shr_u
-                       (i32.sub
-                        (i31.get_u (ref.cast i31 (local.get $end)))
-                        (i31.get_u (ref.cast i31 (local.get $start))))
-                       (i32.const 1))))
+                      (struct.get $mutable-vector $vals (local.get $to))
+                      (local.get $at)
+                      (struct.get $vector $vals (local.get $from))
+                      (local.get $start)
+                      (i32.sub (local.get $end) (local.get $start))))
    to at from start end))
 (define* (vector-fill! v fill #:optional (start 0) (end (vector-length v)))
   (unless (vector? v) (error "expected vector" v))
@@ -2424,31 +2406,19 @@
   (unless (and (exact-integer? end) (<= start end (vector-length v)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $dst (ref eq)) (param $fill (ref eq))
-          (param $start (ref eq)) (param $end (ref eq))
-          (local $i0 i32)
-          (local $i1 i32)
-          (local.set $i0 (i32.shr_u
-                          (i31.get_u (ref.cast i31 (local.get $start)))
-                          (i32.const 1)))
-          (local.set $i1 (i32.sub
-                          (i32.shr_u
-                           (i31.get_u (ref.cast i31 (local.get $end)))
-                           (i32.const 1))
-                          (local.get $i0)))
+   '(func (param $dst (ref $mutable-vector)) (param $fill (ref eq))
+          (param $start i32) (param $end i32)
           ;; FIXME: Remove this debugging call.  With the current
           ;; version of V8 though, doing so causes the array.fill
           ;; instruction to go wrong; test with:
           ;;  bin/eval.scm '(let ((v (vector 1 2 3))) (vector-fill! v #t 1 2) v)'
           ;; We expect #(1 true 3) but get 65536 (!!!!)
-          (call $debug-str-scm (string.const "before fill") (local.get $dst))
+          ;(call $debug-str-scm (string.const "before fill") (local.get $dst))
           (array.fill $raw-scmvector
-                      (struct.get $mutable-vector $vals
-                                  (ref.cast $mutable-vector (local.get $dst)))
-                      (local.get $i0)
+                      (struct.get $mutable-vector $vals (local.get $dst))
+                      (local.get $start)
                       (local.get $fill)
-                      (local.get $i1))
-          )
+                      (i32.sub (local.get $end) (local.get $start))))
    v fill start end))
 (define* (vector->list v #:optional (start 0) (end (vector-length v)))
   (let lp ((i start))

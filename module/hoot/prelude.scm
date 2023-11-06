@@ -1718,22 +1718,17 @@
             (match buf
               (#(bv cur end has-eof?)
                (%inline-wasm
-                '(func (param $bv (ref eq))
-                       (param $cur (ref eq))
-                       (param $end (ref eq))
+                '(func (param $bv (ref $bytevector))
+                       (param $cur i32)
+                       (param $end i32)
                        (result (ref eq))
                        (ref.i31
                         (stringview_iter.next
                          (string.as_iter
                           (string.new_lossy_utf8_array
-                           (struct.get $bytevector $vals
-                                       (ref.cast $bytevector (local.get $bv)))
-                           (i32.shr_s
-                            (i31.get_s (ref.cast i31 (local.get $cur)))
-                            (i32.const 1))
-                           (i32.shr_s
-                            (i31.get_s (ref.cast i31 (local.get $end)))
-                            (i32.const 1)))))))
+                           (struct.get $bytevector $vals (local.get $bv))
+                           (local.get $cur)
+                           (local.get $end))))))
                 bv cur (+ cur len)))))))))))
 
 (define* (read-char #:optional (port (current-input-port)))
@@ -1758,22 +1753,17 @@
               (#(bv cur end has-eof?)
                (%set-port-buffer-cur! buf (+ cur len))
                (%inline-wasm
-                '(func (param $bv (ref eq))
-                       (param $cur (ref eq))
-                       (param $end (ref eq))
+                '(func (param $bv (ref $bytevector))
+                       (param $cur i32)
+                       (param $end i32)
                        (result (ref eq))
                        (ref.i31
                         (stringview_iter.next
                          (string.as_iter
                           (string.new_lossy_utf8_array
-                           (struct.get $bytevector $vals
-                                       (ref.cast $bytevector (local.get $bv)))
-                           (i32.shr_s
-                            (i31.get_s (ref.cast i31 (local.get $cur)))
-                            (i32.const 1))
-                           (i32.shr_s
-                            (i31.get_s (ref.cast i31 (local.get $end)))
-                            (i32.const 1)))))))
+                           (struct.get $bytevector $vals (local.get $bv))
+                           (local.get $cur)
+                           (local.get $end))))))
                 bv cur (+ cur len)))))))))))
 (define* (read-string k #:optional (port (current-input-port)))
   (cond

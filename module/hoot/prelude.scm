@@ -113,11 +113,10 @@
 (define (bitvector-length bv)
   (unless (bitvector? bv) (error "expected bitvector" bv))
   (%inline-wasm
-   '(func (param $bv (ref eq))
+   '(func (param $bv (ref $bitvector))
           (result (ref eq))
           (ref.i31
-           (i32.shl (struct.get $bitvector $len
-                                (ref.cast $bitvector (local.get $bv)))
+           (i32.shl (struct.get $bitvector $len (local.get $bv))
                     (i32.const 1))))
    bv))
 (define (bitvector-ref bv i)
@@ -125,14 +124,13 @@
   (unless (and (exact-integer? i) (<= 0 i) (< i (bitvector-length bv)))
     (error "index out of range" i))
   (%inline-wasm
-   '(func (param $bv (ref eq))
+   '(func (param $bv (ref $bitvector))
           (param $i (ref eq))
           (result (ref eq))
           (if (ref eq)
               (i32.and
                (array.get $raw-bitvector
-                          (struct.get $bitvector $vals
-                                      (ref.cast $bitvector (local.get $bv)))
+                          (struct.get $bitvector $vals (local.get $bv))
                           (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
                                      (i32.const 6)))
                (i32.shl (i32.const 1)

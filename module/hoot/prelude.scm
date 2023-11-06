@@ -276,21 +276,21 @@
             (ref.i31 (i32.shl (global.get $dyn-sp) (i32.const 1))))))
   (define (scm-ref n)
     (%inline-wasm
-     '(func (param $n (ref eq))
+     '(func (param $n (ref i31))
             (result (ref eq))
             (ref.as_non_null
              (table.get $scm-stack
-                        (i32.shr_s (i31.get_s (ref.cast i31 (local.get $n)))
+                        (i32.shr_s (i31.get_s (local.get $n))
                                    (i32.const 1)))))
      n))
   (define (raw-ref n)
     (%inline-wasm
-     '(func (param $n (ref eq))
+     '(func (param $n (ref i31))
             (result (ref eq))
             (ref.i31
              (i32.shl
               (i32.load8_s $raw-stack
-                           (i32.shr_s (i31.get_s (ref.cast i31 (local.get $n)))
+                           (i32.shr_s (i31.get_s (local.get $n))
                                       (i32.const 1)))
               (i32.const 1))))
      n))
@@ -406,18 +406,13 @@
   (cond
    ((eq? val '(missing))
     (%inline-wasm
-     '(func (param $str (ref eq))
-            (call $debug-str
-                  (struct.get $string $str
-                              (ref.cast $string (local.get $str)))))
+     '(func (param $str (ref string))
+            (call $debug-str (local.get $str)))
      message))
    (else
     (%inline-wasm
-     '(func (param $str (ref eq)) (param $val (ref eq))
-            (call $debug-str-scm
-                  (struct.get $string $str
-                              (ref.cast $string (local.get $str)))
-                  (local.get $val)))
+     '(func (param $str (ref string)) (param $val (ref eq))
+            (call $debug-str-scm (local.get $str) (local.get $val)))
      message val))))
 
 (define* (pk v . v*)

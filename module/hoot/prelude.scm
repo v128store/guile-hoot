@@ -1279,16 +1279,15 @@
   (define (getter port)
     ;; FIXME: arg type checking
     (%inline-wasm
-     '(func (param $port (ref eq)) (result (ref eq))
-            (struct.get $port $field (ref.cast $port (local.get $port))))
+     '(func (param $port (ref $port)) (result (ref eq))
+            (struct.get $port $field (local.get $port)))
      port)))
 (define-syntax-rule (%define-simple-port-setter setter $field)
   (define (setter port val)
     ;; FIXME: arg type checking
     (%inline-wasm
-     '(func (param $port (ref eq)) (param $val (ref eq))
-            (struct.set $port $field (ref.cast $port (local.get $port))
-                        (local.get $val)))
+     '(func (param $port (ref $port)) (param $val (ref eq))
+            (struct.set $port $field (local.get $port) (local.get $val)))
      port val)))
 
 (%define-simple-port-getter %port-open? $open?)

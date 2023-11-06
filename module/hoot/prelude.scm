@@ -2241,30 +2241,19 @@
   (unless (and (exact-integer? end) (<= start end (string-length str)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $str (ref eq))
-          (param $start (ref eq))
-          (param $end (ref eq))
+   '(func (param $str (ref string))
+          (param $start i32)
+          (param $end i32)
           (result (ref eq))
-          (local $i0 i32)
-          (local $i1 i32)
           (local $str_iter (ref stringview_iter))
-          (local.set $i0
-                     (i32.shr_s (i31.get_s (ref.cast i31 (local.get $start)))
-                                (i32.const 1)))
-          (local.set $i1
-                     (i32.shr_s (i31.get_s (ref.cast i31 (local.get $end)))
-                                (i32.const 1)))
-          (local.set $str_iter
-                     (string.as_iter
-                      (struct.get $string $str
-                                  (ref.cast $string (local.get $str)))))
+          (local.set $str_iter (string.as_iter (local.get $str)))
           (drop
-           (stringview_iter.advance (local.get $str_iter) (local.get $i0)))
+           (stringview_iter.advance (local.get $str_iter) (local.get $start)))
           (struct.new $string
                       (i32.const 0)
                       (stringview_iter.slice (local.get $str_iter)
-                                             (i32.sub (local.get $i1)
-                                                      (local.get $i0)))))
+                                             (i32.sub (local.get $end)
+                                                      (local.get $start)))))
    str start end))
 (define* (string-copy! to at from #:optional (start 0) (end (string-length from)))
   (error "string-copy!: mutable strings unimplemented"))
@@ -2278,15 +2267,11 @@
   (if (eq? a b)
       0
       (%inline-wasm
-       '(func (param $a (ref eq))
-              (param $b (ref eq))
+       '(func (param $a (ref string))
+              (param $b (ref string))
               (result (ref eq))
-              (ref.i31
-               (i32.shl
-                (string.compare
-                 (struct.get $string $str (ref.cast $string (local.get $a)))
-                 (struct.get $string $str (ref.cast $string (local.get $b))))
-                (i32.const 1))))
+              (ref.i31 (i32.shl (string.compare (local.get $a) (local.get $b))
+                                (i32.const 1))))
        a b)))
 (define (%string-compare* ordered? x y strs)
   (unless (and (string? x) (string? y) (and-map string? strs))

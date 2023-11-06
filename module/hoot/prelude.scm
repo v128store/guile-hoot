@@ -590,10 +590,10 @@
   (unless (and (exact-integer? end) (<= start end (bytevector-length from)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $to (ref $bytevector)) (param $at i32)
+   '(func (param $to (ref $mutable-bytevector)) (param $at i32)
           (param $from (ref $bytevector)) (param $start i32) (param $end i32)
           (array.copy $raw-bytevector $raw-bytevector
-                      (struct.get $bytevector $vals (local.get $to))
+                      (struct.get $mutable-bytevector $vals (local.get $to))
                       (local.get $at)
                       (struct.get $bytevector $vals (local.get $from))
                       (local.get $start)

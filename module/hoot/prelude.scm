@@ -665,11 +665,9 @@
          (not (eqv? x -inf.0))
          (= x x))
     (%inline-wasm
-     '(func (param $x (ref eq))
+     '(func (param $x f64)
             (result (ref eq))
-            (call $f64->exact (struct.get $flonum $val
-                                          (ref.cast $flonum
-                                                    (local.get $x)))))
+            (call $f64->exact (local.get $x)))
      x))
    ((exact? x) x)
    ;; complex numbers are always inexact
@@ -689,10 +687,9 @@
        ((exact-integer? x) x)
        ((exact? x)
         (%inline-wasm
-         '(func (param $x (ref eq))
+         '(func (param $x (ref $fraction))
                 (result (ref eq))
-                (struct.get $fraction $num
-                            (ref.cast $fraction (local.get $x))))
+                (struct.get $fraction $num (local.get $x)))
          x))
        (else (inexact (numerator (exact x)))))
       (error "non-numeric argument")))
@@ -702,10 +699,9 @@
        ((exact-integer? x) 1)
        ((exact? x)
         (%inline-wasm
-         '(func (param $x (ref eq))
+         '(func (param $x (ref $fraction))
                 (result (ref eq))
-                (struct.get $fraction $denom
-                            (ref.cast $fraction (local.get $x))))
+                (struct.get $fraction $denom (local.get $x)))
          x))
        (else (inexact (denominator (exact x)))))
       (error "non-numeric argument")))
@@ -891,14 +887,11 @@
     (unless (eqv? radix 10)
       (error "expected radix of 10 for number->string on flonum" n))
     (%inline-wasm
-     '(func (param $n (ref eq))
+     '(func (param $n f64)
             (result (ref eq))
             (struct.new $string
                         (i32.const 0)
-                        (call $flonum->string
-                              (struct.get $flonum $val
-                                          (ref.cast $flonum (local.get
-                                                             $n))))))
+                        (call $flonum->string (local.get $n))))
      n))
    (else
     (string-append (number->string (real-part n) radix)

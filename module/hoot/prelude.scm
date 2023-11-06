@@ -2703,11 +2703,8 @@
                    #f
                    (lambda (str)
                      (%inline-wasm
-                      '(func (param $str (ref eq))
-                             (call $write-stdout
-                                   (struct.get $string $str
-                                               (ref.cast $string
-                                                         (local.get $str)))))
+                      '(func (param $str (ref string))
+                             (call $write-stdout (local.get $str)))
                       str))
                    #f #f))
 (define (standard-error-port)
@@ -2715,11 +2712,8 @@
                    #f
                    (lambda (str)
                      (%inline-wasm
-                      '(func (param $str (ref eq))
-                             (call $write-stderr
-                                   (struct.get $string $str
-                                               (ref.cast $string
-                                                         (local.get $str)))))
+                      '(func (param $str (ref string))
+                             (call $write-stderr (local.get $str)))
                       str))
                    #f #f))
 

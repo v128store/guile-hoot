@@ -569,25 +569,16 @@
   (unless (and (exact-integer? end) (<= start end (bytevector-length x)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $src (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+   '(func (param $src (ref $bytevector)) (param $start i32) (param $end i32)
           (result (ref eq))
           (local $i0 i32)
-          (local $i1 i32)
           (local $vu0 (ref $raw-bytevector))
-          (local.set $i0 (i32.shr_u
-                          (i31.get_u (ref.cast i31 (local.get $start)))
-                          (i32.const 1)))
-          (local.set $i1 (i32.sub
-                          (i32.shr_u
-                           (i31.get_u (ref.cast i31 (local.get $end)))
-                           (i32.const 1))
-                          (local.get $i0)))
-          (local.set $vu0 (array.new_default $raw-bytevector (local.get $i1)))
+          (local.set $i0 (i32.sub (local.get $end) (local.get $start)))
+          (local.set $vu0 (array.new_default $raw-bytevector (local.get $i0)))
           (array.copy $raw-bytevector $raw-bytevector
                       (local.get $vu0) (i32.const 0)
-                      (struct.get $bytevector $vals
-                                  (ref.cast $bytevector (local.get $src)))
-                      (local.get $i0) (local.get $i1))
+                      (struct.get $bytevector $vals (local.get $src))
+                      (local.get $start) (local.get $i0))
           (struct.new $bytevector (i32.const 0) (local.get $vu0)))
    x start end))
 (define* (bytevector-copy! to at from #:optional
@@ -599,24 +590,14 @@
   (unless (and (exact-integer? end) (<= start end (bytevector-length from)))
     (error "bad end" end))
   (%inline-wasm
-   '(func (param $to (ref eq)) (param $at (ref eq))
-          (param $from (ref eq)) (param $start (ref eq)) (param $end (ref eq))
+   '(func (param $to (ref $bytevector)) (param $at i32)
+          (param $from (ref $bytevector)) (param $start i32) (param $end i32)
           (array.copy $raw-bytevector $raw-bytevector
-                      (struct.get $bytevector $vals
-                                  (ref.cast $bytevector (local.get $to)))
-                      (i32.shr_u
-                       (i31.get_u (ref.cast i31 (local.get $at)))
-                       (i32.const 1))
-                      (struct.get $bytevector $vals
-                                  (ref.cast $bytevector (local.get $from)))
-                      (i32.shr_u
-                       (i31.get_u (ref.cast i31 (local.get $start)))
-                       (i32.const 1))
-                      (i32.shr_u
-                       (i32.sub
-                        (i31.get_u (ref.cast i31 (local.get $end)))
-                        (i31.get_u (ref.cast i31 (local.get $start))))
-                       (i32.const 1))))
+                      (struct.get $bytevector $vals (local.get $to))
+                      (local.get $at)
+                      (struct.get $bytevector $vals (local.get $from))
+                      (local.get $start)
+                      (i32.sub (local.get $end) (local.get $start))))
    to at from start end))
 
 (define-associative-eta-expansion * %*)

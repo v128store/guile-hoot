@@ -26,12 +26,20 @@
   #:use-module (ice-9 match)
   #:use-module (language cps dce)
   #:use-module (language cps simplify)
+  #:use-module ((language cps utils) #:select (primcall-raw-representations))
   #:use-module (language cps verify)
   #:use-module (language cps hoot lower-primcalls)
   #:use-module (language cps hoot tailify)
   #:use-module (language cps hoot unify-returns)
-  #:export (make-lowerer
+  #:export (hoot-primcall-raw-representations
+            make-lowerer
             available-optimizations))
+
+(define (hoot-primcall-raw-representations name param)
+  (case name
+    ((restore) param) ;; param is list of representations.
+    ((flonum->f64 compnum-real compnum-imag) '(f64))
+    (else (primcall-raw-representations name param))))
 
 (define *debug?* #f)
 
@@ -77,5 +85,6 @@
       (optimize-hoot-backend-cps
        (unify-returns
         (tailify
-         (lower-primcalls exp)))
+         (lower-primcalls exp)
+         #:primcall-raw-representations hoot-primcall-raw-representations))
        opts))))

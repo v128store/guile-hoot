@@ -39,6 +39,8 @@
   #:use-module (language cps intmap)
   #:use-module (language cps dump)
   #:use-module (language cps utils)
+  #:use-module ((language cps hoot)
+                #:select (hoot-primcall-raw-representations))
   #:use-module (rnrs bytevectors)
   #:use-module (hoot inline-wasm)
   #:use-module (hoot stdlib)
@@ -2342,16 +2344,8 @@
                 (string<? (match a (($ <local> id) (symbol->string id)))
                           (match b (($ <local> id) (symbol->string id)))))))
       (define reprs
-        (compute-var-representations
-         cps
-         #:primcall-raw-representations
-         (lambda (name param)
-           ;; Provide info for hoot-specific primcalls that have raw
-           ;; results; just `restore' for now.
-           (case name
-             ((restore) param) ;; param is list of representations.
-             ((flonum->f64 compnum-real compnum-imag) '(f64))
-             (else (primcall-raw-representations name param))))))
+        (compute-var-representations cps #:primcall-raw-representations
+                                     hoot-primcall-raw-representations))
       (define locals
         (append
          (add-locals-from-code code)

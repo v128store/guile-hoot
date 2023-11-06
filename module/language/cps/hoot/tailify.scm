@@ -698,7 +698,7 @@ to tail-call the saved continuation."
       (_ cps)))
   (intset-fold rewrite-return-to-pop-and-calli body cps))
 
-(define (tailify-function kfun body cps)
+(define (tailify-function kfun body cps primcall-raw-representations)
   "Partition the function with entry of KFUN into tails.  Rewrite all
 tails in such a way that they enter via a $kfun and leave only via tail
 calls."
@@ -714,13 +714,18 @@ calls."
     (let ((winds (identify-winds cps kfun body succs))
           (live-in (compute-live-in cps body preds))
           (constants (compute-constants cps preds))
-          (reprs (compute-var-representations (intmap-select cps body))))
+          (reprs (compute-var-representations (intmap-select cps body)
+                                              #:primcall-raw-representations
+                                              primcall-raw-representations)))
       (tailify-tails cps winds live-in constants reprs tails joins)))))
 
-(define (tailify cps)
+(define* (tailify cps #:key (primcall-raw-representations
+                             primcall-raw-representations))
   ;; Renumber so that label order is topological order.
   (let ((cps (renumber cps)))
     (with-fresh-name-state cps
-      (intmap-fold tailify-function
-                   (compute-reachable-functions cps)
-                   cps))))
+      (intmap-fold
+       (lambda (kfun body cps)
+         (tailify-function kfun body cps primcall-raw-representations))
+       (compute-reachable-functions cps)
+       cps))))

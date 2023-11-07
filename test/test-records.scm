@@ -157,4 +157,23 @@
                     (not (equal? b c))
                     (not (equal? a c))))))
 
+(test-call "#t"
+           (lambda ()
+             (define-record-type x #:extensible? #t (make-x a) x? (a x-a))
+             (define-record-type y #:extensible? #t #:parent x (make-y a b) y? (b y-b))
+             (define-record-type z #:parent y (make-z a b c) z? (c z-c))
+             (let ((q (make-y 42 69))
+                   (r (make-z 42 69 420)))
+               (and (x? q)
+                    (y? q)
+                    (not (z? q))
+                    (eq? (x-a q) 42)
+                    (eq? (y-b q) 69)
+                    (x? r)
+                    (y? r)
+                    (z? r)
+                    (eq? (x-a r) 42)
+                    (eq? (y-b r) 69)
+                    (eq? (z-c r) 420)))))
+
 (test-end* "test-records")

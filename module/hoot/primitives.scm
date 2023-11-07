@@ -32,6 +32,7 @@
                  syntax->datum datum->syntax identifier?
                  generate-temporaries free-identifier=? bound-identifier=?
                  with-syntax identifier-syntax
+                 syntax-violation procedure-property
                  lambda* case-lambda* define*
 
                  call-with-prompt abort-to-prompt
@@ -49,6 +50,7 @@
                  eval-when
                  make-struct/simple struct? struct-vtable
                  struct-ref struct-set!))
+  #:use-module ((system syntax internal) #:select (syntax-local-binding))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
   ;; on interfaces that use interfaces.  For now, import the-eof-object
@@ -205,7 +207,8 @@
    syntax-case syntax quasisyntax unsyntax unsyntax-splicing
    syntax->datum datum->syntax
    identifier? generate-temporaries free-identifier=? bound-identifier=?
-   with-syntax identifier-syntax
+   with-syntax identifier-syntax syntax-local-binding
+   syntax-violation procedure-property
    lambda* case-lambda* define*
 
    ;; R7RS control

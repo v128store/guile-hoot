@@ -740,7 +740,7 @@
                                  `(,(local.get arg)
                                    (ref.cast ,(make-ref-type #f '$string))
                                    (struct.get $string $str)))
-                                (($ <ref-type> #f 'extern)
+                                (($ <ref-type> #t 'extern)
                                  `(,(local.get arg)
                                    (ref.cast ,(make-ref-type #f '$extern-ref))
                                    (struct.get $extern-ref $val)))

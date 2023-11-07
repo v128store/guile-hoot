@@ -124,7 +124,7 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $val (ref extern)))))
+               (field $val (ref null extern)))))
 
       (type $heap-number
             (sub $heap-object

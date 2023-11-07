@@ -57,4 +57,16 @@
                    (lambda () (error "what"))
                    #:unwind? #t)))
 
+(test-call "#(#t \"hey\" (ho))"
+           (lambda (message irritants)
+             (let ((exn (make-compound-exception
+                         (list
+                          (make-exception-with-message message)
+                          (make-exception-with-irritants irritants)))))
+               (vector (error-object? exn)
+                       (error-object-message exn)
+                       (error-object-irritants exn))))
+           "hey"
+           '(ho))
+
 (test-end* "test-exceptions")

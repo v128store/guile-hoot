@@ -2188,6 +2188,124 @@
     (#f (write-string "#<record with no printer!>" port))
     (print (print record port))))
 
+(define-record-type &exception
+  #:extensible? #t
+  (make-&exception)
+  simple-exception?)
+(define-record-type &compound-exception
+  (make-compound-exception components)
+  compound-exception?
+  (components compound-exception-components))
+
+(define (simple-exceptions exception)
+  "Return a list of the simple exceptions that compose the exception
+object @var{exception}."
+  (cond ((compound-exception? exception)
+         (compound-exception-components exception))
+        ((simple-exception? exception)
+         (list exception))
+        (else
+         (error "not a exception" exception))))
+
+(define (make-exception . exceptions)
+  "Return an exception object composed of @var{exceptions}."
+  (define (flatten exceptions)
+    (if (null? exceptions)
+        '()
+        (append (simple-exceptions (car exceptions))
+                (flatten (cdr exceptions)))))
+  (let ((simple (flatten exceptions)))
+    (if (and (pair? simple) (null? (cdr simple)))
+        (car simple)
+        (make-compound-exception simple))))
+
+(define (exception? obj)
+  "Return true if @var{obj} is an exception object."
+  (or (compound-exception? obj) (simple-exception? obj)))
+
+(define-syntax define-exception-type
+  (lambda (stx)
+    (syntax-case stx ()
+      ((define-exception-type exn parent
+         (make-exn arg ...)
+         exn?
+         (field exn-field)
+         ...)
+       (with-syntax (((%exn-field ...) (generate-temporaries #'(exn-field ...))))
+         #'(begin
+             (define-record-type exn
+               #:parent parent #:extensible? #t
+               (make-exn arg ...)
+               %exn?
+               (field %exn-field)
+               ...)
+             (define (exn? x)
+               (or (%exn? x)
+                   (and (compound-exception? x)
+                        (let lp ((simple (compound-exception-components x)))
+                          (match simple
+                            (() #f)
+                            ((x . simple)
+                             (or (%exn? x)
+                                 (lp simple))))))))
+             (define (exn-field x)
+               (if (%exn? x)
+                   (%exn-field x)
+                   (let lp ((simple (compound-exception-components x)))
+                     (match simple
+                       (() (error "exception type check failed" x))
+                       ((x . simple)
+                        (if (%exn? x)
+                            (%exn-field x)
+                            (lp simple)))))))
+             ...))))))
+
+(define-exception-type &message &exception
+  (make-exception-with-message message)
+  exception-with-message?
+  (message exception-message))
+(define-exception-type &warning &exception
+  (make-warning)
+  warning?)
+(define-exception-type &serious &exception
+  (make-serious-exception)
+  serious-exception?)
+(define-exception-type &error &serious
+  (make-error)
+  error?)
+(define-exception-type &violation &serious
+  (make-violation)
+  violation?)
+(define-exception-type &assertion &violation
+  (make-assertion-violation)
+  assertion-violation?)
+(define-exception-type &non-continuable &violation
+  (make-non-continuable-violation)
+  non-continuable-violation?)
+(define-exception-type &irritants &exception
+  (make-exception-with-irritants irritants)
+  exception-with-irritants?
+  (irritants exception-irritants))
+(define-exception-type &origin &exception
+  (make-exception-with-origin origin)
+  exception-with-origin?
+  (origin exception-origin))
+(define-exception-type &lexical &violation
+  (make-lexical-violation)
+  lexical-violation?)
+(define-exception-type &i/o &error
+  (make-i/o-error)
+  i/o-error?)
+
+;; R7RS.
+(define (error-object? x)
+  (and (exception-with-message? x)
+       (exception-with-irritants? x)))
+(define error-object-message exception-message)
+(define error-object-irritants exception-irritants)
+(define read-error? lexical-violation?)
+(define file-error? i/o-error?)
+
 ;; promises
 (define-record-type <promise>
   #:opaque? #t
@@ -2602,12 +2720,6 @@
 
 (define (raise exn) (%raise-exception exn))
 (define (raise-continuable exn) (%raise-exception exn #:continuable? #t))
-
-(define (error-object? x) (error "unimplemented"))
-(define (read-error? x) (error "unimplemented"))
-(define (error-object-message x) (error "unimplemented"))
-(define (error-object-irritants x) (error "unimplemented"))
-(define (file-error x) (error "unimplemented"))
 
 (define (procedure? x) (%procedure? x))
 

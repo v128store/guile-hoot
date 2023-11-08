@@ -124,7 +124,7 @@
             (sub $heap-object
               (struct
                (field $hash (mut i32))
-               (field $val (ref extern)))))
+               (field $val (ref null extern)))))
 
       (type $heap-number
             (sub $heap-object
@@ -653,6 +653,9 @@
            (param (ref string) i32))
      (func $debug-str-scm (import "debug" "debug_str_scm")
            (param (ref string) (ref eq)))
+
+     (func $procedure->extern (import "ffi" "procedure_to_extern")
+           (param (ref eq)) (result (ref extern)))
 
      (func $die0 (param $reason (ref string))
            (call $die (local.get 0) (ref.i31 (i32.const 1))))

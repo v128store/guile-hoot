@@ -893,6 +893,12 @@ binary, or an input port from which a WASM binary is read."
                      (#t 1)
                      (#f 0)
                      (_ (error "invalid i32" val))))
+                  ;; For (ref null extern), #f is converted to a null
+                  ;; WASM value.
+                  (($ <ref-type> #t 'extern)
+                   (match val
+                     (#f (make-wasm-null type))
+                     (_ val)))
                   (_ val)))
               vals types))
        (define (make-import-closure mod name proc sig)

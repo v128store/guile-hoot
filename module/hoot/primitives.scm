@@ -49,7 +49,8 @@
                  raise-exception
                  eval-when
                  make-struct/simple struct? struct-vtable
-                 struct-ref struct-set!))
+                 struct-ref struct-set!
+                 gensym))
   #:use-module ((system syntax internal) #:select (syntax-local-binding))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
@@ -209,6 +210,7 @@
    identifier? generate-temporaries free-identifier=? bound-identifier=?
    with-syntax identifier-syntax syntax-local-binding
    syntax-violation procedure-property
+   gensym
    lambda* case-lambda* define*
 
    ;; R7RS control
@@ -364,7 +366,7 @@
    (struct-vtable . %struct-vtable)
    (struct-ref . %struct-ref)
    (struct-set! . %struct-set!))
-  #:export (%inline-wasm)
+  #:export (%inline-wasm %wasm-import)
   ;; Mark as non-declarative, as we should not have inlinable exports.
   #:declarative? #f)
 
@@ -374,6 +376,12 @@ expressed in WebAssembly's s-expression syntax.  The backend expects the
 parsed module to contain a single function.  The arguments
 @var{arg}... should correspond to the parameters of the function.  The
 number of result values is also determined from the function signature."
+  (error "target-only primitive"))
+
+(define (%wasm-import code)
+  "Emit WebAssembly import.  @var{code} is a WebAssembly module
+expressed in WebAssembly's s-expression syntax.  The backend expects the
+parsed module to contain a single import."
   (error "target-only primitive"))
 
 ;(add-interesting-primitive! '%inline-asm)

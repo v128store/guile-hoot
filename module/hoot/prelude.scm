@@ -2892,6 +2892,107 @@ object @var{exception}."
                       str))
                    #f #f))
 
+;; FFI
+(define (external? obj)
+  (%inline-wasm
+   '(func (param $obj (ref eq)) (result (ref eq))
+          (ref.i31
+           (if i32
+               (ref.test $extern-ref (local.get $obj))
+               (then (i32.const 17))
+               (else (i32.const 1)))))
+   obj))
+
+(define (external-null? extern)
+  (unless (external? extern)
+    (error "expected external" extern))
+  (%inline-wasm
+   '(func (param $extern (ref $extern-ref)) (result (ref eq))
+          (if (ref eq)
+              (ref.is_null
+               (struct.get $extern-ref $val (local.get $extern)))
+              (then (ref.i31 (i32.const 17)))
+              (else (ref.i31 (i32.const 1)))))
+   extern))
+
+(define (procedure->external proc)
+  (unless (procedure? proc)
+    (error "expected procedure" proc))
+  (%inline-wasm
+   '(func (param $f (ref $proc)) (result (ref eq))
+          (struct.new $extern-ref
+                      (i32.const 0)
+                      (call $procedure->extern (local.get $f))))
+   proc))
+
+(define-syntax define-foreign
+  (lambda (x)
+    (define (cons x y) (%cons x y))
+    (define (car x) (%car x))
+    (define (cdr x) (%cdr x))
+    (define (null? x) (%null? x))
+    (define (map proc lst)
+      (if (null? lst)
+          '()
+          (cons (proc (car lst)) (map proc (cdr lst)))))
+    (define (type-check exp)
+      (define (check param predicate message)
+        #`(unless (#,predicate #,param) (error #,message #,param)))
+      (syntax-case exp (i32 i64 f32 f64 ref null eq string extern)
+        ((x i32) (check #'x #'exact-integer? "expected exact integer"))
+        ((x i64) (check #'x #'exact-integer? "expected exact integer"))
+        ((x f32) (check #'x #'real? "expected real number"))
+        ((x f64) (check #'x #'real? "expected real number"))
+        ((x (ref eq)) #'#t)
+        ((x (ref null extern)) (check #'x #'external? "expected external"))
+        ((x (ref string)) (check #'x #'string? "expected string"))
+        ((x type) (error "unsupported param type" #'type))))
+    (define (import-result-types exp)
+      (syntax-case exp (none)
+        (none #'())
+        (type #'((result type)))))
+    (define (result-types exp)
+      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
+        (none #'())
+        (i32 #'((result i64)))
+        (i64 #'((result i64)))
+        (f32 #'((result f64)))
+        (f64 #'((result f64)))
+        ((ref string) #'((result (ref eq))))
+        ((ref null extern) #'((result (ref eq))))
+        (type (error "unsupported result type" #'type))))
+    (define (lift-result exp)
+      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
+        ((x none) #'x)
+        ((x i32) #'(i64.extend_i32_s x))
+        ((x i64) #'x)
+        ((x f32) #'(f64.promote_f32 x))
+        ((x f64) #'x)
+        ((x (ref string)) #'(struct.new $string (i32.const 0) x))
+        ((x (ref null extern)) #'(struct.new $extern-ref (i32.const 0) x))
+        (type (error "unsupported result type" #'type))))
+    (define (fresh-wasm-id prefix)
+      (datum->syntax x (gensym prefix)))
+    (define (fresh-wasm-ids prefix lst)
+      (map (lambda (_) (fresh-wasm-id prefix)) lst))
+    (syntax-case x (->)
+      ((_ proc-name mod name ptype ... -> rtype)
+       (with-syntax ((iname (fresh-wasm-id "$import-"))
+                     ((pname ...) (fresh-wasm-ids "$param-" #'(ptype ...))))
+         #`(begin
+             (%wasm-import
+              '(func iname (import mod name)
+                     (param ptype) ...
+                     #,@(import-result-types #'rtype)))
+             (define (proc-name pname ...)
+               #,@(map type-check #'((pname ptype) ...))
+               (%inline-wasm
+                '(func (param pname ptype) ...
+                       #,@(result-types #'rtype)
+                       #,(lift-result
+                          #'((call iname (local.get pname) ...) rtype)))
+                pname ...))))))))
+
 (cond-expand
  (hoot-main
   (define current-input-port

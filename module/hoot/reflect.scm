@@ -498,7 +498,8 @@
     ("dynamic-state" (make-hoot-dynamic-state reflector x))
     ("syntax" (make-hoot-syntax reflector x))
     ("port" (make-hoot-port reflector x))
-    ("struct" (make-hoot-struct reflector x))))
+    ("struct" (make-hoot-struct reflector x))
+    ("extern-ref" (~ reflector "extern_value" x))))
 
 (define (guile->wasm reflector x)
   (match x
@@ -542,7 +543,8 @@
          ($ <hoot-syntax> _ obj)
          ($ <hoot-port> _ obj)
          ($ <hoot-struct> _ obj))
-     obj)))
+     obj)
+    (_ (~ reflector "scm_from_extern" x))))
 
 (define wasm-array-vector (@@ (wasm vm) wasm-array-vector))
 (define make-wasm-array (@@ (wasm vm) make-wasm-array))
@@ -637,16 +639,29 @@
                      (cons name (wasm-instance-export-ref instance name)))
                    (wasm-instance-export-names instance)))))
 
-(define (hoot-instantiate reflector scheme-wasm)
+(define* (hoot-instantiate reflector scheme-wasm #:optional (user-imports '()))
+  (define (debug-str str)
+    (format #t "debug: ~a\n" str))
+  (define (debug-str-i32 str x)
+    (format #t "debug: ~a: ~s\n" str x))
+  (define (debug-str-scm str x)
+    (format #t "debug: ~a: ~s\n" str (wasm->guile reflector x)))
   (define debug-imports
     `(("debug" .
-       (("debug_str" . ,(lambda (x) (format #t "debug: ~s\n" x)))
-        ("debug_str_i32" . ,(lambda (x y) (format #t "debug: ~s: ~s\n" x y)))
-        ("debug_str_scm" . ,(lambda (x y)
-                              (format #t "debug: ~s: ~s\n" x y)))))))
-  (define (instantiate wasm imports)
+       (("debug_str" . ,debug-str)
+        ("debug_str_i32" . ,debug-str-i32)
+        ("debug_str_scm" . ,debug-str-scm)))))
+  (define (procedure->extern obj)
+    (wasm->guile reflector obj))
+  (define ffi-imports
+    `(("ffi" .
+       (("procedure_to_extern" . ,procedure->extern)))))
+  (define (instantiate wasm abi-imports)
     (instantiate-wasm (validate-wasm wasm)
-                      #:imports (append imports debug-imports)))
+                      #:imports (append user-imports
+                                        abi-imports
+                                        debug-imports
+                                        ffi-imports)))
   ;; You can either pass an existing reflector and import its ABI, or
   ;; pass a parsed reflection WASM module and create a new reflector.
   (if (reflector? reflector)
@@ -655,8 +670,8 @@
         (make-hoot-module reflector instance))
       (let* ((instance (instantiate scheme-wasm %runtime-imports))
              (abi (make-abi-imports instance))
-             (imports (append %runtime-imports abi))
-             (reflector (make-reflector (instantiate reflector imports) abi)))
+             (imports (append %runtime-imports abi)))
+        (set! reflector (make-reflector (instantiate reflector imports) abi))
         (make-hoot-module reflector instance))))
 
 (define (hoot-call reflector f args)
@@ -686,8 +701,8 @@
      (let* (($load (wasm-instance-export-ref instance "$load")))
        ((wasm->guile reflector (wasm-global-ref $load)))))))
 
-(define (compile-value reflect-wasm exp)
-  (hoot-load (hoot-instantiate reflect-wasm (compile exp))))
+(define* (compile-value reflect-wasm exp #:key (imports '()))
+  (hoot-load (hoot-instantiate reflect-wasm (compile exp) imports)))
 
 (define (compile-call reflect-wasm proc-exp . arg-exps)
   (let* ((proc-module (hoot-instantiate reflect-wasm (compile proc-exp)))

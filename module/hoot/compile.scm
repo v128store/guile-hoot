@@ -232,6 +232,7 @@
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
+  (define imports '())
   (define strings '())
   (define heap-constants '())
   (define heap-constant-count 0)
@@ -740,7 +741,7 @@
                                  `(,(local.get arg)
                                    (ref.cast ,(make-ref-type #f '$string))
                                    (struct.get $string $str)))
-                                (($ <ref-type> #f 'extern)
+                                (($ <ref-type> #t 'extern)
                                  `(,(local.get arg)
                                    (ref.cast ,(make-ref-type #f '$extern-ref))
                                    (struct.get $extern-ref $val)))
@@ -791,6 +792,10 @@
              (define (rename-expr expr)
                (append-map rename-inst expr))
              (rename-expr body))
+
+            (('wasm-import (? import? import))
+             (set! imports (cons import imports))
+             '())
 
             ;; These are the primcalls inserted by tailification to
             ;; handle stack-allocated return continuations.
@@ -2453,7 +2458,6 @@
          (start-func (compute-start-function funcs))
          (types (append (intmap-map->list make-closure-type closure-types)
                         (make-struct-types)))
-         (imports '())
          (tables '())
          (memories '())
          (globals (compute-globals))

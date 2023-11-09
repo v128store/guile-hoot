@@ -273,13 +273,14 @@
                (field $close (ref eq))        ;; #f | () -> ()
                (field $truncate (ref eq))     ;; #f | (length) -> ()
                (field $repr (ref $string))
-               (field $file-name (mut (ref eq)))      ;; #f | string
+               (field $filename (mut (ref eq)))      ;; #f | string
                (field $position (ref $mutable-pair))  ;; (line . column)
                (field $read-buf (mut (ref eq)))   ;; #f | #(bv cur end has-eof?)
                (field $write-buf (mut (ref eq)))  ;; #f | #(bv cur end)
                (field $read-buffering (mut (ref eq))) ;; #f | [1,size,1<<29)
                (field $r/w-random-access? (ref eq))   ;; #f | #t
-               (field $private-data (ref eq)))))  ;; whatever
+               (field $fold-case? (mut (ref eq)))     ;; #f | #t
+               (field $private-data (ref eq)))))      ;; whatever
       (type $struct
             (sub $heap-object
               (struct

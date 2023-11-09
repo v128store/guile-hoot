@@ -555,6 +555,6 @@ function repr(obj) {
         return flonum_to_string(obj);
     if (typeof obj === 'string')
         // FIXME: Improve to match Scheme.
-        return '"' + obj.replace(/(["\\])/g, '\\$1') + '"';
+        return '"' + obj.replace(/(["\\])/g, '\\$1').replace(/\n/g, '\\n') + '"';
     return obj + '';
 }

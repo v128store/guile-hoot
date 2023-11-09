@@ -110,6 +110,22 @@
 (define (keyword->symbol kw) (%keyword->symbol kw))
 
 (define (bitvector? x) (%bitvector? x))
+(define* (make-bitvector len #:optional (fill #f))
+  (unless (and (exact-integer? len) (<= 0 len (1- (ash 1 29))))
+    (error "expected bitvector length to be between 0 and 2**29"))
+  (%inline-wasm
+   '(func (param $len i32) (param $init i32) (result (ref eq))
+          (struct.new $mutable-bitvector
+                      (i32.const 0)
+                      (local.get $len)
+                      (array.new $raw-bitvector
+                                 (local.get $init)
+                                 (i32.add (i32.shr_u (i32.sub (local.get $len)
+                                                              (i32.const 1))
+                                                     (i32.const 5))
+                                          (i32.const 1)))))
+   len
+   (match fill (#f 0) (#t -1))))
 (define (bitvector-length bv)
   (unless (bitvector? bv) (error "expected bitvector" bv))
   (%inline-wasm
@@ -125,19 +141,42 @@
     (error "index out of range" i))
   (%inline-wasm
    '(func (param $bv (ref $bitvector))
-          (param $i (ref eq))
+          (param $i i32)
           (result (ref eq))
           (if (ref eq)
               (i32.and
                (array.get $raw-bitvector
                           (struct.get $bitvector $vals (local.get $bv))
-                          (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
-                                     (i32.const 6)))
-               (i32.shl (i32.const 1)
-                        (i32.shr_s (i31.get_s (ref.cast i31 (local.get $i)))
-                                   (i32.const 1))))
+                          (i32.shr_s (local.get $i) (i32.const 5)))
+               (i32.shl (i32.const 1) (local.get $i)))
               (then (ref.i31 (i32.const 17)))
               (else (ref.i31 (i32.const 1)))))
+   bv i))
+(define (bitvector-set-bit! bv i)
+  (unless (bitvector? bv) (error "expected bitvector" bv))
+  (unless (and (exact-integer? i) (<= 0 i) (< i (bitvector-length bv)))
+    (error "index out of range" i))
+  (unless (%inline-wasm
+           '(func (param $bv (ref eq)) (result (ref eq))
+                  (if (ref eq)
+                      (ref.test $mutable-bitvector (local.get $bv))
+                      (then (ref.i31 (i32.const 17)))
+                      (else (ref.i31 (i32.const 1)))))
+           bv)
+    (error "bitvector not mutable" bv))
+  (%inline-wasm
+   '(func (param $bv (ref $mutable-bitvector))
+          (param $i i32)
+          (local $i0 i32)
+          (local.set $i0 (i32.shr_s (local.get $i) (i32.const 5)))
+          (array.set $raw-bitvector
+                     (struct.get $bitvector $vals (local.get $bv))
+                     (local.get $i0)
+                     (i32.or
+                      (array.get $raw-bitvector
+                                 (struct.get $bitvector $vals (local.get $bv))
+                                 (i32.shr_s (local.get $i) (i32.const 5)))
+                      (i32.shl (i32.const 1) (local.get $i)))))
    bv i))
 ;; bitvector-set!, list->bitvector etc not yet implemented
 
@@ -1221,6 +1260,7 @@
                     read-buf-size
                     write-buf-size
                     r/w-random-access?
+                    fold-case?
                     private-data)
   (when file-name
     (unless (string? file-name) (error "bad file name" file-name)))
@@ -1247,6 +1287,7 @@
             (param $write-buf (ref eq))
             (param $read-buffering (ref eq))
             (param $r/w-random-access? (ref eq))
+            (param $fold-case? (ref eq))
             (param $private-data (ref eq))
             (result (ref eq))
             (struct.new $port (i32.const 0)
@@ -1267,9 +1308,11 @@
                         (local.get $write-buf)
                         (local.get $read-buffering)
                         (local.get $r/w-random-access?)
+                        (local.get $fold-case?)
                         (local.get $private-data)))
      read write input-waiting? seek close truncate repr file-name
-     read-buf write-buf read-buf-size r/w-random-access? private-data)))
+     read-buf write-buf read-buf-size r/w-random-access?
+     fold-case? private-data)))
 
 (define (%set-port-buffer-cur! buf cur)           (vector-set! buf 1 cur))
 (define (%set-port-buffer-end! buf end)           (vector-set! buf 2 end))
@@ -1298,19 +1341,24 @@
 (%define-simple-port-getter %port-close $close)
 (%define-simple-port-getter %port-truncate $truncate)
 (%define-simple-port-getter %port-repr $repr)
-(%define-simple-port-getter %port-file-name $file-name)
+(%define-simple-port-getter port-filename $filename)
 (%define-simple-port-getter %port-position $position)
 (%define-simple-port-getter %port-read-buffer $read-buf)
 (%define-simple-port-getter %port-write-buffer $write-buf)
 (%define-simple-port-getter %port-read-buffering $read-buffering)
 (%define-simple-port-getter %port-r/w-random-access? $r/w-random-access?)
+(%define-simple-port-getter %port-fold-case? $fold-case?)
 (%define-simple-port-getter %port-private-data $private-data)
 
 (%define-simple-port-setter %set-port-open?! $open?)
-(%define-simple-port-setter %set-port-file-name! $file-name)
+(%define-simple-port-setter %set-port-filename! $filename)
 (%define-simple-port-setter %set-port-read-buffer! $read-buf)
 (%define-simple-port-setter %set-port-write-buffer! $write-buf)
 (%define-simple-port-setter %set-port-read-buffering! $read-buffering)
+(%define-simple-port-setter %set-port-fold-case?! $fold-case?)
+
+(define (port-line port) (car (%port-position port)))
+(define (port-column port) (cdr (%port-position port)))
 
 (define* (get-output-bytevector port #:optional (clear-buffer? #f))
   ;; FIXME: How to know it's a bytevector output port?
@@ -1365,10 +1413,11 @@
                 #f                      ; close
                 #f                      ; truncate
                 "bytevector"            ; repr
-                #f                      ; file-name
+                #f                      ; filename
                 #f                      ; read-buf-size
                 default-buffer-size     ; write-buf-size
                 #f                      ; r/w-random-access
+                #f                      ; fold-case?
                 accum                   ; private data
                 ))
   port)
@@ -1397,10 +1446,11 @@
               #f                      ; close
               #f                      ; truncate
               "bytevector"            ; repr
-              #f                      ; file-name
+              #f                      ; filename
               default-buffer-size     ; read-buf-size
               #f                      ; write-buf-size
               #f                      ; r/w-random-access
+              #f                      ; fold-case?
               #f                      ; private data
               ))
 
@@ -1443,10 +1493,11 @@
               #f                        ; close
               #f                        ; truncate
               repr                      ; repr
-              #f                        ; file-name
+              #f                        ; filename
               default-buffer-size       ; read-buf-size
               default-buffer-size       ; write-buf-size
               #f                        ; r/w-random-access
+              #f                        ; fold-case?
               #f                        ; private data
               ))
 
@@ -2290,12 +2341,27 @@ object @var{exception}."
   (make-exception-with-origin origin)
   exception-with-origin?
   (origin exception-origin))
+(define-exception-type &port-position &exception
+  (make-exception-with-port-position filename line column)
+  exception-with-port-position?
+  (filename exception-filename)
+  (line exception-line)
+  (column exception-column))
 (define-exception-type &lexical &violation
   (make-lexical-violation)
   lexical-violation?)
 (define-exception-type &i/o &error
   (make-i/o-error)
   i/o-error?)
+(define-exception-type &i/o-line-and-column &i/o
+  (make-i/o-line-and-column-error line column)
+  i/o-line-and-column-error?
+  (line i/o-error-line)
+  (column i/o-error-column))
+(define-exception-type &i/o-filename &i/o
+  (make-i/o-filename-error filename)
+  i/o-filename-error?
+  (filename i/o-error-filename))
 
 ;; R7RS.
 (define (error-object? x)
@@ -2468,7 +2534,6 @@ object @var{exception}."
 (define (string-=?  x y . strs) (%string-compare* =  x y strs))
 (define (string->=? x y . strs) (%string-compare* >= x y strs))
 (define (string->?  x y . strs) (%string-compare* >  x y strs))
-(define (substring str start end) (string-copy str start end))
 (define (list->string chars)
   (let ((p (open-output-string)))
     (for-each (lambda (ch) (write-char ch p)) chars)
@@ -2802,9 +2867,15 @@ object @var{exception}."
      (quote-strings?
       (write-char #\" port)
       (string-for-each (lambda (ch)
-                         (when (or (eq? ch #\\) (eq? ch #\"))
-                           (write-char #\\ port))
-                         (write-char ch port))
+                         (case ch
+                           ((#\newline)
+                            (write-char #\\ port)
+                            (write-char #\n port))
+                           ((#\\ #\")
+                            (write-char #\\ port)
+                            (write-char ch port))
+                           (else
+                            (write-char ch port))))
                        x)
       (write-char #\" port))
      (else
@@ -2840,7 +2911,526 @@ object @var{exception}."
     (recur "unhandled object :("))))
 
 (define* (read #:optional (port (current-input-port)))
-  (error "read unimplemented"))
+  ;; For read-syntax, we'd define these annotate / strip functions
+  ;; differently, to create syntax objects instead.
+  (define (annotate line column datum) datum)
+  (define (strip-annotation datum) datum)
+
+  (define fold-case? (%port-fold-case? port))
+  (define (set-fold-case?! val)
+    (set! fold-case? val)
+    (%set-port-fold-case?! port val))
+
+  (define (next) (read-char port))
+  (define (peek) (peek-char port))
+  ;; We are only ever interested in whether an object is a char or not.
+  (define (eof-object? x) (not (char? x)))
+
+  (define (input-error msg args)
+    (raise
+     (make-exception (make-lexical-violation)
+                     (make-exception-with-origin "read")
+                     (make-exception-with-message msg)
+                     (make-exception-with-irritants args)
+                     (make-i/o-filename-error (port-filename port))
+                     (make-i/o-line-and-column-error (1+ (port-line port))
+                                                     (1+ (port-column port))))))
+
+  (define-syntax-rule (error msg arg ...)
+    (let ((args (list arg ...)))
+      (input-error msg args)))
+
+  (define (read-semicolon-comment)
+    (let ((ch (next)))
+      (cond
+       ((eof-object? ch) ch)
+       ((eqv? ch #\newline) (next))
+       (else (read-semicolon-comment)))))
+
+  (define-syntax-rule (take-until first pred)
+    (let ((p (open-output-string)))
+      (write-char first p)
+      (let lp ()
+        (let ((ch (peek)))
+          (if (or (eof-object? ch) (pred ch))
+              (get-output-string p)
+              (begin
+                (write-char ch p)
+                (next)
+                (lp)))))))
+  (define-syntax-rule (take-while first pred)
+    (take-until first (lambda (ch) (not (pred ch)))))
+
+  (define (delimiter? ch)
+    (case ch
+      ((#\( #\) #\; #\" #\space #\return #\ff #\newline #\tab #\[ #\]) #t)
+      (else #f)))
+
+  (define (read-token ch)
+    (take-until ch delimiter?))
+
+  (define (read-mixed-case-symbol ch)
+    (let ((str (read-token ch)))
+      (string->symbol (if fold-case? (string-downcase str) str))))
+
+  (define (read-parenthesized rdelim)
+    (let lp ((ch (next-non-whitespace)))
+      (when (eof-object? ch)
+        (error "unexpected end of input while searching for: ~A"
+               rdelim))
+      (cond
+       ((eqv? ch rdelim) '())
+       ((or (eqv? ch #\)) (eqv? ch #\]))
+        (error "mismatched close paren: ~A" ch))
+       (else
+        (let ((expr (read-expr ch)))
+          ;; Note that it is possible for scm_read_expression to
+          ;; return `.', but not as part of a dotted pair: as in
+          ;; #{.}#.  Indeed an example is here!
+          (if (and (eqv? ch #\.) (eq? (strip-annotation expr) '#{.}#))
+              (let* ((tail (read-subexpression "tail of improper list"))
+                     (close (next-non-whitespace)))
+                (unless (eqv? close rdelim)
+                  (error "missing close paren: ~A" close))
+                tail)
+              (cons expr (lp (next-non-whitespace)))))))))
+
+  (define (hex-digit ch)
+    (case ch
+      ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+       (- (char->integer ch) (char->integer #\0)))
+      ((#\a #\b #\c #\d #\e #\f)
+       (+ 10 (- (char->integer ch) (char->integer #\a))))
+      ((#\A #\B #\C #\D #\E #\F)
+       (+ 10 (- (char->integer ch) (char->integer #\A))))
+      (else #f)))
+
+  (define (read-r6rs-hex-escape)
+    (let ((ch (next)))
+      (cond
+       ((hex-digit ch) =>
+        (lambda (res)
+          (let lp ((res res))
+            (let ((ch (next)))
+              (cond
+               ((hex-digit ch) => (lambda (digit) (lp (+ (* 16 res) digit))))
+               ((eqv? ch #\;) (integer->char res))
+               ((eof-object? ch)
+                (error "unexpected end of input in character escape sequence"))
+               (else
+                (error "invalid character in escape sequence: ~S" ch)))))))
+       ((eof-object? ch)
+        (error "unexpected end of input in character escape sequence"))
+       (else
+        (error "invalid character in escape sequence: ~S" ch)))))
+
+  (define (read-fixed-hex-escape len)
+    (let lp ((len len) (res 0))
+      (if (zero? len)
+          (integer->char res)
+          (let ((ch (next)))
+            (cond
+             ((hex-digit ch) =>
+              (lambda (digit)
+                (lp (1- len) (+ (* res 16) digit))))
+             ((eof-object? ch)
+              (error "unexpected end of input in character escape sequence"))
+             (else
+              (error "invalid character in escape sequence: ~S" ch)))))))
+
+  (define (char-intraline-whitespace? ch)
+    ;; True for tab and for codepoints whose general category is Zs.
+    (case ch
+      ((#\tab #\space
+        #\240 #\13200
+        #\20000 #\20001 #\20002 #\20003 #\20004 #\20005
+        #\20006 #\20007 #\20010 #\20011 #\20012
+        #\20057
+        #\20137
+        #\30000) #t)
+      (else #f)))
+
+  (define (read-string rdelim)
+    (let ((out (open-output-string)))
+      (let lp ()
+        (let ((ch (next)))
+          (cond
+           ((eof-object? ch)
+            (error "unexpected end of input while reading string"))
+           ((eqv? ch rdelim)
+            (get-output-string out))
+           ((eqv? ch #\\)
+            (let ((ch (next)))
+              (when (eof-object? ch)
+                (error "unexpected end of input while reading string"))
+              (cond
+               ((eqv? ch #\newline)
+                ;; Skip intraline whitespace before continuing.
+                (let skip ()
+                  (let ((ch (peek)))
+                    (when (and (not (eof-object? ch))
+                               (char-intraline-whitespace? ch))
+                      (next)
+                      (skip))))
+                (lp))
+               ((eqv? ch rdelim)
+                (write-char rdelim out)
+                (lp))
+               (else
+                (write-char
+                 (case ch
+                   ;; Accept "\(" for use at the beginning of
+                   ;; lines in multiline strings to avoid
+                   ;; confusing emacs lisp modes.
+                   ((#\| #\\ #\() ch)
+                   ((#\0) #\nul)
+                   ((#\f) #\ff)
+                   ((#\n) #\newline)
+                   ((#\r) #\return)
+                   ((#\t) #\tab)
+                   ((#\a) #\alarm)
+                   ((#\v) #\vtab)
+                   ((#\b) #\backspace)
+                   ;; When faced with the choice between Guile's old
+                   ;; two-char \xHH escapes and R6RS \xHHH...;
+                   ;; escapes, prefer R6RS; \xHH is of limited
+                   ;; utility.
+                   ((#\x) (read-r6rs-hex-escape))
+                   ((#\u) (read-fixed-hex-escape 4))
+                   ((#\U) (read-fixed-hex-escape 6))
+                   (else
+                    (error "invalid character in escape sequence: ~S" ch)))
+                 out)
+                (lp)))))
+           (else
+            (write-char ch out)
+            (lp)))))))
+
+  (define (read-character)
+    (let ((ch (next)))
+      (cond
+       ((eof-object? ch)
+        (error "unexpected end of input after #\\"))
+       ((delimiter? ch)
+        ch)
+       (else
+        (let* ((tok (read-token ch))
+               (len (string-length tok)))
+          (define dotted-circle #\x25cc)
+          (define r5rs-charnames
+            '(("space" . #\x20) ("newline" . #\x0a)))
+          (define r6rs-charnames
+            '(("nul" . #\x00) ("alarm" . #\x07) ("backspace" . #\x08)
+              ("tab" . #\x09) ("linefeed" . #\x0a) ("vtab" . #\x0b)
+              ("page" . #\x0c) ("return" . #\x0d) ("esc" . #\x1b)
+              ("delete" . #\x7f)))
+          (define r7rs-charnames
+            '(("escape" . #\x1b)))
+          (define C0-control-charnames
+            '(("nul" . #\x00) ("soh" . #\x01) ("stx" . #\x02)
+              ("etx" . #\x03) ("eot" . #\x04) ("enq" . #\x05)
+              ("ack" . #\x06) ("bel" . #\x07) ("bs"  . #\x08)
+              ("ht"  . #\x09) ("lf"  . #\x0a) ("vt"  . #\x0b)
+              ("ff"  . #\x0c) ("cr"  . #\x0d) ("so"  . #\x0e)
+              ("si"  . #\x0f) ("dle" . #\x10) ("dc1" . #\x11)
+              ("dc2" . #\x12) ("dc3" . #\x13) ("dc4" . #\x14)
+              ("nak" . #\x15) ("syn" . #\x16) ("etb" . #\x17)
+              ("can" . #\x18) ("em"  . #\x19) ("sub" . #\x1a)
+              ("esc" . #\x1b) ("fs"  . #\x1c) ("gs"  . #\x1d)
+              ("rs"  . #\x1e) ("us"  . #\x1f) ("sp"  . #\x20)
+              ("del" . #\x7f)))
+          (define alt-charnames
+            '(("null" . #\x0) ("nl" . #\x0a) ("np" . #\x0c)))
+          ;; Although R6RS and R7RS charnames specified as being
+          ;; case-sensitive, Guile matches them case-insensitively, like
+          ;; other char names.
+          (define (named-char tok alist)
+            (let ((tok (string-downcase tok)))
+              (let lp ((alist alist))
+                (match alist
+                  (() #f)
+                  (((name . ch) . alist)
+                   (if (string-=? name tok) ch (lp alist)))))))
+          (cond
+           ((= len 1) ch)
+           ((and (= len 2) (eqv? (string-ref tok 1) dotted-circle))
+            ;; Ignore dotted circles, which may be used to keep
+            ;; combining characters from combining with the backslash in
+            ;; #\charname.
+            ch)
+           ((and (<= (char->integer #\0) (char->integer ch) (char->integer #\7))
+                 (string->number tok 8))
+            ;; Specifying a codepoint as an octal value.
+            => integer->char)
+           ((and (eqv? ch #\x) (> len 1)
+                 (string->number (string-copy tok 1) 16))
+            ;; Specifying a codepoint as an hexadecimal value.  Skip
+            ;; initial "x".
+            => integer->char)
+           ((named-char tok r5rs-charnames))
+           ((named-char tok r6rs-charnames))
+           ((named-char tok r7rs-charnames))
+           ((named-char tok C0-control-charnames))
+           ((named-char tok alt-charnames))
+           (else
+            (error "unknown character name ~a" tok))))))))
+
+  (define (read-vector)
+    (list->vector (map strip-annotation (read-parenthesized #\)))))
+
+  (define (read-bytevector)
+    (define (expect ch)
+      (unless (eqv? (next) ch)
+        (error "invalid bytevector prefix" ch)))
+    (expect #\u)
+    (expect #\8)
+    (expect #\()
+    (let ((p (open-output-bytevector)))
+      (for-each (lambda (datum) (write-u8 (strip-annotation datum) p))
+                (read-parenthesized #\)))
+      (get-output-bytevector p)))
+
+  ;; FIXME: We should require a terminating delimiter.
+  (define (read-bitvector)
+    (let lp ((bits '()) (len 0))
+      (let ((ch (peek)))
+        (case ch
+          ((#\0) (next) (lp bits (1+ len)))
+          ((#\1) (next) (lp (cons len bits) (1+ len)))
+          (else
+           (let ((bv (make-bitvector len #f)))
+             (for-each (lambda (bit) (bitvector-set-bit! bv bit)) bits)
+             bv))))))
+
+  (define (read-true)
+    (match (peek)
+      ((or (? eof-object?) (? delimiter?))
+       #t)
+      (_ (match (string-downcase (read-token #\t))
+           ('"true" #t)
+           (tok (error "unexpected input when reading #true" tok))))))
+  (define (read-false)
+    (match (peek)
+      ((or (? eof-object?) (? delimiter?))
+       #f)
+      (_ (match (string-downcase (read-token #\f))
+           ('"false" #f)
+           (tok (error "unexpected input when reading #false" tok))))))
+
+  (define (read-keyword)
+    (let ((expr (strip-annotation (read-subexpression "keyword"))))
+      (unless (symbol? expr)
+        (error "keyword prefix #: not followed by a symbol: ~a" expr))
+      (symbol->keyword expr)))
+
+  (define (read-number-and-radix ch)
+    (let ((tok (string-append "#" (read-token ch))))
+      (or (string->number tok)
+          (error "unknown # object: ~S" tok))))
+
+  (define (read-extended-symbol)
+    (define (next-not-eof)
+      (let ((ch (next)))
+        (when (eof-object? ch)
+          (error "end of input while reading symbol"))
+        ch))
+    (let ((out (open-output-string)))
+      (let lp ((saw-brace? #f))
+        (let lp/inner ((ch (next-not-eof))
+                       (saw-brace? saw-brace?))
+          (cond
+           (saw-brace?
+            (unless (eqv? ch #\#)
+              ;; Don't eat CH, see
+              ;; <https://debbugs.gnu.org/cgi/bugreport.cgi?bug=49623>.
+              (write-char #\} out)
+              (lp/inner ch #f)))
+           ((eqv? ch #\})
+            (lp #t))
+           ((eqv? ch #\\)
+            ;; \xH+; => R6RS hex escape
+            ;; \C => C otherwise, for any C
+            (let* ((ch (next-not-eof))
+                   (ch (if (eqv? ch #\x)
+                           (read-r6rs-hex-escape)
+                           ch)))
+              (write-char ch out)
+              (lp #f)))
+           (else
+            (write-char ch out)
+            (lp #f)))))
+      (string->symbol (get-output-string out))))
+
+  (define (read-nil)
+    ;; Have already read "#\n" -- now read "il".
+    (match (read-mixed-case-symbol #\n)
+      ('nil #nil)
+      (id (error "unexpected input while reading #nil: ~a" id))))
+
+  (define (read-sharp)
+    (let* ((ch (next)))
+      (cond
+       ((eof-object? ch)
+        (error "unexpected end of input after #"))
+       (else
+        (case ch
+          ((#\\) (read-character))
+          ((#\() (read-vector))
+          ((#\v) (read-bytevector))
+          ((#\*) (read-bitvector))
+          ((#\f #\F) (read-false))
+          ((#\t #\T) (read-true))
+          ((#\:) (read-keyword))
+          ((#\i #\e #\b #\B #\o #\O #\d #\D #\x #\X #\I #\E)
+           (read-number-and-radix ch))
+          ((#\{) (read-extended-symbol))
+          ((#\') (list 'syntax (read-subexpression "syntax expression")))
+          ((#\`) (list 'quasisyntax
+                       (read-subexpression "quasisyntax expression")))
+          ((#\,)
+           (if (eqv? #\@ (peek))
+               (begin
+                 (next)
+                 (list 'unsyntax-splicing
+                       (read-subexpression "unsyntax-splicing expression")))
+               (list 'unsyntax (read-subexpression "unsyntax expression"))))
+          ((#\n) (read-nil))
+          (else
+           (error "Unknown # object: ~S" (string #\# ch))))))))
+
+  (define (read-number ch)
+    (let ((str (read-token ch)))
+      (or (string->number str)
+          (string->symbol (if fold-case? (string-downcase str) str)))))
+
+  (define (read-expr* ch)
+    (case ch
+      ((#\[) (read-parenthesized #\]))
+      ((#\() (read-parenthesized #\)))
+      ((#\") (read-string ch))
+      ((#\|) (string->symbol (read-string ch)))
+      ((#\') (list 'quote (read-subexpression "quoted expression")))
+      ((#\`) (list 'quasiquote (read-subexpression "quasiquoted expression")))
+      ((#\,) (cond
+              ((eqv? #\@ (peek))
+               (next)
+               (list 'unquote-splicing (read-subexpression "subexpression of ,@")))
+              (else
+               (list 'unquote (read-subexpression "unquoted expression")))))
+      ;; FIXME: read-sharp should recur if we read a comment
+      ((#\#) (read-sharp))
+      ((#\)) (error "unexpected \")\""))
+      ((#\]) (error "unexpected \"]\""))
+      ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9 #\+ #\- #\.) (read-number ch))
+      (else (read-mixed-case-symbol ch))))
+
+  (define (read-expr ch)
+    (annotate (port-line port)
+              (port-column port)
+              (read-expr* ch)))
+
+  (define (read-directive)
+    (define (directive-char? ch)
+      (and (char? ch)
+           (or (eqv? ch #\-)
+               (char-alphabetic? ch)
+               (char-numeric? ch))))
+    (let ((ch (peek)))
+      (cond
+       ((directive-char? ch)
+        (next)
+        (string->symbol (take-while ch directive-char?)))
+       (else
+        #f))))
+
+  (define (skip-scsh-comment)
+    (let lp ((ch (next)))
+      (cond
+       ((eof-object? ch)
+        (error "unterminated `#! ... !#' comment"))
+       ((eqv? ch #\!)
+        (let ((ch (next)))
+          (if (eqv? ch #\#)
+              (next)
+              (lp ch))))
+       (else
+        (lp (next))))))
+
+  (define (process-shebang)
+    ;; After having read #!, we complete either with #!r6rs,
+    ;; #!fold-case, #!no-fold-case, or a SCSH block comment terminated
+    ;; by !#.
+    (match (read-directive)
+      ('fold-case
+       (set-fold-case?! #t)
+       (next))
+      ((or 'no-fold-case 'r6rs)
+       (set-fold-case?! #f)
+       (next))
+      (_
+       (skip-scsh-comment))))
+
+  (define (skip-eol-comment)
+    (let ((ch (next)))
+      (cond
+       ((eof-object? ch) ch)
+       ((eq? ch #\newline) (next))
+       (else (skip-eol-comment)))))
+
+  ;; Unlike SCSH-style block comments, SRFI-30/R6RS block comments may be
+  ;; nested.
+  (define (skip-r6rs-block-comment)
+    ;; We have read #|, now looking for |#.
+    (let ((ch (next)))
+      (when (eof-object? ch)
+        (error "unterminated `#| ... |#' comment"))
+      (cond
+       ((and (eqv? ch #\|) (eqv? (peek) #\#))
+        ;; Done.
+        (next)
+        (values))
+       ((and (eqv? ch #\#) (eqv? (peek) #\|))
+        ;; A nested comment.
+        (next)
+        (skip-r6rs-block-comment)
+        (skip-r6rs-block-comment))
+       (else
+        (skip-r6rs-block-comment)))))
+
+  (define (read-subexpression what)
+    (let ((ch (next-non-whitespace)))
+      (when (eof-object? ch)
+        (error (string-append "unexpected end of input while reading " what)))
+      (read-expr ch)))
+
+  (define (next-non-whitespace)
+    (let lp ((ch (next)))
+      (case ch
+        ((#\;)
+         (lp (skip-eol-comment)))
+        ((#\#)
+         (case (peek)
+           ((#\!)
+            (next)
+            (lp (process-shebang)))
+           ((#\;)
+            (next)
+            (read-subexpression "#; comment")
+            (next-non-whitespace))
+           ((#\|)
+            (next)
+            (skip-r6rs-block-comment)
+            (next-non-whitespace))
+           (else ch)))
+        ((#\space #\return #\ff #\newline #\tab)
+         (next-non-whitespace))
+        (else ch))))
+
+  (let ((ch (next-non-whitespace)))
+    (if (eof-object? ch)
+        ch
+        (read-expr ch))))
+
 (define* (display datum #:optional (port (current-output-port)))
   (%write-datum port datum #f))
 (define* (write datum #:optional (port (current-output-port)))

@@ -54,6 +54,7 @@ SCM_TESTS = 					\
   test/test-procedures.scm			\
   test/test-promises.scm			\
   test/test-prompts.scm				\
+  test/test-read.scm				\
   test/test-records.scm				\
   test/test-strings.scm				\
   test/test-symbols.scm				\

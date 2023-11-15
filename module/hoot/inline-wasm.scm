@@ -23,6 +23,8 @@
   #:use-module (ice-9 match)
   #:use-module ((language tree-il primitives)
                 #:select (add-interesting-primitive!))
+  #:use-module ((language tree-il effects)
+                #:select (add-primcall-effect-analyzer!))
   #:use-module ((language tree-il compile-cps)
                 #:select (define-custom-primcall-converter))
   #:use-module (language tree-il)
@@ -34,6 +36,124 @@
   #:use-module (wasm wat)
   #:use-module ((hoot primitives) #:select (%inline-wasm %wasm-import))
   #:export (install-inline-wasm!))
+
+(define (inline-wasm-effect-free? args)
+  (define (effect-free-expr? expr)
+    (define (effect-free-inst? inst)
+      (match inst
+        (((or 'block 'loop) label type body)
+         (effect-free-expr? body))
+        (('if label type consequent alternate)
+         (and (effect-free-expr? consequent)
+              (effect-free-expr? alternate)))
+        (('try label type body catches catch-all)
+         (and (effect-free-expr? body)
+              (and-map effect-free-expr? catches)
+              (or (not catch-all) (effect-free-expr? catch-all))))
+        (('try_delegate label type body handler)
+         (effect-free-expr? body))
+        ((op . args)
+         (case op
+           ((nop
+             br br_if br_table return drop select
+             local.get local.set local.tee global.get
+             table.get
+             i32.load i64.load f32.load f64.load
+             i32.load8_s i32.load8_u
+             i32.load16_s i32.load16_u
+             i64.load8_s i64.load8_u
+             i64.load16_s i64.load16_u
+             i64.load32_s i64.load32_u
+             memory.size
+             i32.const i64.const f32.const f64.const
+             i32.eqz i32.eq i32.ne
+             i32.lt_s i32.lt_u i32.gt_s i32.gt_u
+             i32.le_s i32.le_u i32.ge_s i32.ge_u
+             i64.eqz i64.eq i64.ne
+             i64.lt_s i64.lt_u i64.gt_s i64.gt_u
+             i64.le_s i64.le_u i64.ge_s i64.ge_u
+             f32.eq f32.ne f32.lt f32.gt f32.le f32.ge
+             f64.eq f64.ne f64.lt f64.gt f64.le f64.ge
+             i32.clz i32.ctz i32.popcnt
+             i32.add i32.sub i32.mul
+             i32.div_s i32.div_u i32.rem_s i32.rem_u
+             i32.and i32.or i32.xor
+             i32.shl i32.shr_s i32.shr_u i32.rotl i32.rotr
+             i64.clz i64.ctz i64.popcnt
+             i64.add i64.sub i64.mul
+             i64.div_s i64.div_u i64.rem_s i64.rem_u
+             i64.and i64.or i64.xor
+             i64.shl i64.shr_s i64.shr_u i64.rotl i64.rotr
+             f32.abs f32.neg f32.ceil f32.floor f32.trunc f32.nearest f32.sqrt
+             f32.add f32.sub f32.mul f32.div f32.min f32.max f32.copysign
+             f64.abs f64.neg f64.ceil f64.floor f64.trunc f64.nearest f64.sqrt
+             f64.add f64.sub f64.mul f64.div f64.min f64.max f64.copysign
+             i32.wrap_i64 i32.trunc_f32_s i32.trunc_f32_u
+             i32.trunc_f64_s i32.trunc_f64_u
+             i64.extend_i32_s i64.extend_i32_u i64.trunc_f32_s i64.trunc_f32_u
+             i64.trunc_f64_s i64.trunc_f64_u
+             f32.convert_i32_s f32.convert_i32_u
+             f32.convert_i64_s f32.convert_i64_u
+             f32.demote_f64 f64.convert_i32_s f64.convert_i32_u
+             f64.convert_i64_s f64.convert_i64_u
+             f64.promote_f32
+             i32.reinterpret_f32 i64.reinterpret_f64 f32.reinterpret_i32
+             f64.reinterpret_i64
+             i32.extend8_s i32.extend16_s
+             i64.extend8_s i64.extend16_s i64.extend32_s
+
+             ref.null ref.is_null ref.func ref.eq ref.as_non_null
+             struct.new struct.new_default struct.get struct.get_s struct.get_u
+             array.new array.new_default array.new_fixed array.new_data
+             array.new_elem array.get array.get_s array.get_u
+             array.len
+             ref.test ref.cast br_on_cast br_on_cast_fail
+             extern.internalize extern.externalize
+             ref.i31 i31.get_s i31.get_u
+
+             string.new_utf8 string.new_wtf16
+             string.const string.measure_utf8 string.measure_wtf8
+             string.measure_wtf16 string.concat string.eq
+             string.is_usv_sequence
+             string.new_lossy_utf8 string.new_wtf8
+             string.as_wtf8 stringview_wtf8.advance stringview_wtf8.slice
+             string.as_wtf16 stringview_wtf16.length
+             stringview_wtf16.get_codeunit stringview_wtf16.slice
+             ;; Assume that stateful iter stringviews are ephemeral.
+             string.as_iter stringview_iter.next stringview_iter.advance
+             stringview_iter.rewind stringview_iter.slice
+             string.compare string.from_code_point
+             string.new_utf8_array string.new_wtf16_array
+             string.new_lossy_utf8_array string.new_wtf8_array
+
+             i8x16.splat i16x8.splat i32x4.splat i64x2.splat
+             f32x4.splat f64x2.splat
+             ;; A number of SIMD opcodes missing here.
+
+             i32.trunc_sat_f32_s i32.trunc_sat_f32_u
+             i32.trunc_sat_f64_s i32.trunc_sat_f64_u
+             i64.trunc_sat_f32_s i64.trunc_sat_f32_u
+             i64.trunc_sat_f64_s i64.trunc_sat_f64_u
+             table.size)
+            #t)
+           (else #f)))))
+    (and-map effect-free-inst? expr))
+  (match args
+    ((($ <const> _ wat) . args)
+     (match (false-if-exception (wat->wasm (list wat)))
+       (($ <wasm> () ()
+           (($ <func> id ($ <type-use> #f
+                            ($ <func-sig> params results))
+               locals body))
+           () () () () #f () () () () ())
+        (and (= (length params) (length args))
+             (effect-free-expr? body)))
+       (_ #f)))))
+
+(define (wasm-import-effect-free? args)
+  (match args
+    (() #t)
+    (_ #f)))
 
 (define install-inline-wasm!
   (let ((m (current-module)))
@@ -48,7 +168,9 @@
        (lambda ()
          (set-current-module m)
          (add-interesting-primitive! '%inline-wasm)
-         (add-interesting-primitive! '%wasm-import))))))
+         (add-interesting-primitive! '%wasm-import)
+         (add-primcall-effect-analyzer! '%inline-wasm inline-wasm-effect-free?)
+         (add-primcall-effect-analyzer! '%wasm-import wasm-import-effect-free?))))))
 
 (define (n-valued-continuation cps src nvals k)
   (define (enumerate f n)

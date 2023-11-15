@@ -2239,166 +2239,6 @@
     (#f (write-string "#<record with no printer!>" port))
     (print (print record port))))
 
-(define-record-type &exception
-  #:extensible? #t
-  (make-&exception)
-  simple-exception?)
-(define-record-type &compound-exception
-  (make-compound-exception components)
-  compound-exception?
-  (components compound-exception-components))
-
-(define (simple-exceptions exception)
-  "Return a list of the simple exceptions that compose the exception
-object @var{exception}."
-  (cond ((compound-exception? exception)
-         (compound-exception-components exception))
-        ((simple-exception? exception)
-         (list exception))
-        (else
-         (error "not a exception" exception))))
-
-(define (make-exception . exceptions)
-  "Return an exception object composed of @var{exceptions}."
-  (define (flatten exceptions)
-    (if (null? exceptions)
-        '()
-        (append (simple-exceptions (car exceptions))
-                (flatten (cdr exceptions)))))
-  (let ((simple (flatten exceptions)))
-    (if (and (pair? simple) (null? (cdr simple)))
-        (car simple)
-        (make-compound-exception simple))))
-
-(define (exception? obj)
-  "Return true if @var{obj} is an exception object."
-  (or (compound-exception? obj) (simple-exception? obj)))
-
-(define-syntax define-exception-type
-  (lambda (stx)
-    (syntax-case stx ()
-      ((define-exception-type exn parent
-         (make-exn arg ...)
-         exn?
-         (field exn-field)
-         ...)
-       (with-syntax (((%exn-field ...) (generate-temporaries #'(exn-field ...))))
-         #'(begin
-             (define-record-type exn
-               #:parent parent #:extensible? #t
-               (make-exn arg ...)
-               %exn?
-               (field %exn-field)
-               ...)
-             (define (exn? x)
-               (or (%exn? x)
-                   (and (compound-exception? x)
-                        (let lp ((simple (compound-exception-components x)))
-                          (match simple
-                            (() #f)
-                            ((x . simple)
-                             (or (%exn? x)
-                                 (lp simple))))))))
-             (define (exn-field x)
-               (if (%exn? x)
-                   (%exn-field x)
-                   (let lp ((simple (compound-exception-components x)))
-                     (match simple
-                       (() (error "exception type check failed" x))
-                       ((x . simple)
-                        (if (%exn? x)
-                            (%exn-field x)
-                            (lp simple)))))))
-             ...))))))
-
-(define-exception-type &message &exception
-  (make-exception-with-message message)
-  exception-with-message?
-  (message exception-message))
-(define-exception-type &warning &exception
-  (make-warning)
-  warning?)
-(define-exception-type &serious &exception
-  (make-serious-exception)
-  serious-exception?)
-(define-exception-type &error &serious
-  (make-error)
-  error?)
-(define-exception-type &violation &serious
-  (make-violation)
-  violation?)
-(define-exception-type &assertion &violation
-  (make-assertion-violation)
-  assertion-violation?)
-(define-exception-type &non-continuable &violation
-  (make-non-continuable-violation)
-  non-continuable-violation?)
-(define-exception-type &irritants &exception
-  (make-exception-with-irritants irritants)
-  exception-with-irritants?
-  (irritants exception-irritants))
-(define-exception-type &origin &exception
-  (make-exception-with-origin origin)
-  exception-with-origin?
-  (origin exception-origin))
-(define-exception-type &port-position &exception
-  (make-exception-with-port-position filename line column)
-  exception-with-port-position?
-  (filename exception-filename)
-  (line exception-line)
-  (column exception-column))
-(define-exception-type &lexical &violation
-  (make-lexical-violation)
-  lexical-violation?)
-(define-exception-type &i/o &error
-  (make-i/o-error)
-  i/o-error?)
-(define-exception-type &i/o-line-and-column &i/o
-  (make-i/o-line-and-column-error line column)
-  i/o-line-and-column-error?
-  (line i/o-error-line)
-  (column i/o-error-column))
-(define-exception-type &i/o-filename &i/o
-  (make-i/o-filename-error filename)
-  i/o-filename-error?
-  (filename i/o-error-filename))
-
-;; R7RS.
-(define (error-object? x)
-  (and (exception-with-message? x)
-       (exception-with-irritants? x)))
-(define error-object-message exception-message)
-(define error-object-irritants exception-irritants)
-(define read-error? lexical-violation?)
-(define file-error? i/o-error?)
-
-;; promises
-(define-record-type <promise>
-  #:opaque? #t
-  (%%make-promise value)
-  promise?
-  (value %promise-value %set-promise-value!))
-(define (%make-promise eager? val)
-  (%%make-promise (cons eager? val)))
-(define (make-promise x)
-  (if (promise? x) x (%make-promise #t x)))
-(define (force promise)
-  (match (%promise-value promise)
-    ((#t . val) val)
-    ((#f . thunk)
-     (let ((promise* (thunk)))
-       (match (%promise-value promise)
-         ((and value (#f . _))
-          (match (%promise-value promise*)
-            ((eager? . data)
-             (set-car! value eager?)
-             (set-cdr! value data)
-             (%set-promise-value! promise* value)
-             (force promise))))
-         ((#t . val) val))))))
-(define-syntax-rule (delay-force expr) (%make-promise #f (lambda () expr)))
-(define-syntax-rule (delay expr) (delay-force (%make-promise #t expr)))
-
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))
 
@@ -2889,6 +2729,359 @@ object @var{exception}."
     (write-record x port))
    (else
     (recur "unhandled object :("))))
+
+(define* (display datum #:optional (port (current-output-port)))
+  (%write-datum port datum #f))
+(define* (write datum #:optional (port (current-output-port)))
+  (%write-datum port datum #t))
+(define* (write-shared datum #:optional (port (current-output-port)))
+  (error "write unimplemented"))
+(define* (write-simple datum #:optional (port (current-output-port)))
+  (error "write unimplemented"))
+
+(define (jiffies-per-second)
+  (%inline-wasm
+   '(func (result i64)
+          (i64.extend_i32_u (call $jiffies-per-second)))))
+
+(define (current-jiffy)
+  (%inline-wasm
+   '(func (result i64)
+          (i64.extend_i32_u (call $current-jiffy)))))
+
+(define (current-second)
+  (%inline-wasm
+   '(func (result f64) (call $current-second))))
+
+(define (standard-input-port)
+    (%make-soft-port "stdin"
+                     (lambda ()
+                       (%inline-wasm
+                        '(func (result (ref eq))
+                               (struct.new $string
+                                           (i32.const 0)
+                                           (call $read-stdin)))))
+                     #f #f #f))
+(define (standard-output-port)
+  (%make-soft-port "stdout"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref string))
+                             (call $write-stdout (local.get $str)))
+                      str))
+                   #f #f))
+(define (standard-error-port)
+  (%make-soft-port "stderr"
+                   #f
+                   (lambda (str)
+                     (%inline-wasm
+                      '(func (param $str (ref string))
+                             (call $write-stderr (local.get $str)))
+                      str))
+                   #f #f))
+
+;; FFI
+(define (external? obj)
+  (%inline-wasm
+   '(func (param $obj (ref eq)) (result (ref eq))
+          (ref.i31
+           (if i32
+               (ref.test $extern-ref (local.get $obj))
+               (then (i32.const 17))
+               (else (i32.const 1)))))
+   obj))
+
+(define (external-null? extern)
+  (unless (external? extern)
+    (error "expected external" extern))
+  (%inline-wasm
+   '(func (param $extern (ref $extern-ref)) (result (ref eq))
+          (if (ref eq)
+              (ref.is_null
+               (struct.get $extern-ref $val (local.get $extern)))
+              (then (ref.i31 (i32.const 17)))
+              (else (ref.i31 (i32.const 1)))))
+   extern))
+
+(define (procedure->external proc)
+  (unless (procedure? proc)
+    (error "expected procedure" proc))
+  (%inline-wasm
+   '(func (param $f (ref $proc)) (result (ref eq))
+          (struct.new $extern-ref
+                      (i32.const 0)
+                      (call $procedure->extern (local.get $f))))
+   proc))
+
+(define-syntax define-foreign
+  (lambda (x)
+    (define (cons x y) (%cons x y))
+    (define (car x) (%car x))
+    (define (cdr x) (%cdr x))
+    (define (null? x) (%null? x))
+    (define (map proc lst)
+      (if (null? lst)
+          '()
+          (cons (proc (car lst)) (map proc (cdr lst)))))
+    (define (type-check exp)
+      (define (check param predicate message)
+        #`(unless (#,predicate #,param) (error #,message #,param)))
+      (syntax-case exp (i32 i64 f32 f64 ref null eq string extern)
+        ((x i32) (check #'x #'exact-integer? "expected exact integer"))
+        ((x i64) (check #'x #'exact-integer? "expected exact integer"))
+        ((x f32) (check #'x #'real? "expected real number"))
+        ((x f64) (check #'x #'real? "expected real number"))
+        ((x (ref eq)) #'#t)
+        ((x (ref null extern)) (check #'x #'external? "expected external"))
+        ((x (ref string)) (check #'x #'string? "expected string"))
+        ((x type) (error "unsupported param type" #'type))))
+    (define (import-result-types exp)
+      (syntax-case exp (none)
+        (none #'())
+        (type #'((result type)))))
+    (define (result-types exp)
+      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
+        (none #'())
+        (i32 #'((result i64)))
+        (i64 #'((result i64)))
+        (f32 #'((result f64)))
+        (f64 #'((result f64)))
+        ((ref string) #'((result (ref eq))))
+        ((ref null extern) #'((result (ref eq))))
+        (type (error "unsupported result type" #'type))))
+    (define (lift-result exp)
+      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
+        ((x none) #'x)
+        ((x i32) #'(i64.extend_i32_s x))
+        ((x i64) #'x)
+        ((x f32) #'(f64.promote_f32 x))
+        ((x f64) #'x)
+        ((x (ref string)) #'(struct.new $string (i32.const 0) x))
+        ((x (ref null extern)) #'(struct.new $extern-ref (i32.const 0) x))
+        (type (error "unsupported result type" #'type))))
+    (define (fresh-wasm-id prefix)
+      (datum->syntax x (gensym prefix)))
+    (define (fresh-wasm-ids prefix lst)
+      (map (lambda (_) (fresh-wasm-id prefix)) lst))
+    (syntax-case x (->)
+      ((_ proc-name mod name ptype ... -> rtype)
+       (with-syntax ((iname (fresh-wasm-id "$import-"))
+                     ((pname ...) (fresh-wasm-ids "$param-" #'(ptype ...))))
+         #`(begin
+             (%wasm-import
+              '(func iname (import mod name)
+                     (param ptype) ...
+                     #,@(import-result-types #'rtype)))
+             (define (proc-name pname ...)
+               #,@(map type-check #'((pname ptype) ...))
+               (%inline-wasm
+                '(func (param pname ptype) ...
+                       #,@(result-types #'rtype)
+                       #,(lift-result
+                          #'((call iname (local.get pname) ...) rtype)))
+                pname ...))))))))
+
+(cond-expand
+ (hoot-main
+  (define current-input-port
+    (make-parameter (standard-input-port)
+                    (lambda (val)
+                      (unless (input-port? val)
+                        (error "expected input port" val))
+                      val)))
+  (define current-output-port
+    (make-parameter (standard-output-port)
+                    (lambda (val)
+                      (unless (output-port? val)
+                        (error "expected output port" val))
+                      val)))
+  (define current-error-port
+    (make-parameter (standard-error-port)
+                    (lambda (val)
+                      (unless (output-port? val)
+                        (error "expected output port" val))
+                      val)))
+  (%inline-wasm
+   '(func (param $current-input-port (ref eq))
+          (param $current-output-port (ref eq))
+          (param $current-error-port (ref eq))
+          (global.set $current-input-port (local.get $current-input-port))
+          (global.set $current-output-port (local.get $current-output-port))
+          (global.set $current-error-port (local.get $current-error-port)))
+   current-input-port
+   current-output-port
+   current-error-port))
+ (hoot-aux
+  (define current-input-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-input-port))))
+  (define current-output-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-output-port))))
+  (define current-error-port
+    (%inline-wasm
+     '(func (result (ref eq)) (global.get $current-error-port))))))
+
+;; promises
+(define-record-type <promise>
+  #:opaque? #t
+  (%%make-promise value)
+  promise?
+  (value %promise-value %set-promise-value!))
+(define (%make-promise eager? val)
+  (%%make-promise (cons eager? val)))
+(define (make-promise x)
+  (if (promise? x) x (%make-promise #t x)))
+(define (force promise)
+  (match (%promise-value promise)
+    ((#t . val) val)
+    ((#f . thunk)
+     (let ((promise* (thunk)))
+       (match (%promise-value promise)
+         ((and value (#f . _))
+          (match (%promise-value promise*)
+            ((eager? . data)
+             (set-car! value eager?)
+             (set-cdr! value data)
+             (%set-promise-value! promise* value)
+             (force promise))))
+         ((#t . val) val))))))
+(define-syntax-rule (delay-force expr) (%make-promise #f (lambda () expr)))
+(define-syntax-rule (delay expr) (delay-force (%make-promise #t expr)))
+
+(define-record-type &exception
+  #:extensible? #t
+  (make-&exception)
+  simple-exception?)
+(define-record-type &compound-exception
+  (make-compound-exception components)
+  compound-exception?
+  (components compound-exception-components))
+
+(define (simple-exceptions exception)
+  "Return a list of the simple exceptions that compose the exception
+object @var{exception}."
+  (cond ((compound-exception? exception)
+         (compound-exception-components exception))
+        ((simple-exception? exception)
+         (list exception))
+        (else
+         (error "not a exception" exception))))
+
+(define (make-exception . exceptions)
+  "Return an exception object composed of @var{exceptions}."
+  (define (flatten exceptions)
+    (if (null? exceptions)
+        '()
+        (append (simple-exceptions (car exceptions))
+                (flatten (cdr exceptions)))))
+  (let ((simple (flatten exceptions)))
+    (if (and (pair? simple) (null? (cdr simple)))
+        (car simple)
+        (make-compound-exception simple))))
+
+(define (exception? obj)
+  "Return true if @var{obj} is an exception object."
+  (or (compound-exception? obj) (simple-exception? obj)))
+
+(define-syntax define-exception-type
+  (lambda (stx)
+    (syntax-case stx ()
+      ((define-exception-type exn parent
+         (make-exn arg ...)
+         exn?
+         (field exn-field)
+         ...)
+       (with-syntax (((%exn-field ...) (generate-temporaries #'(exn-field ...))))
+         #'(begin
+             (define-record-type exn
+               #:parent parent #:extensible? #t
+               (make-exn arg ...)
+               %exn?
+               (field %exn-field)
+               ...)
+             (define (exn? x)
+               (or (%exn? x)
+                   (and (compound-exception? x)
+                        (let lp ((simple (compound-exception-components x)))
+                          (match simple
+                            (() #f)
+                            ((x . simple)
+                             (or (%exn? x)
+                                 (lp simple))))))))
+             (define (exn-field x)
+               (if (%exn? x)
+                   (%exn-field x)
+                   (let lp ((simple (compound-exception-components x)))
+                     (match simple
+                       (() (error "exception type check failed" x))
+                       ((x . simple)
+                        (if (%exn? x)
+                            (%exn-field x)
+                            (lp simple)))))))
+             ...))))))
+
+(define-exception-type &message &exception
+  (make-exception-with-message message)
+  exception-with-message?
+  (message exception-message))
+(define-exception-type &warning &exception
+  (make-warning)
+  warning?)
+(define-exception-type &serious &exception
+  (make-serious-exception)
+  serious-exception?)
+(define-exception-type &error &serious
+  (make-error)
+  error?)
+(define-exception-type &violation &serious
+  (make-violation)
+  violation?)
+(define-exception-type &assertion &violation
+  (make-assertion-violation)
+  assertion-violation?)
+(define-exception-type &non-continuable &violation
+  (make-non-continuable-violation)
+  non-continuable-violation?)
+(define-exception-type &irritants &exception
+  (make-exception-with-irritants irritants)
+  exception-with-irritants?
+  (irritants exception-irritants))
+(define-exception-type &origin &exception
+  (make-exception-with-origin origin)
+  exception-with-origin?
+  (origin exception-origin))
+(define-exception-type &port-position &exception
+  (make-exception-with-port-position filename line column)
+  exception-with-port-position?
+  (filename exception-filename)
+  (line exception-line)
+  (column exception-column))
+(define-exception-type &lexical &violation
+  (make-lexical-violation)
+  lexical-violation?)
+(define-exception-type &i/o &error
+  (make-i/o-error)
+  i/o-error?)
+(define-exception-type &i/o-line-and-column &i/o
+  (make-i/o-line-and-column-error line column)
+  i/o-line-and-column-error?
+  (line i/o-error-line)
+  (column i/o-error-column))
+(define-exception-type &i/o-filename &i/o
+  (make-i/o-filename-error filename)
+  i/o-filename-error?
+  (filename i/o-error-filename))
+
+;; R7RS.
+(define (error-object? x)
+  (and (exception-with-message? x)
+       (exception-with-irritants? x)))
+(define error-object-message exception-message)
+(define error-object-irritants exception-irritants)
+(define read-error? lexical-violation?)
+(define file-error? i/o-error?)
 
 (define* (read #:optional (port (current-input-port)))
   ;; For read-syntax, we'd define these annotate / strip functions
@@ -3411,195 +3604,3 @@ object @var{exception}."
         ch
         (read-expr ch))))
 
-(define* (display datum #:optional (port (current-output-port)))
-  (%write-datum port datum #f))
-(define* (write datum #:optional (port (current-output-port)))
-  (%write-datum port datum #t))
-(define* (write-shared datum #:optional (port (current-output-port)))
-  (error "write unimplemented"))
-(define* (write-simple datum #:optional (port (current-output-port)))
-  (error "write unimplemented"))
-
-(define (jiffies-per-second)
-  (%inline-wasm
-   '(func (result i64)
-          (i64.extend_i32_u (call $jiffies-per-second)))))
-
-(define (current-jiffy)
-  (%inline-wasm
-   '(func (result i64)
-          (i64.extend_i32_u (call $current-jiffy)))))
-
-(define (current-second)
-  (%inline-wasm
-   '(func (result f64) (call $current-second))))
-
-(define (standard-input-port)
-    (%make-soft-port "stdin"
-                     (lambda ()
-                       (%inline-wasm
-                        '(func (result (ref eq))
-                               (struct.new $string
-                                           (i32.const 0)
-                                           (call $read-stdin)))))
-                     #f #f #f))
-(define (standard-output-port)
-  (%make-soft-port "stdout"
-                   #f
-                   (lambda (str)
-                     (%inline-wasm
-                      '(func (param $str (ref string))
-                             (call $write-stdout (local.get $str)))
-                      str))
-                   #f #f))
-(define (standard-error-port)
-  (%make-soft-port "stderr"
-                   #f
-                   (lambda (str)
-                     (%inline-wasm
-                      '(func (param $str (ref string))
-                             (call $write-stderr (local.get $str)))
-                      str))
-                   #f #f))
-
-;; FFI
-(define (external? obj)
-  (%inline-wasm
-   '(func (param $obj (ref eq)) (result (ref eq))
-          (ref.i31
-           (if i32
-               (ref.test $extern-ref (local.get $obj))
-               (then (i32.const 17))
-               (else (i32.const 1)))))
-   obj))
-
-(define (external-null? extern)
-  (unless (external? extern)
-    (error "expected external" extern))
-  (%inline-wasm
-   '(func (param $extern (ref $extern-ref)) (result (ref eq))
-          (if (ref eq)
-              (ref.is_null
-               (struct.get $extern-ref $val (local.get $extern)))
-              (then (ref.i31 (i32.const 17)))
-              (else (ref.i31 (i32.const 1)))))
-   extern))
-
-(define (procedure->external proc)
-  (unless (procedure? proc)
-    (error "expected procedure" proc))
-  (%inline-wasm
-   '(func (param $f (ref $proc)) (result (ref eq))
-          (struct.new $extern-ref
-                      (i32.const 0)
-                      (call $procedure->extern (local.get $f))))
-   proc))
-
-(define-syntax define-foreign
-  (lambda (x)
-    (define (cons x y) (%cons x y))
-    (define (car x) (%car x))
-    (define (cdr x) (%cdr x))
-    (define (null? x) (%null? x))
-    (define (map proc lst)
-      (if (null? lst)
-          '()
-          (cons (proc (car lst)) (map proc (cdr lst)))))
-    (define (type-check exp)
-      (define (check param predicate message)
-        #`(unless (#,predicate #,param) (error #,message #,param)))
-      (syntax-case exp (i32 i64 f32 f64 ref null eq string extern)
-        ((x i32) (check #'x #'exact-integer? "expected exact integer"))
-        ((x i64) (check #'x #'exact-integer? "expected exact integer"))
-        ((x f32) (check #'x #'real? "expected real number"))
-        ((x f64) (check #'x #'real? "expected real number"))
-        ((x (ref eq)) #'#t)
-        ((x (ref null extern)) (check #'x #'external? "expected external"))
-        ((x (ref string)) (check #'x #'string? "expected string"))
-        ((x type) (error "unsupported param type" #'type))))
-    (define (import-result-types exp)
-      (syntax-case exp (none)
-        (none #'())
-        (type #'((result type)))))
-    (define (result-types exp)
-      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
-        (none #'())
-        (i32 #'((result i64)))
-        (i64 #'((result i64)))
-        (f32 #'((result f64)))
-        (f64 #'((result f64)))
-        ((ref string) #'((result (ref eq))))
-        ((ref null extern) #'((result (ref eq))))
-        (type (error "unsupported result type" #'type))))
-    (define (lift-result exp)
-      (syntax-case exp (none i32 i64 f32 f64 ref null string extern)
-        ((x none) #'x)
-        ((x i32) #'(i64.extend_i32_s x))
-        ((x i64) #'x)
-        ((x f32) #'(f64.promote_f32 x))
-        ((x f64) #'x)
-        ((x (ref string)) #'(struct.new $string (i32.const 0) x))
-        ((x (ref null extern)) #'(struct.new $extern-ref (i32.const 0) x))
-        (type (error "unsupported result type" #'type))))
-    (define (fresh-wasm-id prefix)
-      (datum->syntax x (gensym prefix)))
-    (define (fresh-wasm-ids prefix lst)
-      (map (lambda (_) (fresh-wasm-id prefix)) lst))
-    (syntax-case x (->)
-      ((_ proc-name mod name ptype ... -> rtype)
-       (with-syntax ((iname (fresh-wasm-id "$import-"))
-                     ((pname ...) (fresh-wasm-ids "$param-" #'(ptype ...))))
-         #`(begin
-             (%wasm-import
-              '(func iname (import mod name)
-                     (param ptype) ...
-                     #,@(import-result-types #'rtype)))
-             (define (proc-name pname ...)
-               #,@(map type-check #'((pname ptype) ...))
-               (%inline-wasm
-                '(func (param pname ptype) ...
-                       #,@(result-types #'rtype)
-                       #,(lift-result
-                          #'((call iname (local.get pname) ...) rtype)))
-                pname ...))))))))
-
-(cond-expand
- (hoot-main
-  (define current-input-port
-    (make-parameter (standard-input-port)
-                    (lambda (val)
-                      (unless (input-port? val)
-                        (error "expected input port" val))
-                      val)))
-  (define current-output-port
-    (make-parameter (standard-output-port)
-                    (lambda (val)
-                      (unless (output-port? val)
-                        (error "expected output port" val))
-                      val)))
-  (define current-error-port
-    (make-parameter (standard-error-port)
-                    (lambda (val)
-                      (unless (output-port? val)
-                        (error "expected output port" val))
-                      val)))
-  (%inline-wasm
-   '(func (param $current-input-port (ref eq))
-          (param $current-output-port (ref eq))
-          (param $current-error-port (ref eq))
-          (global.set $current-input-port (local.get $current-input-port))
-          (global.set $current-output-port (local.get $current-output-port))
-          (global.set $current-error-port (local.get $current-error-port)))
-   current-input-port
-   current-output-port
-   current-error-port))
- (hoot-aux
-  (define current-input-port
-    (%inline-wasm
-     '(func (result (ref eq)) (global.get $current-input-port))))
-  (define current-output-port
-    (%inline-wasm
-     '(func (result (ref eq)) (global.get $current-output-port))))
-  (define current-error-port
-    (%inline-wasm
-     '(func (result (ref eq)) (global.get $current-error-port))))))

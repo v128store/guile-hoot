@@ -1987,8 +1987,8 @@
           (close-port p)
           (apply values vals))))))
 
-(define (%make-vtable nfields printer name constructor properties
-                      parents mutable-fields compare)
+(define-syntax-rule (%make-vtable nfields printer name constructor properties
+                                  parents mutable-fields compare)
   (%inline-wasm
    '(func (param $nfields (ref eq))
           (param $printer (ref eq))
@@ -2010,7 +2010,7 @@
                       (local.get $parents)
                       (local.get $mutable-fields)
                       (local.get $compare)))
-    nfields printer name constructor properties parents mutable-fields compare))
+   nfields printer name constructor properties parents mutable-fields compare))
 
 (define (record-type-parents rtd)
   (%inline-wasm

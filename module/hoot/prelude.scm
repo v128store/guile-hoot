@@ -2177,7 +2177,8 @@
                             (write-string ">" port)))))
                     (_ printer))
                 '#,id
-                constructor
+                (lambda (vtable cfield ...)
+                  (%make-struct vtable cfield ...))
                 '#,properties
                 #,parents
                 #,(compute-mutable-fields #'(setter ...))

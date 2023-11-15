@@ -4132,6 +4132,24 @@
                (then (call $i32->fixnum (local.get $a)))
                (else (return_call $s64->bignum (i64.extend_i32_s (local.get $a))))))
 
+     (func $string->wtf8
+           (param $str (ref string)) (result (ref $raw-bytevector))
+           (local $vu0 (ref $raw-bytevector))
+           (local.set $vu0
+                      (array.new_default
+                       $raw-bytevector
+                       (string.measure_wtf8 (local.get $str))))
+           (string.encode_wtf8_array (local.get $str)
+                                     (local.get $vu0)
+                                     (i32.const 0))
+           (local.get $vu0))
+
+     (func $wtf8->string
+           (param $bv (ref $raw-bytevector)) (result (ref string))
+           (string.new_lossy_utf8_array (local.get $bv)
+                                        (i32.const 0)
+                                        (array.len (local.get $bv))))
+
      (func $set-fluid-and-return-prev (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq))
            (param $arg2 (ref eq))

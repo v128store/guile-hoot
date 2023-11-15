@@ -50,7 +50,8 @@
                  eval-when
                  make-struct/simple struct? struct-vtable
                  struct-ref struct-set!
-                 gensym))
+                 gensym
+                 string-utf8-length))
   #:use-module ((system syntax internal) #:select (syntax-local-binding))
   ;; A bug in Guile: the public interface of (guile) uses (ice-9 ports),
   ;; which should re-export all its bindings, but #:select doesn't work
@@ -77,7 +78,9 @@
                  bytevector-ieee-single-native-ref
                  bytevector-ieee-single-native-set!
                  bytevector-ieee-double-native-ref
-                 bytevector-ieee-double-native-set!))
+                 bytevector-ieee-double-native-set!
+
+                 string->utf8 utf8->string))
   #:use-module ((scheme base)
                 #:select
                 (_
@@ -237,6 +240,9 @@
    (bytevector-u8-ref . %bytevector-u8-ref)
    (bytevector-u8-set! . %bytevector-u8-set!)
    (bytevector? . %bytevector?)
+   (string->utf8 . %string->utf8)
+   (utf8->string . %utf8->string)
+   (string-utf8-length . %string-utf8-length)
 
    ;; R7RS numerics
    (* . %*)

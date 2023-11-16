@@ -2395,12 +2395,12 @@
                     (#f
                      (syntax-case opaque? ()
                        (#t
-                        #`(lambda (x port)
+                        #`(lambda (x port write-field)
                             (write-string "#<" port)
                             (write-string #,id-str port)
                             (write-string ">" port)))
                        (#f
-                        #`(lambda (x port)
+                        #`(lambda (x port write-field)
                             #;
                             (unless (predicate x)
                               (error "record type check failed"))
@@ -2415,12 +2415,11 @@
                                    (let ((name (symbol->string (car fields)))
                                          (fields (cdr fields)))
                                      #`((write-string " " port)
-                                        (write-string #,name port)
-                                        (write-string ": " port)
-                                        (write (%struct-ref x #,i) port)
+                                        (write-field #,name (%struct-ref x #,i) port)
                                         . #,(lp fields (1+ i)))))))
                             (write-string ">" port)))))
-                    (_ printer))
+                    (_ #`(let ((p #,printer))
+                           (lambda (x port write-field) (p x port)))))
                 '#,id
                 (lambda (vtable cfield ...)
                   (%make-struct vtable cfield ...))
@@ -2477,11 +2476,15 @@
           (apply parse-body #'id tail kwargs)))))))
 (define (record? x)
   (%struct? x))
-(define (write-record record port)
+(define (write-record record port write)
   (define printer-field 1)
+  (define (write-field name value port)
+    (write-string name port)
+    (write-string ": " port)
+    (write value port))
   (match (%struct-ref (%struct-vtable record) printer-field)
     (#f (write-string "#<record with no printer!>" port))
-    (print (print record port))))
+    (print (print record port write-field))))
 
 (define (eq? x y) (%eq? x y))
 (define (eqv? x y) (%eqv? x y))
@@ -2664,7 +2667,7 @@
     (write-string "#:" port)
     (write-string (symbol->string (keyword->symbol x)) port))
    ((record? x)
-    (write-record x port))
+    (write-record x port write))
    (else
     (recur "unhandled object :("))))
 

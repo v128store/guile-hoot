@@ -66,6 +66,9 @@
 
 (define-syntax-rule (match e cs ...) (simple-match e cs ...))
 
+(define (raise exn) (%raise-exception exn))
+(define (raise-continuable exn) (%raise-exception exn #:continuable? #t))
+
 ;; Guile extensions.
 (define (1+ x) (%+ x 1))
 (define (1- x) (%- x 1))
@@ -2542,84 +2545,6 @@
       ((_ msg . arg) #'(%error msg . arg))
       (f (identifier? #'f) #'%generic-error))))
 
-(cond-expand
- (hoot-main
-  (define %exception-handler (make-fluid #f))
-  (define (fluid-ref* fluid depth)
-    (%inline-wasm
-     '(func (param $fluid (ref $fluid)) (param $depth i32)
-            (result (ref eq))
-            (call $fluid-ref* (local.get $fluid) (local.get $depth)))
-     fluid depth))
-  ;; FIXME: Use #:key instead
-  (define* (with-exception-handler handler thunk
-                                   #:optional keyword (unwind? #f))
-    #;
-    (unless (procedure? handler)
-      (error "not a procedure" handler))
-    (cond
-     (unwind?
-      (let ((tag (make-prompt-tag "exception handler")))
-        (call-with-prompt
-         tag
-         (lambda ()
-           (with-fluids ((%exception-handler (cons #t tag)))
-             (thunk)))
-         (lambda (k exn)
-           (handler exn)))))
-     (else
-      (let ((running? (make-fluid #f)))
-        (with-fluids ((%exception-handler (cons running? handler)))
-          (thunk))))))
-  ;; FIXME: Use #:key instead
-  (define* (raise-exception exn #:optional keyword continuable?)
-    (let lp ((depth 0))
-      ;; FIXME: fluid-ref* takes time proportional to depth, which
-      ;; makes this loop quadratic.
-      (match (fluid-ref* %exception-handler depth)
-        (#f
-         ;; No exception handlers bound; fall back.
-         (pk 'uncaught-exception exn)
-         (%inline-wasm
-          '(func (param $exn (ref eq))
-                 (call $die (string.const "uncaught exception")
-                       (local.get $exn))
-                 (unreachable))
-          exn))
-        ((#t . prompt-tag)
-         (abort-to-prompt prompt-tag exn)
-         (error "unreachable"))
-        ((running? . handler)
-         (if (fluid-ref running?)
-             (begin
-               (lp (1+ depth)))
-             (with-fluids ((running? #t))
-               (cond
-                (continuable?
-                 (handler exn))
-                (else
-                 (handler exn)
-                 ;; FIXME: Raise &non-continuable.
-                 (error "non-continuable")))))))))
-  (%inline-wasm
-   '(func (param $with-exception-handler (ref $proc))
-          (param $raise-exception (ref $proc))
-          (global.set $with-exception-handler (local.get $with-exception-handler))
-          (global.set $raise-exception (local.get $raise-exception)))
-   with-exception-handler
-   raise-exception))
- (hoot-aux
-  (define with-exception-handler
-    (%inline-wasm
-     '(func (result (ref eq))
-            (global.get $with-exception-handler))))
-  ;; FIXME: #:key
-  (define* (raise-exception exn #:optional keyword continuable?)
-    (%raise-exception exn #:continuable? continuable?))))
-
-(define (raise exn) (%raise-exception exn))
-(define (raise-continuable exn) (%raise-exception exn #:continuable? #t))
-
 (define (procedure? x) (%procedure? x))
 
 ;; Temp definitions!
@@ -3618,3 +3543,76 @@ object @var{exception}."
         ch
         (read-expr ch))))
 
+(cond-expand
+ (hoot-main
+  (define %exception-handler (make-fluid #f))
+  (define (fluid-ref* fluid depth)
+    (%inline-wasm
+     '(func (param $fluid (ref $fluid)) (param $depth i32)
+            (result (ref eq))
+            (call $fluid-ref* (local.get $fluid) (local.get $depth)))
+     fluid depth))
+  ;; FIXME: Use #:key instead
+  (define* (with-exception-handler handler thunk
+                                   #:optional keyword (unwind? #f))
+    #;
+    (unless (procedure? handler)
+      (error "not a procedure" handler))
+    (cond
+     (unwind?
+      (let ((tag (make-prompt-tag "exception handler")))
+        (call-with-prompt
+         tag
+         (lambda ()
+           (with-fluids ((%exception-handler (cons #t tag)))
+             (thunk)))
+         (lambda (k exn)
+           (handler exn)))))
+     (else
+      (let ((running? (make-fluid #f)))
+        (with-fluids ((%exception-handler (cons running? handler)))
+          (thunk))))))
+  ;; FIXME: Use #:key instead
+  (define* (raise-exception exn #:optional keyword continuable?)
+    (let lp ((depth 0))
+      ;; FIXME: fluid-ref* takes time proportional to depth, which
+      ;; makes this loop quadratic.
+      (match (fluid-ref* %exception-handler depth)
+        (#f
+         ;; No exception handlers bound; fall back.
+         ;(pk 'uncaught-exception exn)
+         (%inline-wasm
+          '(func (param $exn (ref eq))
+                 (call $die (string.const "uncaught exception")
+                       (local.get $exn))
+                 (unreachable))
+          exn))
+        ((#t . prompt-tag)
+         (abort-to-prompt prompt-tag exn)
+         (raise (make-non-continuable-violation)))
+        ((running? . handler)
+         (if (fluid-ref running?)
+             (begin
+               (lp (1+ depth)))
+             (with-fluids ((running? #t))
+               (cond
+                (continuable?
+                 (handler exn))
+                (else
+                 (handler exn)
+                 (raise (make-non-continuable-violation))))))))))
+  (%inline-wasm
+   '(func (param $with-exception-handler (ref $proc))
+          (param $raise-exception (ref $proc))
+          (global.set $with-exception-handler (local.get $with-exception-handler))
+          (global.set $raise-exception (local.get $raise-exception)))
+   with-exception-handler
+   raise-exception))
+ (hoot-aux
+  (define with-exception-handler
+    (%inline-wasm
+     '(func (result (ref eq))
+            (global.get $with-exception-handler))))
+  ;; FIXME: #:key
+  (define* (raise-exception exn #:optional keyword continuable?)
+    (%raise-exception exn #:continuable? continuable?))))

@@ -475,7 +475,7 @@
 
 (define (length l)
   (let lp ((len 0) (l l))
-    (if (null? l) len (lp (1+ len) (cdr l)))))
+    (if (%null? l) len (lp (%+ len 1) (%cdr l)))))
 
 (define (list-ref l n)
   (let lp ((l l) (n n))

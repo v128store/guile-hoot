@@ -835,14 +835,16 @@
 (define-associative-eta-expansion gcd %gcd)
 (define-associative-eta-expansion lcm %lcm)
 
-(define (max x . y)
-  (match y
-    (() x)
-    ((y . y*) (apply max (if (> x y) x y) y*))))
-(define (min x . y)
-  (match y
-    (() x)
-    ((y . y*) (apply min (if (< x y) x y) y*))))
+(define max
+  (case-lambda
+   ((x) x)
+   ((x y) (if (> x y) x y))
+   ((x y . z) (apply max (max x y) z))))
+(define min
+  (case-lambda
+   ((x) x)
+   ((x y) (if (< x y) x y))
+   ((x y . z) (apply min (min x y) z))))
 
 (define (negative? x) (< x 0))
 (define (positive? x) (> x 0))

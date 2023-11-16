@@ -32,6 +32,14 @@
      (let ((fk (lambda () (simple-match-1 v cs ...))))
        (simple-match-pat v pat (let () e0 e ...) (fk))))))
 
+(define-syntax simple-match-patv
+  (syntax-rules ()
+    ((_ v idx () kt kf) kt)
+    ((_ v idx (x . y) kt kf)
+     (simple-match-pat (vector-ref v idx) x
+                       (simple-match-patv v (1+ idx) y kt kf)
+                       kf))))
+
 (define-syntax simple-match-pat
   (syntax-rules (_ quote unquote ? and or not)
     ((_ v _ kt kf) kt)
@@ -59,8 +67,7 @@
     ((_ v #(x ...) kt kf)
      (if (and (vector? v)
               (eq? (vector-length v) (length '(x ...))))
-         (let ((vv (vector->list v)))
-           (simple-match-pat vv (x ...) kt kf))
+         (simple-match-patv v 0 (x ...) kt kf)
          kf))
     ((_ v var kt kf) (let ((var v)) kt))))
 

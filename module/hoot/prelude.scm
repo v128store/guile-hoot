@@ -2241,10 +2241,21 @@
    nfields printer name constructor properties parents mutable-fields compare))
 
 (define (record-type-parents rtd)
-  (%inline-wasm
-   '(func (param $vtable (ref $vtable)) (result (ref eq))
-          (struct.get $vtable $parents (local.get $vtable)))
-   rtd))
+  (match (%inline-wasm
+          '(func (param $vtable (ref $vtable)) (result (ref eq))
+                 (struct.get $vtable $parents (local.get $vtable)))
+          rtd)
+    ((? vector? parentv) parentv)
+    (parent
+     (let ((grandparents (record-type-parents parent)))
+       (define parents (make-vector (1+ (vector-length grandparents)) parent))
+       (vector-copy! parents 0 grandparents 0)
+       (%inline-wasm
+        '(func (param $vtable (ref $vtable)) (param $parentv (ref eq))
+               (struct.set $vtable $parents (local.get $vtable)
+                           (local.get $parentv)))
+        rtd parents)
+       parents))))
 (define-syntax define-record-type
   (lambda (stx)
     (define (cons a b) (%cons a b))
@@ -2323,13 +2334,12 @@
                 (1+ parent-count)
                 (procedure-property value 'fields)
                 (procedure-property value 'mutable-fields)
-                #`(let ((parentv (record-type-parents #,parent)))
-                    (vector #,@(let lp ((i 0))
-                                 (if (< i parent-count)
-                                     (cons #`(vector-ref parentv #,i)
-                                           (lp (1+ i)))
-                                     '()))
-                            #,parent))))))))
+                (if (eq? parent-count 0)
+                    #`(vector #,parent)
+                    ;; Lazily initialize parentv on first access;
+                    ;; mentioning all of the vtables would make it
+                    ;; harder for peval / dce to elide unused vtables.
+                    parent)))))))
       (define (valid-constructor-args? cfields fields)
         (define (check-parent-fields cfields parent-fields)
           (cond

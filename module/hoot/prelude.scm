@@ -274,6 +274,8 @@
 (define (atomic-box-swap! x y) (%atomic-box-swap! x y))
 (define (atomic-box-compare-and-swap! x y z) (%atomic-box-compare-and-swap! x y z))
 
+(define (list . args) args)
+
 (define-syntax-rule (define-primcall f %f arg ...)
   (begin
     (define (generic arg ...)
@@ -467,7 +469,6 @@
 (define (length l)
   (let lp ((len 0) (l l))
     (if (null? l) len (lp (1+ len) (cdr l)))))
-(define (list . args) args)
 
 (define (list-ref l n)
   (let lp ((l l) (n n))

@@ -1689,14 +1689,12 @@
 ;; FIXME: kwargs
 (define (%make-soft-port repr %read-string %write-string input-waiting? close)
   (define (make-reader read-string)
-    (define transcoder (open-output-bytevector))
     (define buffer #f)
     (define buffer-pos 0)
     (lambda (bv start count)
       (unless (and buffer (< buffer-pos (bytevector-length buffer)))
         (let* ((str (%read-string)))
-          (write-string str transcoder)
-          (set! buffer (get-output-bytevector transcoder #t))
+          (set! buffer (string->utf8 str))
           (set! buffer-pos 0)))
 
       (let* ((to-copy (min count (- (bytevector-length buffer) buffer-pos)))

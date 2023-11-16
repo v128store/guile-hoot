@@ -37,11 +37,12 @@
            (error "Unexpected trailing expression" tail)))
        expr))))
 
-(define* (optimize expr #:key (optimization-level (default-optimization-level)) (opts '()))
+(define* (optimize expr #:key (optimization-level (default-optimization-level))
+                   (opts '()) import-abi?)
   (define lower-tree-il
     ((language-lowerer (lookup-language 'tree-il)) optimization-level opts))
 
-  (let* ((expr (wrap-with-prelude expr #:import-abi? #t))
+  (let* ((expr (wrap-with-prelude expr #:import-abi? import-abi?))
          (env (default-hoot-environment))
          (tree-il (compile expr #:from 'scheme #:to 'tree-il
                            #:env env
@@ -52,8 +53,13 @@
 
 (when (batch-mode?)
   (match (program-arguments)
-    ((arg0 expr)
-     (optimize (read1 expr)))
-    ((arg0 . _)
-     (format (current-error-port) "usage: ~a EXPR\n" arg0)
-     (exit 1))))
+    ((arg0 . args)
+     (let lp ((args args) (import-abi? #f))
+       (match args
+         (("--import-abi" . args)
+          (lp args #t))
+         ((expr)
+          (optimize (read1 expr) #:import-abi? import-abi?))
+         (_
+          (format (current-error-port) "usage: ~a [--import-abi] EXPR\n" arg0)
+          (exit 1)))))))

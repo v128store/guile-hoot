@@ -2481,6 +2481,11 @@
                    #,@properties)
                  (syntax-case stx ()
                    (x (identifier? #'x) #'vtable))))
+             ;; Note that the procedures stored in record vtables are
+             ;; treated as "trusted": they do no type checks.  They
+             ;; shouldn't be exposed to users because it may be that
+             ;; they can apply to objects of different types but the
+             ;; same shape.
              (define vtable
                (%make-vtable
                 #,(length #'(cfield ...))
@@ -2494,9 +2499,6 @@
                             (write-string ">" port)))
                        (#f
                         #`(lambda (x port write-field)
-                            #;
-                            (unless (predicate x)
-                              (error "record type check failed"))
                             (write-string "#<" port)
                             (write-string #,id-str port)
                             #,@(let lp ((fields (map syntax->datum

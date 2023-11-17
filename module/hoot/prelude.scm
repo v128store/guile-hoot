@@ -1661,11 +1661,16 @@
 (%define-simple-port-setter %set-port-read-buffering! $read-buffering)
 (%define-simple-port-setter %set-port-fold-case?! $fold-case?)
 
-(define (port-line port) (car (%port-position port)))
-(define (port-column port) (cdr (%port-position port)))
+(define (port-line port)
+  (check-type port port? 'port-line)
+  (car (%port-position port)))
+(define (port-column port)
+  (check-type port port? 'port-column)
+  (cdr (%port-position port)))
 
 (define* (get-output-bytevector port #:optional (clear-buffer? #f))
   ;; FIXME: How to know it's a bytevector output port?
+  (check-type port output-port? 'get-output-bytevector)
   (define accum (%port-private-data port))
   (flush-output-port port)
   (let ((flattened (bytevector-concatenate (box-ref accum))))
@@ -1726,6 +1731,7 @@
   port)
 
 (define (open-input-bytevector src)
+  (check-type src bytevector? 'open-input-bytevector)
   (define pos 0)
   (define default-buffer-size 1024)
   (define (bv-read dst start count)
@@ -1741,6 +1747,7 @@
     (check-range dst 0 len 'seek)
     (set! pos dst)
     dst)
+  ;; FIXME: Can we just provide `src` directly as the read buffer?
   (%make-port bv-read
               #f                      ; write
               #f                      ; input-waiting?
@@ -1758,6 +1765,7 @@
 
 ;; FIXME: kwargs
 (define (%make-soft-port repr %read-string %write-string input-waiting? close)
+  (check-type repr string? 'make-port)
   (define (make-reader read-string)
     (define buffer #f)
     (define buffer-pos 0)
@@ -1784,7 +1792,6 @@
       count))
 
   (define default-buffer-size 1024)
-  (check-type repr string? 'make-port)
   (%make-port (and read-string (make-reader read-string))
               (and write-string (make-writer write-string))
               input-waiting?

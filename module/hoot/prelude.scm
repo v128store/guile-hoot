@@ -770,29 +770,25 @@
 (define (odd? x) (not (even? x)))
 
 (define (numerator x)
-  (if (number? x)
-      (cond
-       ((exact-integer? x) x)
-       ((exact? x)
-        (%inline-wasm
-         '(func (param $x (ref $fraction))
-                (result (ref eq))
-                (struct.get $fraction $num (local.get $x)))
-         x))
-       (else (inexact (numerator (exact x)))))
-      (error "non-numeric argument")))
+  (cond
+   ((exact-integer? x) x)
+   ((exact? x)
+    (%inline-wasm
+     '(func (param $x (ref $fraction))
+            (result (ref eq))
+            (struct.get $fraction $num (local.get $x)))
+     x))
+   (else (inexact (numerator (exact x))))))
 (define (denominator x)
-  (if (number? x)
-      (cond
-       ((exact-integer? x) 1)
-       ((exact? x)
-        (%inline-wasm
-         '(func (param $x (ref $fraction))
-                (result (ref eq))
-                (struct.get $fraction $denom (local.get $x)))
-         x))
-       (else (inexact (denominator (exact x)))))
-      (error "non-numeric argument")))
+  (cond
+   ((exact-integer? x) 1)
+   ((exact? x)
+    (%inline-wasm
+     '(func (param $x (ref $fraction))
+            (result (ref eq))
+            (struct.get $fraction $denom (local.get $x)))
+     x))
+   (else (inexact (denominator (exact x))))))
 (define (exact-integer-sqrt x) (error "unimplemented"))
 
 (define (floor/ x y)

@@ -2930,20 +2930,17 @@
   (define current-input-port
     (make-parameter (standard-input-port)
                     (lambda (val)
-                      (unless (input-port? val)
-                        (error "expected input port" val))
+                      (check-type val input-port? 'current-input-port)
                       val)))
   (define current-output-port
     (make-parameter (standard-output-port)
                     (lambda (val)
-                      (unless (output-port? val)
-                        (error "expected output port" val))
+                      (check-type val output-port? 'current-output-port)
                       val)))
   (define current-error-port
     (make-parameter (standard-error-port)
                     (lambda (val)
-                      (unless (output-port? val)
-                        (error "expected output port" val))
+                      (check-type val output-port? 'current-error-port)
                       val)))
   (%inline-wasm
    '(func (param $current-input-port (ref eq))
@@ -3010,7 +3007,7 @@ object @var{exception}."
         ((simple-exception? exception)
          (list exception))
         (else
-         (error "not a exception" exception))))
+         (raise (%make-type-error exception 'exception? 'simple-exceptions)))))
 
 (define (make-exception . exceptions)
   "Return an exception object composed of @var{exceptions}."

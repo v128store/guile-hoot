@@ -2128,6 +2128,7 @@
                             (local.get $end))))))
                  bv cur (+ cur len))))))))))))
 (define* (read-string k #:optional (port (current-input-port)))
+  (check-type port input-port? 'read-string)
   (cond
    ;; Call peek-char to ensure we're at the start of some UTF-8.
    ((eof-object? (peek-char port)) (eof-object))
@@ -2156,6 +2157,7 @@
                    (take-string count cur)))
              (take-string count cur))))))))
 (define* (read-line #:optional (port (current-input-port)))
+  (check-type port input-port? 'read-line)
   (define bytes '())
   (define (finish)
     (utf8->string (bytevector-concatenate-reverse bytes)))
@@ -2192,8 +2194,9 @@
            (finish))))))))
 
 (define* (write-u8 u8 #:optional (port (current-output-port)))
+  (check-type port port? 'write-u8)
   (match (%port-write-buffer port)
-    (#f (error "not an output port"))
+    (#f (raise (make-type-error port 'write-u8 'output-port?)))
     ((and buf #(dst cur end))
      (when (and (eq? cur end) (%port-r/w-random-access? port))
        (flush-input-port port))
@@ -2211,9 +2214,10 @@
 
 (define* (write-bytevector bv #:optional (port (current-output-port))
                            (start 0) (end (bytevector-length bv)))
+  (check-type port port? 'write-u8)
   (let ((count (- end start)))
     (match (%port-write-buffer port)
-      (#f (error "not an output port"))
+      (#f (raise (make-type-error port 'write-u8 'output-port?)))
       ((and buf #(dst cur end))
        (when (and (eq? cur end) (%port-r/w-random-access? port))
          (flush-input-port port))

@@ -1382,10 +1382,45 @@
     (for-each (lambda (ch) (write-char ch p)) chars)
     (get-output-string p)))
 (define* (string->list str #:optional (start 0) (end (string-length str)))
-  (let lp ((i start))
-    (if (< i end)
-        (cons (string-ref str i) (lp (1+ i)))
-        '())))
+  (check-type str string? 'string->list)
+  (check-range start 0 (string-length str) 'string->list)
+  (check-range end start (string-length str) 'string->list)
+  (%inline-wasm
+   '(func (param $s (ref string)) (param $start i32) (param $end i32)
+          (result (ref eq))
+          (local $str_iter (ref stringview_iter))
+          (local $s0 (ref eq))
+          (local $i0 i32)
+          (local.set $str_iter (string.as_iter (local.get $s)))
+          (local.set $s0
+                     (struct.new $mutable-pair
+                                 (i32.const 0)
+                                 (ref.i31 (i32.const 1))
+                                 (ref.i31 (i32.const 13))))
+          (local.set $i0
+                     (i32.sub (local.get $end) (local.get $start)))
+          (drop
+           (stringview_iter.advance (local.get $str_iter) (local.get $start)))
+          (ref.cast $mutable-pair (local.get $s0))
+          (loop $lp
+            (if (local.get $i0)
+                (then
+                 (ref.cast $mutable-pair (local.get $s0))
+                 (local.tee
+                  $s0
+                  (struct.new $mutable-pair
+                              (i32.const 0)
+                              (ref.i31
+                               (i32.add
+                                (i32.shl (stringview_iter.next (local.get $str_iter))
+                                         (i32.const 2))
+                                (i32.const #b11)))
+                              (ref.i31 (i32.const 13))))
+                 (struct.set $mutable-pair $cdr)
+                 (local.set $i0 (i32.sub (local.get $i0) (i32.const 1)))
+                 (br $lp))))
+          (struct.get $mutable-pair $cdr))
+   str start end))
 (define* (string->vector str #:optional (start 0) (end (string-length string)))
   (list->vector (string->list str start end)))
 (define* (vector->string v #:optional (start 0) (end (vector-length v)))

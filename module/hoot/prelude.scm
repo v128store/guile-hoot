@@ -27,7 +27,7 @@
 
 (define-syntax simple-match-1
   (syntax-rules ()
-    ((_ v) (error "value failed to match" v))
+    ((_ v) (raise (%make-match-error v)))
     ((_ v (pat e0 e ...) cs ...)
      (let ((fk (lambda () (simple-match-1 v cs ...))))
        (simple-match-pat v pat (let () e0 e ...) (fk))))))
@@ -141,6 +141,8 @@
   (list msg))
 (define (%make-runtime-error-with-message+irritants msg irritants)
   (list msg irritants))
+(define (%make-match-error v)
+  (list v))
 
 (define error
   (case-lambda

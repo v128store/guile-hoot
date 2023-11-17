@@ -1114,17 +1114,8 @@
 
 ;; Adapted from the comments for scm_rationalize in libguile's numbers.c
 (define (rationalize x y)
-  ;; FIXME: use `(rational? x)' for type checks
-  (unless (and (real? x)
-               (not (eqv? x +inf.0))
-               (not (eqv? x -inf.0))
-               (= x x))
-    (error "expected rational" x))
-  (unless (and (real? x)
-               (not (eqv? x +inf.0))
-               (not (eqv? x -inf.0))
-               (= x x))
-    (error "expected rational" y))
+  (check-type x rational? 'rationalize)
+  (check-type y rational? 'rationalize)
   (define (exact-rationalize x eps)
     (let ((n1  (if (negative? x) -1 1))
           (x   (abs x))
@@ -1150,10 +1141,8 @@
 (define (square x) (* x x))
 
 (define (expt x y)
-  (unless (number? x)
-    (error "not a number" x))
-  (unless (number? y)
-    (error "not a number" y))
+  (check-type x number? 'expt)
+  (check-type y number? 'expt)
   (cond
    ((eqv? x 0)
     (cond ((zero? y) (if (exact? y) 1 1.0))
@@ -1174,11 +1163,27 @@
    (else (exp (* y (log x))))))
 
 ;; (scheme complex)
-(define (make-polar real imag) (error "unimplemented"))
-(define (magnitude z) (error "unimplemented"))
-(define (angle z) (error "unimplemented"))
-(define (real-part z) (error "unimplemented"))
-(define (imag-part z) (error "unimplemented"))
+(define (make-polar x y) (raise (%make-unimplemented-error 'make-polar)))
+(define (magnitude z) (raise (%make-unimplemented-error 'magnitude)))
+(define (angle z) (raise (%make-unimplemented-error 'angle)))
+(define (real-part z)
+  (cond
+   ((real? z) z)
+   (else
+    (check-type z complex? 'real-part)
+    (%inline-wasm
+     '(func (param $z (ref $complex)) (result f64)
+            (struct.get $complex $real (local.get $z)))
+     z))))
+(define (imag-part z)
+  (cond
+   ((real? z) 0.0)
+   (else
+    (check-type z complex? 'real-part)
+    (%inline-wasm
+     '(func (param $z (ref $complex)) (result f64)
+            (struct.get $complex $imag (local.get $z)))
+     z))))
 
 (define (char->integer x) (%char->integer x))
 (define (integer->char x) (%integer->char x))
@@ -1249,7 +1254,7 @@
          (char-foldcase ch1) (char-foldcase ch2) (map char-foldcase ch*)))
 
 (define (string-upcase str)
-  (unless (string? str) (error "expected a string" str))
+  (check-type str string? 'string-upcase)
   (%inline-wasm
    '(func (param $str (ref string))
           (result (ref eq))
@@ -1258,7 +1263,7 @@
                       (call $string-upcase (local.get $str))))
    str))
 (define (string-downcase str)
-  (unless (string? str) (error "expected a string" str))
+  (check-type str string? 'string-downcase)
   (%inline-wasm
    '(func (param $str (ref string))
           (result (ref eq))
@@ -1288,17 +1293,25 @@
            (and-map pred (cdr l)))))
 
 (define (boolean? x) (match x ((or #f #t) #t) (_ #f)))
-(define (boolean=? x y . z)
-  (unless (and (boolean? x) (boolean? y) (and-map boolean? z))
-    (error "expected booleans" x y z))
-  (apply eq? x y z))
+(define boolean=?
+  (case-lambda
+   ((x y)
+    (check-type x boolean? 'boolean=?)
+    (check-type y boolean? 'boolean=?)
+    (eq? x y))
+   ((x y . z)
+    (let lp ((z z) (res (boolean=? x y)))
+      (match z
+        (() res)
+        ((y . z)
+         (lp z (boolean=? x y))))))))
 
 ;; R7RS strings
 (define (string? x) (%string? x))
 (define (string-length x) (%string-length x))
 (define (string-ref x i) (%string-ref x i))
 (define (string-set! x i v)
-  (error "string-set!: mutable strings unimplemented"))
+  (raise (%make-unimplemented-error 'string-set!)))
 (define (string . chars) (list->string chars))
 (define* (make-string n #:optional (init #\space))
   (let ((p (open-output-string)))
@@ -1312,11 +1325,9 @@
     (for-each (lambda (str) (write-string str p)) strs)
     (get-output-string p)))
 (define* (string-copy str #:optional (start 0) (end (string-length str)))
-  (unless (string? str) (error "expected string" str))
-  (unless (and (exact-integer? start) (<= 0 start (string-length str)))
-    (error "bad start" start))
-  (unless (and (exact-integer? end) (<= start end (string-length str)))
-    (error "bad end" end))
+  (check-type str string? 'string-copy)
+  (check-range start 0 (string-length str) 'string-copy)
+  (check-range end start (string-length str) 'string-copy)
   (%inline-wasm
    '(func (param $str (ref string))
           (param $start i32)
@@ -1333,12 +1344,10 @@
                                                       (local.get $start)))))
    str start end))
 (define* (string-copy! to at from #:optional (start 0) (end (string-length from)))
-  (error "string-copy!: mutable strings unimplemented"))
+  (raise (%make-unimplemented-error 'string-copy!)))
 (define (string-fill! . _)
-  (error "string-fill!: mutable strings unimplemented"))
+  (raise (%make-unimplemented-error 'string-fill!)))
 (define (string-for-each f str . strs)
-  (unless (and (string? str) (and-map string? strs))
-    (error "expected strings" str strs))
   (apply for-each f (string->list str) (map string->list strs)))
 (define (%string-compare a b)
   (if (eq? a b)

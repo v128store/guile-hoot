@@ -1884,6 +1884,7 @@
   ;; have some bytes waiting to be read, and that the underlying
   ;; port-position is ahead.  This function discards buffered input and
   ;; seeks back from before the buffered input.
+  (check-type port port? 'flush-input-port)
   (match (%port-read-buffer port)
     (#f (raise (%make-type-error port 'flush-input-port 'input-port?)))
     ((and buf #(bv cur end has-eof?))
@@ -1892,6 +1893,7 @@
        (%set-port-buffer-end! buf 0)
        (seek port (- cur end) 'cur)))))
 (define* (flush-output-port #:optional (port (current-output-port)))
+  (check-type port port? 'flush-output-port)
   (match (%port-write-buffer port)
     (#f (raise (%make-type-error port 'flush-output-port 'output-port?)))
     ((and buf #(bv cur end))
@@ -1901,6 +1903,7 @@
        (%write-bytes port bv cur (- end cur))))))
 
 (define* (u8-ready? #:optional (port (current-input-port)))
+  (check-type port port? 'u8-ready?)
   (match (%port-read-buffer port)
     (#f (raise (%make-type-error port 'u8-ready? 'input-port?)))
     (#(bv cur end has-eof?)
@@ -1951,6 +1954,7 @@
                (values buf end)))))))))))
 
 (define* (peek-u8 #:optional (port (current-input-port)))
+  (check-type port port? 'peek-u8)
   (let lp ((buf (%port-read-buffer port)))
     (match buf
       (#f (raise (%make-type-error port 'peek-u8 'input-port?)))
@@ -1969,6 +1973,7 @@
          (bytevector-u8-ref bv cur)))))))
 
 (define* (read-u8 #:optional (port (current-input-port)))
+  (check-type port port? 'read-u8)
   (define (read-eof! buf)
     (%set-port-buffer-has-eof?! buf #f)
     (eof-object))
@@ -2053,19 +2058,20 @@
               (error "decoding error: partial utf-8 sequence"))
             (match buf
               (#(bv cur end has-eof?)
-               (%inline-wasm
-                '(func (param $bv (ref $bytevector))
-                       (param $cur i32)
-                       (param $end i32)
-                       (result (ref eq))
-                       (ref.i31
-                        (stringview_iter.next
-                         (string.as_iter
-                          (string.new_lossy_utf8_array
-                           (struct.get $bytevector $vals (local.get $bv))
-                           (local.get $cur)
-                           (local.get $end))))))
-                bv cur (+ cur len)))))))))))
+               (integer->char
+                (%inline-wasm
+                 '(func (param $bv (ref $bytevector))
+                        (param $cur i32)
+                        (param $end i32)
+                        (result i64)
+                        (i64.extend_i32_s
+                         (stringview_iter.next
+                          (string.as_iter
+                           (string.new_lossy_utf8_array
+                            (struct.get $bytevector $vals (local.get $bv))
+                            (local.get $cur)
+                            (local.get $end))))))
+                 bv cur (+ cur len))))))))))))
 
 (define* (read-char #:optional (port (current-input-port)))
   (let ((a (peek-u8 port)))
@@ -2088,19 +2094,20 @@
             (match buf
               (#(bv cur end has-eof?)
                (%set-port-buffer-cur! buf (+ cur len))
-               (%inline-wasm
-                '(func (param $bv (ref $bytevector))
-                       (param $cur i32)
-                       (param $end i32)
-                       (result (ref eq))
-                       (ref.i31
-                        (stringview_iter.next
-                         (string.as_iter
-                          (string.new_lossy_utf8_array
-                           (struct.get $bytevector $vals (local.get $bv))
-                           (local.get $cur)
-                           (local.get $end))))))
-                bv cur (+ cur len)))))))))))
+               (integer->char
+                (%inline-wasm
+                 '(func (param $bv (ref $bytevector))
+                        (param $cur i32)
+                        (param $end i32)
+                        (result i64)
+                        (i64.extend_i32_s
+                         (stringview_iter.next
+                          (string.as_iter
+                           (string.new_lossy_utf8_array
+                            (struct.get $bytevector $vals (local.get $bv))
+                            (local.get $cur)
+                            (local.get $end))))))
+                 bv cur (+ cur len))))))))))))
 (define* (read-string k #:optional (port (current-input-port)))
   (cond
    ;; Call peek-char to ensure we're at the start of some UTF-8.

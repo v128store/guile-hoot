@@ -658,6 +658,7 @@
    x start end))
 (define* (bytevector-copy! to at from #:optional
                            (start 0) (end (bytevector-length from)))
+  ;; FIXME: check that `to` is mutable
   (check-type to bytevector? 'bytevector-copy!)
   (check-range at 0 (bytevector-length to) 'bytevector-copy!)
   (check-type from bytevector? 'bytevector-copy!)
@@ -1439,14 +1440,15 @@
 
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str)
-  (unless (string? str) (error "expected string" str))
+  (check-type str string? 'string->symbol)
   (%string->symbol str))
 (define (symbol->string sym)
-  (unless (symbol? sym) (error "expected symbol" sym))
+  (check-type sym symbol? 'symbol->string)
   (%symbol->string sym))
 (define (symbol=? x y . z)
-  (unless (and (symbol? x) (symbol? y) (and-map symbol? z))
-    (error "expected symbols" x y z))
+  (check-type x symbol? 'symbol=?)
+  (check-type y symbol? 'symbol=?)
+  (for-each (lambda (z) (check-type z symbol? 'symbol=?)) z)
   (apply eq? x y z))
 
 ;; R7RS vectors
@@ -1462,11 +1464,9 @@
 (define (vector-ref x i) (%vector-ref x i))
 (define (vector-set! x i v) (%vector-set! x i v))
 (define* (vector-copy v #:optional (start 0) (end (vector-length v)))
-  (unless (vector? v) (error "expected vector" v))
-  (unless (and (exact-integer? start) (<= 0 start (vector-length v)))
-    (error "bad start" start))
-  (unless (and (exact-integer? end) (<= start end (vector-length v)))
-    (error "bad end" end))
+  (check-type v vector? 'vector-copy)
+  (check-range start 0 (vector-length v) 'vector-copy)
+  (check-range end start (vector-length v) 'vector-copy)
   (%inline-wasm
    '(func (param $src (ref $vector)) (param $start i32) (param $end i32)
           (result (ref eq))
@@ -1483,14 +1483,11 @@
           (struct.new $mutable-vector (i32.const 0) (local.get $v0)))
    v start end))
 (define* (vector-copy! to at from #:optional (start 0) (end (vector-length from)))
-  (unless (vector? to) (error "expected mutable vector" to))
-  (unless (and (exact-integer? at) (<= 0 at (vector-length to)))
-    (error "bad at" at))
-  (unless (vector? from) (error "expected vector" from))
-  (unless (and (exact-integer? start) (<= 0 start (vector-length from)))
-    (error "bad start" start))
-  (unless (and (exact-integer? end) (<= start end (vector-length from)))
-    (error "bad end" end))
+  (check-type to vector? 'vector-copy!)
+  (check-range at 0 (vector-length to) 'vector-copy!)
+  (check-type from vector? 'vector-copy!)
+  (check-range start 0 (vector-length from) 'vector-copy!)
+  (check-range end start (vector-length from) 'vector-copy!)
   (%inline-wasm
    '(func (param $to (ref $mutable-vector)) (param $at i32)
           (param $from (ref $vector)) (param $start i32) (param $end i32)
@@ -1502,20 +1499,13 @@
                       (i32.sub (local.get $end) (local.get $start))))
    to at from start end))
 (define* (vector-fill! v fill #:optional (start 0) (end (vector-length v)))
-  (unless (vector? v) (error "expected vector" v))
-  (unless (and (exact-integer? start) (<= 0 start (vector-length v)))
-    (error "bad start" start))
-  (unless (and (exact-integer? end) (<= start end (vector-length v)))
-    (error "bad end" end))
+  ;; FIXME: check for mutability
+  (check-type v vector? 'vector-fill!)
+  (check-range start 0 (vector-length v) 'vector-fill!)
+  (check-range end start (vector-length v) 'vector-fill!)
   (%inline-wasm
    '(func (param $dst (ref $mutable-vector)) (param $fill (ref eq))
           (param $start i32) (param $end i32)
-          ;; FIXME: Remove this debugging call.  With the current
-          ;; version of V8 though, doing so causes the array.fill
-          ;; instruction to go wrong; test with:
-          ;;  bin/eval.scm '(let ((v (vector 1 2 3))) (vector-fill! v #t 1 2) v)'
-          ;; We expect #(1 true 3) but get 65536 (!!!!)
-          ;(call $debug-str-scm (string.const "before fill") (local.get $dst))
           (array.fill $raw-scmvector
                       (struct.get $mutable-vector $vals (local.get $dst))
                       (local.get $start)

@@ -1953,7 +1953,7 @@
 (define* (peek-u8 #:optional (port (current-input-port)))
   (let lp ((buf (%port-read-buffer port)))
     (match buf
-      (#f (error "not an input port"))
+      (#f (raise (%make-type-error port 'peek-u8 'input-port?)))
       (#(bv cur end has-eof?)
        (cond
         ((eq? cur end)
@@ -1974,7 +1974,7 @@
     (eof-object))
   (let lp ((buf (%port-read-buffer port)))
     (match buf
-      (#f (error "not an input port"))
+      (#f (raise (%make-type-error port 'read-u8 'input-port?)))
       (#(bv cur end has-eof?)
        (cond
         ((eq? cur end)
@@ -1991,8 +1991,8 @@
          (bytevector-u8-ref bv cur)))))))
 
 (define* (read-bytevector k #:optional (port (current-input-port)))
-  (unless (and (exact-integer? k) (<= 0 k))
-    (error "read-bytevector: bad k" k))
+  (check-range k 0 (1- (ash 1 29)) 'read-bytevector)
+  (check-type port input-port? 'read-bytevector)
   (call-with-values (lambda ()
                       (%fill-input port (%port-read-buffer port) (max k 1)))
     (lambda (buf avail)
@@ -2010,10 +2010,10 @@
 
 (define* (read-bytevector! dst #:optional (port (current-input-port))
                            (start 0) (end (bytevector-length dst)))
-  (unless (and (exact-integer? start) (<= 0 start (bytevector-length dst)))
-    (error "bad start" start))
-  (unless (and (exact-integer? end) (<= start end (bytevector-length dst)))
-    (error "bad end" end))
+  (check-type dst bytevector? 'read-bytevector!)
+  (check-range start 0 (bytevector-length dst) 'read-bytevector!)
+  (check-range end start (bytevector-length dst) 'read-bytevector!)
+  (check-type port input-port? 'read-bytevector!)
   (let ((count (- start end)))
     (call-with-values (lambda ()
                         (%fill-input port (%port-read-buffer port)

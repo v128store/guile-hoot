@@ -1347,8 +1347,11 @@
   (raise (%make-unimplemented-error 'string-copy!)))
 (define (string-fill! . _)
   (raise (%make-unimplemented-error 'string-fill!)))
-(define (string-for-each f str . strs)
-  (apply for-each f (string->list str) (map string->list strs)))
+(define string-for-each
+  (case-lambda
+   ((f str) (for-each f (string->list str)))
+   ((f str . strs)
+    (apply for-each f (string->list str) (map string->list strs)))))
 (define (%string-compare a b)
   (if (eq? a b)
       0

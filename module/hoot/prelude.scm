@@ -119,10 +119,26 @@
 (define (symbol->keyword sym) (%symbol->keyword sym))
 (define (keyword->symbol kw) (%keyword->symbol kw))
 
+(define (bad-size-error val who)
+  (list val who))
+(define (bad-index-error val who)
+  (list val who))
+(define (bad-type-error val who what)
+  (list val who what))
+
+(define-syntax-rule (assert-size-in-range x max who)
+  (unless (and (exact-integer? x) (<= 0 x) (<= x max))
+    (raise (bad-size-error x who))))
+(define-syntax-rule (assert-index-in-range x size who)
+  (unless (and (exact-integer? x) (<= 0 x) (< x size))
+    (raise (bad-index-error x who))))
+(define-syntax-rule (assert-type x predicate who)
+  (unless (predicate x)
+    (raise (bad-type-error x who (symbol->string 'predicate)))))
+
 (define (bitvector? x) (%bitvector? x))
 (define* (make-bitvector len #:optional (fill #f))
-  (unless (and (exact-integer? len) (<= 0 len (1- (ash 1 29))))
-    (error "expected bitvector length to be between 0 and 2**29"))
+  (assert-size-in-range len (1- (ash 1 29)) 'make-bitvector)
   (%inline-wasm
    '(func (param $len i32) (param $init i32) (result (ref eq))
           (struct.new $mutable-bitvector
@@ -137,7 +153,7 @@
    len
    (match fill (#f 0) (#t -1))))
 (define (bitvector-length bv)
-  (unless (bitvector? bv) (error "expected bitvector" bv))
+  (assert-type bv bitvector? 'bitvector-length)
   (%inline-wasm
    '(func (param $bv (ref $bitvector))
           (result (ref eq))
@@ -146,9 +162,8 @@
                     (i32.const 1))))
    bv))
 (define (bitvector-ref bv i)
-  (unless (bitvector? bv) (error "expected bitvector" bv))
-  (unless (and (exact-integer? i) (<= 0 i) (< i (bitvector-length bv)))
-    (error "index out of range" i))
+  (assert-type bv bitvector? 'bitvector-ref)
+  (assert-index-in-range i (bitvector-length bv) 'bitvector-ref)
   (%inline-wasm
    '(func (param $bv (ref $bitvector))
           (param $i i32)
@@ -163,17 +178,16 @@
               (else (ref.i31 (i32.const 1)))))
    bv i))
 (define (bitvector-set-bit! bv i)
-  (unless (bitvector? bv) (error "expected bitvector" bv))
-  (unless (and (exact-integer? i) (<= 0 i) (< i (bitvector-length bv)))
-    (error "index out of range" i))
-  (unless (%inline-wasm
-           '(func (param $bv (ref eq)) (result (ref eq))
-                  (if (ref eq)
-                      (ref.test $mutable-bitvector (local.get $bv))
-                      (then (ref.i31 (i32.const 17)))
-                      (else (ref.i31 (i32.const 1)))))
-           bv)
-    (error "bitvector not mutable" bv))
+  (define (mutable-bitvector? x)
+    (%inline-wasm
+     '(func (param $bv (ref eq)) (result (ref eq))
+            (if (ref eq)
+                (ref.test $mutable-bitvector (local.get $bv))
+                (then (ref.i31 (i32.const 17)))
+                (else (ref.i31 (i32.const 1)))))
+     x))
+  (assert-type bv mutable-bitvector? 'bitvector-set-bit!)
+  (assert-index-in-range i (bitvector-length bv) 'bitvector-set-bit!)
   (%inline-wasm
    '(func (param $bv (ref $mutable-bitvector))
           (param $i i32)

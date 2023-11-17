@@ -131,7 +131,14 @@
   (list val size who))
 (define (%make-type-error val who what)
   (list val who what))
+(define (%make-unimplemented-error who)
+  (list who))
+(define (%make-assertion-error expr who)
+  (list expr who))
 
+(define-syntax-rule (assert expr who)
+  (unless expr
+    (raise (%make-assertion-error 'expr who))))
 (define-syntax-rule (check-size x max who)
   (unless (and (exact-integer? x) (<= 0 x) (<= x max))
     (raise (%make-size-error x max who))))
@@ -789,16 +796,15 @@
             (struct.get $fraction $denom (local.get $x)))
      x))
    (else (inexact (denominator (exact x))))))
-(define (exact-integer-sqrt x) (error "unimplemented"))
+(define (exact-integer-sqrt x)
+  (raise (%make-unimplemented-error 'exact-integer-sqrt)))
 
 (define (floor/ x y)
   (values (floor-quotient x y) (floor-remainder x y)))
 ;; Adapted from the SRFI-141 reference implementation
 (define (floor-quotient x y)
-  (unless (integer? x)
-    (error "expected integer" x))
-  (unless (integer? y)
-    (error "expected integer" y))
+  (check-type x integer? 'floor-quotient)
+  (check-type y integer? 'floor-quotient)
   (cond
    ((and (negative? x) (negative? y))
     (quotient (- x) (- y)))
@@ -826,10 +832,8 @@
 (define (truncate-remainder x y) (remainder x y))
 
 (define (%binary-gcd x y)
-  (unless (integer? x)
-    (error "expected integer" x))
-  (unless (integer? y)
-    (error "expected integer" y))
+  (check-type x integer? 'gcd)
+  (check-type y integer? 'gcd)
   (let ((result
          (%inline-wasm
           '(func (param $x (ref eq)) (param $y (ref eq))
@@ -847,10 +851,8 @@
     ((_ x y) (%binary-gcd x y))))
 
 (define (%binary-lcm x y)
-  (unless (integer? x)
-    (error "expected integer" x))
-  (unless (integer? y)
-    (error "expected integer" y))
+  (check-type x integer? 'lcm)
+  (check-type y integer? 'lcm)
   (let* ((exact-x (exact x))
          (exact-y (exact y))
          (result (if (and (eqv? exact-x 0) (eqv? exact-y 0))
@@ -970,8 +972,7 @@
                    "/"
                    (number->string (denominator n) radix)))
    ((real? n)
-    (unless (eqv? radix 10)
-      (error "expected radix of 10 for number->string on flonum" n))
+    (assert (eqv? radix 10) 'number->string)
     (%inline-wasm
      '(func (param $n f64)
             (result (ref eq))

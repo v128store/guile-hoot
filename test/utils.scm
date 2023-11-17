@@ -132,15 +132,24 @@
    (use-d8? d8-result)
    (else hoot-result)))
 
+(define cache (make-hash-table))
+(define (compile/cache expr . args)
+  (cond
+   ((hash-ref cache (cons expr args)))
+   (else
+    (let ((result (apply compile expr args)))
+      (hash-set! cache (cons expr args) result)
+      result))))
+
 (define (compile-value* expr)
-  (let ((wasm (compile expr)))
+  (let ((wasm (compile/cache expr)))
     (compare-results (and use-hoot-vm? (compile-value/hoot wasm))
                      (and use-d8? (compile-value/d8 wasm)))))
 
 (define (compile-call* proc . args)
-  (let ((proc* (compile proc))
+  (let ((proc* (compile/cache proc))
         (args* (map (lambda (exp)
-                      (compile exp #:import-abi? #t #:export-abi? #f))
+                      (compile/cache exp #:import-abi? #t #:export-abi? #f))
                     args)))
     (compare-results (and use-hoot-vm? (apply compile-call/hoot proc* args*))
                      (and use-d8? (apply compile-call/d8 proc* args*)))))

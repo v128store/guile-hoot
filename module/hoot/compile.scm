@@ -1061,6 +1061,12 @@
                (i32.wrap_i64)
                (call $string-set!)))
 
+            (('symbol-hash #f str)
+             `(,(local.get sym)
+               (ref.cast ,(make-ref-type #f '$symbol))
+               (struct.get $symbol $hash)
+               (i64.extend_i32_u)))
+
             ;; For the time being, atomic boxes are basically the same
             ;; as regular boxes.
             (('make-atomic-box #f val)

@@ -44,7 +44,6 @@
                  make-variable variable-ref variable-set!
                  keyword->symbol symbol->keyword
                  exact->inexact
-                 inf? nan?
                  error
                  raise-exception
                  eval-when
@@ -338,8 +337,6 @@
    (fluid-set! . %fluid-set!)
    (with-fluid* . %with-fluid*)
    (with-dynamic-state . %with-dynamic-state)
-   (inf? . %inf?)
-   (nan? . %nan?)
    (make-atomic-box . %make-atomic-box)
    (atomic-box-ref . %atomic-box-ref)
    (atomic-box-set! . %atomic-box-set!)

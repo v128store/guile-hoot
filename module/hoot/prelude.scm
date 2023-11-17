@@ -137,6 +137,17 @@
   (list expr who))
 (define (%make-not-seekable-error port who)
   (list port who))
+(define (%make-runtime-error-with-message msg)
+  (list msg))
+(define (%make-runtime-error-with-message+irritants msg irritants)
+  (list msg irritants))
+
+(define error
+  (case-lambda
+   ((msg)
+    (raise (%make-runtime-error-with-message msg)))
+   ((msg . args)
+    (raise (%make-runtime-error-with-message+irritants msg args)))))
 
 (define-syntax-rule (assert expr who)
   (unless expr
@@ -2631,14 +2642,6 @@
                   (#f #f)
                   (compare (compare x y equal?)))))))
    (else #f)))
-
-;; Error handling
-(define (%generic-error message . args) (error "unimplemented"))
-(define-syntax error
-  (lambda (stx)
-    (syntax-case stx ()
-      ((_ msg . arg) #'(%error msg . arg))
-      (f (identifier? #'f) #'%generic-error))))
 
 (define (procedure? x) (%procedure? x))
 

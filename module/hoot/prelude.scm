@@ -1432,13 +1432,25 @@
 (define string->utf8
   (case-lambda
    ((str)           (%string->utf8 str))
-   ((str start)     (string->utf8 str start (string-length str)))
-   ((str start end) (string->utf8 (string-copy str start end)))))
+   ((str start)     (%string->utf8
+                     (if (zero? start)
+                         str
+                         (string-copy str start))))
+   ((str start end) (%string->utf8
+                     (if (and (zero? start) (eq? end (string-length str)))
+                         str
+                         (string-copy str start end))))))
 (define utf8->string
   (case-lambda
    ((bv)            (%utf8->string bv))
-   ((bv start)      (utf8->string bv start (bytevector-length bv)))
-   ((bv start end)  (utf8->string (bytevector-copy bv start end)))))
+   ((bv start)      (%utf8->string
+                     (if (zero? start)
+                         bv
+                         (bytevector-copy bv start))))
+   ((bv start end)  (%utf8->string
+                     (if (and (zero? start) (eq? end (bytevector-length bv)))
+                         bv
+                         (bytevector-copy bv start end))))))
 
 (define (symbol? x) (%symbol? x))
 (define (string->symbol str)

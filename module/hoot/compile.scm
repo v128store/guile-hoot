@@ -1061,7 +1061,7 @@
                (i32.wrap_i64)
                (call $string-set!)))
 
-            (('symbol-hash #f str)
+            (('symbol-hash #f sym)
              `(,(local.get sym)
                (ref.cast ,(make-ref-type #f '$symbol))
                (struct.get $symbol $hash)

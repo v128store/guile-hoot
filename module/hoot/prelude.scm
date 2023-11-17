@@ -752,22 +752,15 @@
 (define (inexact x) (%inexact x))
 (define (exact x)
   (cond
-   ;; FIXME: replace test with `(and (rational? x) (inexact? x))' once
-   ;; `rational?' can be used reliably
-   ((and (real? x)
-         (inexact? x)
-         (not (eqv? x +inf.0))
-         (not (eqv? x -inf.0))
-         (= x x))
+   ((exact? x) x)
+   (else
+    (check-type x real? 'exact)
+    (check-type x finite? 'exact)
     (%inline-wasm
      '(func (param $x f64)
             (result (ref eq))
             (call $f64->exact (local.get $x)))
-     x))
-   ((exact? x) x)
-   ;; complex numbers are always inexact
-   ((number? x) (error "cannot convert argument to exact number"))
-   (else (error "non-numeric argument"))))
+     x))))
 
 (define (quotient x y) (%quotient x y))
 (define (remainder x y) (%remainder x y))

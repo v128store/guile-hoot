@@ -135,6 +135,8 @@
   (list who))
 (define (%make-assertion-error expr who)
   (list expr who))
+(define (%make-not-seekable-error port who)
+  (list port who))
 
 (define-syntax-rule (assert expr who)
   (unless expr
@@ -150,7 +152,7 @@
     (raise (%make-range-error x min max who))))
 (define-syntax-rule (check-type x predicate who)
   (unless (predicate x)
-    (raise (%make-type-error x who (symbol->string 'predicate)))))
+    (raise (%make-type-error x who 'predicate))))
 
 (define (bitvector? x) (%bitvector? x))
 (define* (make-bitvector len #:optional (fill #f))
@@ -1561,16 +1563,7 @@
                     r/w-random-access?
                     fold-case?
                     private-data)
-  (when file-name
-    (unless (string? file-name) (error "bad file name" file-name)))
-  (when read
-    (unless (and (exact-integer? read-buf-size) (< 0 read-buf-size))
-      (error "bad read buf size" read-buf-size)))
-  (when write
-    (unless (and (exact-integer? write-buf-size) (< 0 write-buf-size))
-      (error "bad write buf size" write-buf-size)))
-  (unless (string? repr)
-    (error "missing repr" repr))
+  (when file-name (check-type file-name string? 'make-port))
   (let ((read-buf (and read (vector (make-bytevector read-buf-size 0) 0 0 #f)))
         (write-buf (and write (vector (make-bytevector write-buf-size 0) 0 0))))
     (%inline-wasm
@@ -1699,8 +1692,7 @@
     (define len (bytevector-length (get-output-bytevector port)))
     (define base (match whence ('start 0) ('cur (or pos len)) ('end len)))
     (define dst (+ base offset))
-    (when (or (< dst 0) (< len dst))
-      (error "out of range" offset))
+    (check-range dst 0 len 'seek)
     (set! pos (if (= pos dst) #f dst))
     dst)
 
@@ -1734,8 +1726,7 @@
     (define len (bytevector-length src))
     (define base (match whence ('start 0) ('cur len) ('end len)))
     (define dst (+ base offset))
-    (when (or (< dst 0) (< len dst))
-      (error "out of range" offset))
+    (check-range dst 0 len 'seek)
     (set! pos dst)
     dst)
   (%make-port bv-read
@@ -1780,9 +1771,8 @@
       (%write-string (utf8->string bv start (+ start count)))
       count))
 
-  (unless (string? repr)
-    (error "invalid repr" repr))
   (define default-buffer-size 1024)
+  (check-type repr string? 'make-port)
   (%make-port (and read-string (make-reader read-string))
               (and write-string (make-writer write-string))
               input-waiting?
@@ -1825,30 +1815,30 @@
 (define (binary-port? x) (port? x))
 (define (textual-port? x) (port? x))
 (define (input-port-open? x)
-  (unless (input-port? x) (error "not an input port"))
+  (check-type x input-port? 'input-port-open?)
   (%port-open? x))
 (define (output-port-open? x)
-  (unless (output-port? x) (error "not an output port"))
+  (check-type x output-port? 'output-port-open?)
   (%port-open? x))
-(define (close-input-port x)
-  (unless (input-port? x) (error "not an input port"))
+(define (close-input-port port)
+  (check-type port input-port? 'close-input-port)
   ;; FIXME: Allow half-closing of socket-like ports.
-  (close-port x))
-(define (close-output-port x)
-  (unless (output-port? x) (error "not an output port"))
+  (close-port port))
+(define (close-output-port port)
+  (check-type port output-port? 'close-output-port)
   ;; FIXME: Allow half-closing of socket-like ports.
-  (close-port x))
+  (close-port port))
 (define (close-port port)
-  (unless (port? port) (error "not a port" port))
+  (check-type port port? 'close-port)
   (when (%port-open? port)
     (when (output-port? port) (flush-output-port port))
     (%set-port-open?! port #f))
   (values))
 
 (define (seek port offset whence)
-  (unless (port? port) (error "not a port" port))
-  (unless (exact-integer? offset) (error "bad offset" offset))
-  (case whence ((cur start end) #t) (else (error "bad whence" whence)))
+  (check-type port port? 'seek)
+  (check-type offset exact-integer? 'seek)
+  (assert (memq whence '(cur start end)) 'seek)
   (define (buffered-bytes buf)
     (define (port-buffer-cur buf) (vector-ref buf 1))
     (define (port-buffer-end buf) (vector-ref buf 2))
@@ -1867,7 +1857,7 @@
                  (buf-out (buffered-bytes (%port-write-buffer port))))
              (+ pos (- buf-in) buf-out)))
           ((not (%port-r/w-random-access? port))
-           (error "port is not seekable"))
+           (raise (%make-not-seekable-error port 'seek)))
           (else
            (when (input-port? port) (flush-input-port port))
            (when (output-port? port) (flush-output-port port))
@@ -1875,19 +1865,17 @@
              (when (input-port? port)
                (%set-port-buffer-has-eof?! (%port-read-buffer port) #f))
              pos)))))
-   (else (error "port is not seekable" port))))
+   (else (raise (%make-not-seekable-error port 'seek)))))
 
 (define (%write-bytes port bv start count)
   (let ((written ((%port-write port) bv start count)))
-    (unless (<= 0 written count)
-      (error "bad return from port write function" written))
+    (check-range written 0 count '%write-bytes)
     (when (< written count)
       (%write-bytes port bv (+ start written) (- count written)))))
 
 (define (%read-bytes port bv start count)
   (let ((read ((%port-read port) bv start count)))
-    (unless (<= 0 read count)
-      (error "bad return from port read function" read))
+    (check-range read 0 count '%read-bytes)
     read))
 
 (define* (flush-input-port #:optional (port (current-output-port)))
@@ -1897,7 +1885,7 @@
   ;; port-position is ahead.  This function discards buffered input and
   ;; seeks back from before the buffered input.
   (match (%port-read-buffer port)
-    (#f (error "not an input port"))
+    (#f (raise (%make-type-error port 'flush-input-port 'input-port?)))
     ((and buf #(bv cur end has-eof?))
      (when (< cur end)
        (%set-port-buffer-cur! buf 0)
@@ -1905,7 +1893,7 @@
        (seek port (- cur end) 'cur)))))
 (define* (flush-output-port #:optional (port (current-output-port)))
   (match (%port-write-buffer port)
-    (#f (error "not an output port"))
+    (#f (raise (%make-type-error port 'flush-output-port 'output-port?)))
     ((and buf #(bv cur end))
      (when (< cur end)
        (%set-port-buffer-cur! buf 0)
@@ -1914,7 +1902,7 @@
 
 (define* (u8-ready? #:optional (port (current-input-port)))
   (match (%port-read-buffer port)
-    (#f (error "not an input port"))
+    (#f (raise (%make-type-error port 'u8-ready? 'input-port?)))
     (#(bv cur end has-eof?)
      (or (< cur end)
          has-eof?

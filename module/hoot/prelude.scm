@@ -2714,8 +2714,7 @@
 
 (define (current-jiffy)
   (%inline-wasm
-   '(func (result i64)
-          (i64.extend_i32_u (call $current-jiffy)))))
+   '(func (result i64) (call $current-jiffy))))
 
 (define (current-second)
   (%inline-wasm

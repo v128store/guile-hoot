@@ -40,7 +40,10 @@
   #:use-module (language cps dump)
   #:use-module (language cps utils)
   #:use-module ((language cps hoot)
-                #:select (hoot-primcall-raw-representations))
+                #:select (hoot-primcall-raw-representations
+                          target-hash
+                          target-symbol-hash
+                          target-keyword-hash))
   #:use-module (rnrs bytevectors)
   #:use-module (hoot inline-wasm)
   #:use-module (hoot stdlib)
@@ -139,32 +142,8 @@
                 (reverse (fold1 add-export abi-exports (reverse exports)))
                 start elems datas tags strings custom))))
 
-;; Thomas Wang's 32-bit integer hasher, from
-;; http://www.cris.com/~Ttwang/tech/inthash.htm.
-(define (hash-i32 i)
-  ;; 32-bit hash
-  (define (i32 i) (logand i #xffffffff))
-  (let* ((i (i32 i))
-         (i (i32 (logxor (logxor i 61) (ash i -16))))
-         (i (i32 (+ i (i32 (ash i 3)))))
-         (i (i32 (logxor i (ash i -4))))
-         (i (i32 (* i #x27d4eb2d))))
-    (i32 (logxor i (ash i -15)))))
-(define (finish-heap-object-hash h)
-  (let ((h (hash-i32 h)))
-    (if (= h 0)
-        (hash-i32 42)
-        h)))
-(define (hashq-constant x)
-  (finish-heap-object-hash (hash x (ash 1 32))))
-(define (hashq-symbol x)
-  (finish-heap-object-hash
-   (string-fold (lambda (ch h)
-                  (logand #xffffffff (+ (* h 31) (char->integer ch))))
-                0
-                (symbol->string x))))
-(define (hashq-keyword x)
-  (finish-heap-object-hash (hashq-symbol (keyword->symbol x))))
+(define (target-hashq x)
+  (target-hash x))
 
 (define-record-type <static-procedure>
   (make-static-procedure code)
@@ -249,13 +228,13 @@
     (match x
       ((car . cdr)
        (intern! (make-ref-type #f '$pair)
-                `((i32.const ,(hashq-constant x))
+                `((i32.const ,(target-hashq x))
                   ,@(compile-constant car)
                   ,@(compile-constant cdr)
                   (struct.new $pair))))
       (#(elt ...)
        (intern! (make-ref-type #f '$vector)
-                `((i32.const ,(hashq-constant x))
+                `((i32.const ,(target-hashq x))
                   ,@(append-map compile-constant elt)
                   (array.new_fixed $raw-scmvector ,(vector-length x))
                   (struct.new $vector))))
@@ -263,7 +242,7 @@
        ;; FIXME: Probably we should put the initializers in the data
        ;; section instead of using new_fixed.
        (intern! (make-ref-type #f '$bytevector)
-                `((i32.const ,(hashq-constant x))
+                `((i32.const ,(target-hashq x))
                   ,@(map (lambda (u8) `(i32.const ,u8))
                          (bytevector->u8-list x))
                   (array.new_fixed $raw-bytevector ,(bytevector-length x))
@@ -272,7 +251,7 @@
        ;; FIXME: Probably we should put the initializers in the data
        ;; section instead of using new_fixed.
        (intern! (make-ref-type #f '$bitvector)
-                `((i32.const ,(hashq-constant x))
+                `((i32.const ,(target-hashq x))
                   (i32.const ,(bitvector-length x))
                   ,@(let* ((u32v (uniform-array->bytevector x))
                            (u32len (/ (bytevector-length u32v) 4)))
@@ -289,7 +268,7 @@
                   (struct.new $bitvector))))
       ((? string?)
        (intern! (make-ref-type #f '$string)
-                `((i32.const ,(hashq-constant x))
+                `((i32.const ,(target-hashq x))
                   (string.const ,x)
                   (struct.new $string))))
       (($ <static-procedure> code)
@@ -305,7 +284,7 @@
        ;; the initializer, and rely on lower-globals pass to move this
        ;; non-constant initialization to start.
        (intern! (make-ref-type #f '$symbol)
-                `((i32.const ,(hashq-symbol x))
+                `((i32.const ,(target-symbol-hash (symbol->string x)))
                   ,@(compile-constant (symbol->string x))
                   (struct.new $symbol)
                   . ,(if import-abi? `((call $intern-symbol!)) '()))
@@ -317,7 +296,8 @@
       ((? keyword?)
        ;; Same run-time interning considerations as symbols.
        (intern! (make-ref-type #f '$keyword)
-                `((i32.const ,(hashq-keyword x))
+                `((i32.const ,(target-keyword-hash
+                               (symbol->string (keyword->symbol x))))
                   ,@(compile-constant (keyword->symbol x))
                   (struct.new $keyword)
                   . ,(if import-abi? `((call $intern-keyword!)) '()))
@@ -1205,6 +1185,13 @@
               x y scm-block-type
               '((local.get $i0) (local.get $i1) (i32.and) (ref.i31))
               '((call $logand))))
+            (('logand/immediate y x)
+             (compile-fixnum-fast-path
+              x scm-block-type
+              `((local.get $i0) (i32.const ,(ash y 1)) (i32.and) (ref.i31))
+              `((i32.const ,(ash y 1))
+                (ref.i31)
+                (call $logand))))
             (('logior #f x y)
              (compile-fixnum-fixnum-fast-path
               x y scm-block-type
@@ -1360,6 +1347,10 @@
             (('ulogand #f x y)
              `(,(local.get x)
                ,(local.get y)
+               (i64.and)))
+            (('ulogand/immediate y x)
+             `(,(local.get x)
+               (i64.const ,y)
                (i64.and)))
             (('ulogior #f x y)
              `(,(local.get x)

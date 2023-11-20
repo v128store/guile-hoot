@@ -228,6 +228,16 @@
                           ($continue k* src ($const y))))))
 
          (($ $kargs names vars
+             ($ $continue k src
+                ($ $primcall 'logand/immediate (? not-hoot-fixnum? y) (x))))
+          (with-cps out
+            (letv y*)
+            (letk k* ($kargs ('y) (y*)
+                       ($continue k src ($primcall 'logand #f (x y*)))))
+            (setk label ($kargs names vars
+                          ($continue k* src ($const y))))))
+
+         (($ $kargs names vars
              ($ $throw src 'throw #f (key args)))
           (with-cps out
             (letv exn)

@@ -34,7 +34,11 @@
   #:use-module (wasm types)
   #:export (hoot-primcall-raw-representations
             make-lowerer
-            available-optimizations))
+            available-optimizations
+            target-hash
+            target-symbol-hash
+            target-symbol-hash-bits
+            target-keyword-hash))
 
 (define (hoot-primcall-raw-representations name param)
   (case name
@@ -100,3 +104,39 @@
          (lower-primcalls exp)
          #:primcall-raw-representations hoot-primcall-raw-representations))
        opts))))
+
+;; Thomas Wang's 32-bit integer hasher, from
+;; http://www.cris.com/~Ttwang/tech/inthash.htm.
+(define (hash-i32 i)
+  ;; 32-bit hash
+  (define (i32 i) (logand i #xffffffff))
+  (let* ((i (i32 i))
+         (i (i32 (logxor (logxor i 61) (ash i -16))))
+         (i (i32 (+ i (i32 (ash i 3)))))
+         (i (i32 (logxor i (ash i -4))))
+         (i (i32 (* i #x27d4eb2d))))
+    (i32 (logxor i (ash i -15)))))
+(define (finish-heap-object-hash h)
+  (let ((h (hash-i32 h)))
+    (if (= h 0)
+        (hash-i32 42)
+        h)))
+
+;; FIXME: leakage of host hash function to guest.  Though it's valid for
+;; our use case to generate hashq values, it's not reproducible.
+(define (hashq-constant x)
+  (finish-heap-object-hash (hash x (ash 1 32))))
+
+(define (target-hash obj)
+  (hashq-constant obj))
+
+(define (target-symbol-hash str)
+  (finish-heap-object-hash
+   (string-fold (lambda (ch h)
+                  (logand #xffffffff (+ (* h 31) (char->integer ch))))
+                0
+                str)))
+(define target-symbol-hash-bits 32)
+
+(define (target-keyword-hash str)
+  (finish-heap-object-hash (target-symbol-hash str)))

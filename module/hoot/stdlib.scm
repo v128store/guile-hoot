@@ -4240,6 +4240,18 @@
                                         (struct.get $parameter $convert
                                                     (local.get $parameter)))))
 
+     (func $weak-map-get-scm (param $weak-map (ref extern))
+           (param $key (ref eq)) (param $default (ref eq)) (result (ref eq))
+           (local $value (ref null eq))
+           (local.set $value
+                      (call $weak-map-get
+                            (local.get $weak-map)
+                            (local.get $key)))
+           (if (ref eq)
+               (ref.is_null (local.get $value))
+               (then (local.get $default))
+               (else (ref.as_non_null (local.get $value)))))
+
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))
      (table ,@(maybe-import '$ret-stack) 0 (ref null $kvarargs))

@@ -1506,7 +1506,7 @@
                (ref.cast ,(make-ref-type #f '$bytevector))
                (struct.get $bytevector $vals)
                (call $wtf8->string)
-               (struct.new $string)))
+               (struct.new $mutable-string)))
 
             ;; Unboxing and boxing numbers.
             (('scm->f64 #f src)

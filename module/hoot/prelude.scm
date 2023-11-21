@@ -119,30 +119,33 @@
 (define (symbol->keyword sym) (%symbol->keyword sym))
 (define (keyword->symbol kw) (%keyword->symbol kw))
 
-(define (%make-size-error val max who)
-  (list val max who))
-(define (%make-index-error val size who)
-  (list val size who))
-(define (%make-range-error val min max who)
-  (list val min max who))
-(define (%make-start-offset-error val size who)
-  (list val size who))
-(define (%make-end-offset-error val size who)
-  (list val size who))
-(define (%make-type-error val who what)
-  (list val who what))
-(define (%make-unimplemented-error who)
-  (list who))
-(define (%make-assertion-error expr who)
-  (list expr who))
-(define (%make-not-seekable-error port who)
-  (list port who))
-(define (%make-runtime-error-with-message msg)
-  (list msg))
-(define (%make-runtime-error-with-message+irritants msg irritants)
-  (list msg irritants))
-(define (%make-match-error v)
-  (list v))
+(define-syntax-rule (define-exception-constructor (name arg ...) global)
+  (define (name arg ...)
+    ((%inline-wasm '(func (result (ref eq)) (global.get global))) arg ...)))
+(define-exception-constructor (%make-size-error val max who)
+  $make-size-error)
+(define-exception-constructor (%make-index-error val size who)
+  $make-index-error)
+(define-exception-constructor (%make-range-error val min max who)
+  $make-range-error)
+(define-exception-constructor (%make-start-offset-error val size who)
+  $make-start-offset-error)
+(define-exception-constructor (%make-end-offset-error val size who)
+  $make-end-offset-error)
+(define-exception-constructor (%make-type-error val who what)
+  $make-type-error)
+(define-exception-constructor (%make-unimplemented-error who)
+  $make-unimplemented-error)
+(define-exception-constructor (%make-assertion-error expr who)
+  $make-assertion-error)
+(define-exception-constructor (%make-not-seekable-error port who)
+  $make-not-seekable-error)
+(define-exception-constructor (%make-runtime-error-with-message msg)
+  $make-runtime-error-with-message)
+(define-exception-constructor (%make-runtime-error-with-message+irritants msg irritants)
+  $make-runtime-error-with-message+irritants)
+(define-exception-constructor (%make-match-error v)
+  $make-match-error)
 
 (define error
   (case-lambda
@@ -3081,6 +3084,13 @@ object @var{exception}."
 (define-exception-type &assertion &violation
   (make-assertion-violation)
   assertion-violation?)
+(define-exception-type &implementation-restriction &violation
+  (make-implementation-restriction-violation)
+  implementation-restriction-violation?)
+(define-exception-type &failed-type-check &assertion
+  (make-failed-type-check predicate)
+  failed-type-check?
+  (predicate failed-type-check-predicate))
 (define-exception-type &non-continuable &violation
   (make-non-continuable-violation)
   non-continuable-violation?)
@@ -3092,12 +3102,6 @@ object @var{exception}."
   (make-exception-with-origin origin)
   exception-with-origin?
   (origin exception-origin))
-(define-exception-type &port-position &exception
-  (make-exception-with-port-position filename line column)
-  exception-with-port-position?
-  (filename exception-filename)
-  (line exception-line)
-  (column exception-column))
 (define-exception-type &lexical &violation
   (make-lexical-violation)
   lexical-violation?)
@@ -3113,6 +3117,13 @@ object @var{exception}."
   (make-i/o-filename-error filename)
   i/o-filename-error?
   (filename i/o-error-filename))
+(define-exception-type &i/o-not-seekable &i/o
+  (make-i/o-not-seekable-error)
+  i/o-not-seekable-error?)
+(define-exception-type &i/o-port &i/o
+  (make-i/o-port-error port)
+  i/o-port-error?
+  (port i/o-error-port))
 
 ;; R7RS.
 (define (error-object? x)
@@ -3702,13 +3713,77 @@ object @var{exception}."
                 (else
                  (handler exn)
                  (raise (make-non-continuable-violation))))))))))
-  (%inline-wasm
-   '(func (param $with-exception-handler (ref $proc))
-          (param $raise-exception (ref $proc))
-          (global.set $with-exception-handler (local.get $with-exception-handler))
-          (global.set $raise-exception (local.get $raise-exception)))
-   with-exception-handler
-   raise-exception))
+
+  (let ()
+    (define (make-with-irritants exn message origin irritants)
+      (let ((base (make-exception
+                   (make-exception-with-message message)
+                   (make-exception-with-origin origin)
+                   (make-exception-with-irritants irritants))))
+        (if exn (make-exception base exn) base)))
+    (define-syntax-rule (define-exception-constructor (name arg ...) body ...)
+      (cond-expand
+       ((and) (define (name arg ...) body ...))
+       (else (define (name arg ...) (list arg ...)))))
+    (define-exception-constructor (make-size-error val max who)
+      (make-with-irritants #f "size out of range" who (list val)))
+    (define-exception-constructor (make-index-error val size who)
+      (make-with-irritants #f "index out of range" who (list val)))
+    (define-exception-constructor (make-range-error val min max who)
+      (make-with-irritants #f "value out of range" who (list val)))
+    (define-exception-constructor (make-start-offset-error val size who)
+      (make-with-irritants #f "start offset out of range" who (list val)))
+    (define-exception-constructor (make-end-offset-error val size who)
+      (make-with-irritants #f "end offset out of range" who (list val)))
+    (define-exception-constructor (make-type-error val who what)
+      (make-with-irritants (make-failed-type-check what)
+                           "type check failed"
+                           who (list val)))
+    (define-exception-constructor (make-unimplemented-error who)
+      (make-exception (make-implementation-restriction-violation)
+                      (make-exception-with-message "unimplemented")
+                      (make-exception-with-origin who)))
+    (define-exception-constructor (make-assertion-error expr who)
+      (make-with-irritants (make-assertion-violation) "assertion failed"
+                           who (list expr)))
+    (define-exception-constructor (make-not-seekable-error port who)
+      (make-exception (make-i/o-not-seekable-error)
+                      (make-i/o-port-error port)
+                      (make-exception-with-origin who)))
+    (define-exception-constructor (make-runtime-error-with-message msg)
+      (make-exception (make-error) (make-exception-with-message msg)))
+    (define-exception-constructor (make-runtime-error-with-message+irritants msg irritants)
+      (make-exception (make-error)
+                      (make-exception-with-message msg)
+                      (make-exception-with-irritants irritants)))
+    (define-exception-constructor (make-match-error v)
+      (make-exception (make-assertion-violation)
+                      (make-exception-with-message "value failed to match")
+                      (make-exception-with-irritants (list v))))
+
+    (define-syntax-rule (initialize-globals (global type proc) ...)
+      (%inline-wasm
+       '(func (param global type) ...
+              (global.set global (local.get global)) ...)
+       proc ...))
+    (define-syntax-rule (initialize-proc-globals (global proc) ...)
+      (initialize-globals (global (ref $proc) proc) ...))
+    (initialize-proc-globals
+     ($with-exception-handler with-exception-handler)
+     ($raise-exception raise-exception)
+
+     ($make-size-error make-size-error)
+     ($make-index-error make-index-error)
+     ($make-range-error make-range-error)
+     ($make-start-offset-error make-start-offset-error)
+     ($make-end-offset-error make-end-offset-error)
+     ($make-type-error make-type-error)
+     ($make-unimplemented-error make-unimplemented-error)
+     ($make-assertion-error make-assertion-error)
+     ($make-not-seekable-error make-not-seekable-error)
+     ($make-runtime-error-with-message make-runtime-error-with-message)
+     ($make-runtime-error-with-message+irritants make-runtime-error-with-message+irritants)
+     ($make-match-error make-match-error))))
  (hoot-aux
   (define with-exception-handler
     (%inline-wasm

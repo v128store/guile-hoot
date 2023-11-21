@@ -30,4 +30,18 @@
 (test-call "#t" (lambda (a b) (string->? a b)) "Odd" "Even")
 (test-call "#t" (lambda (a b) (string-<? a b)) "Even" "Odd")
 
+;; String mutation
+(test-call "#f" (lambda (a) (mutable-string? a)) "abc")
+(test-call "#t" (lambda (a) (mutable-string? (string-copy a))) "abc")
+(test-call "#t" (lambda () (mutable-string? (string #\a #\b #\c))))
+;; (test-call "xyz" (lambda ()
+;;                    (let ((a (string #\a #\b #\c)))
+;;                      (%string-set-str! a (string #\x #\y #\z))
+;;                      a)))
+;; (test-call "1@3" (lambda (a)
+;;                    (let ((a (string-copy a)))
+;;                      (string-set! a 1 #\@)
+;;                      a))
+;;            "123")
+
 (test-end* "test-strings")

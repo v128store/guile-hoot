@@ -1338,10 +1338,46 @@
 
 ;; R7RS strings
 (define (string? x) (%string? x))
+(define (mutable-string? x)
+  (%inline-wasm '(func (param $obj (ref eq))
+                       (result (ref eq))
+                       (if (ref eq)
+                           (ref.test $mutable-string (local.get $obj))
+                           (then (ref.i31 (i32.const 17)))
+                           (else (ref.i31 (i32.const 1)))))
+                x))
 (define (string-length x) (%string-length x))
 (define (string-ref x i) (%string-ref x i))
 (define (string-set! x i v)
-  (raise (%make-unimplemented-error 'string-set!)))
+  (check-type x mutable-string? 'string-set!)
+  (check-range i 0 (1- (string-length x)) 'string-set!)
+  (check-type v char? 'string-set!)
+  (let ((x* (string-append (string-copy x 0 i)
+                           (string v)
+                           (string-copy x (1+ i) (string-length x)))))
+    (%inline-wasm '(func (param $s (ref $mutable-string))
+                         (param $new-s (ref $string))
+                         (struct.set $mutable-string
+                                     $str
+                                     (local.get $s)
+                                     (struct.get $string
+                                                 $str
+                                                 (local.get $new-s))))
+                  x x*)
+    (if #f #f)))
+(define (%string-set-str! x x*)
+  (check-type x mutable-string? '%string-set-str!)
+  (check-type x* string? '%string-set-str!)
+  (%inline-wasm '(func (param $s (ref $mutable-string))
+                       (param $new-s (ref $string))
+                       (struct.set $mutable-string
+                                   $str
+                                   (local.get $s)
+                                   (struct.get $string
+                                               $str
+                                               (local.get $new-s))))
+                x x*)
+  (if #f #f))
 (define (string . chars) (list->string chars))
 (define* (make-string n #:optional (init #\space))
   (let ((p (open-output-string)))

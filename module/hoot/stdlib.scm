@@ -649,7 +649,7 @@
            (result (ref extern)))
      (func $weak-map-get (import "rt" "weak_map_get")
            (param (ref extern) (ref eq))
-           (result (ref eq)))
+           (result (ref null eq)))
      (func $weak-map-set (import "rt" "weak_map_set")
            (param (ref extern) (ref eq) (ref eq)))
      (func $weak-map-delete (import "rt" "weak_map_delete")

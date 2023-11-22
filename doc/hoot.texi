@@ -36,6 +36,7 @@ See @ref{License} for more information.
 @menu
 * Introduction::                  What's the deal with WASM, anyway?
 * Compiling to WASM::             Using the compiler and development tools.
+* Scheme reference::              Hoot-specific Scheme extensions.
 * Toolchain reference::           General purpose WASM tools.
 * Contributing::                  Lend a hand!
 * License::                       Copying, distributing, and using this text.
@@ -144,12 +145,6 @@ specification: stringref.  We still emit stringref, but it is reduced
 to being an intermediate form.  A lowering pass replaces stringref
 instructions with something resembling the JS String Builtins
 proposal.
-
-Hoot's usability in the browser is a work-in-progress.  The
-@file{reflect.js} library is provided to allow JavaScript to call
-Scheme procedures and inspect Scheme values.  However, a foreign
-function interface to call host functions from Scheme is not yet
-available.
 
 @node Installation
 @section Installation
@@ -602,10 +597,18 @@ The @code{(hoot reflect)} module provides an interface for inspecting
 and manipulating Scheme values that live within WASM modules.  This is
 the primary interface for testing compiler output directly from Guile.
 
-@deffn {Procedure} hoot-instantiate reflector scheme-wasm
+@deffn {Procedure} hoot-instantiate reflector scheme-wasm [imports '()]
 Instantiate and return a new Hoot module using the compiled Scheme
 WASM module @var{scheme-wasm} and the reflection module
 @var{reflector}.
+
+Optionally, @var{imports} may contain a 2-tier association list
+structure of imported functions, globals, tables, and memories:
+
+@lisp
+`(("math" . (("random" . ,(lambda (x) (random x))))))
+@end lisp
+
 @end deffn
 
 @deffn {Procedure} hoot-load module
@@ -613,9 +616,13 @@ Invoke the load thunk of @var{module} and return the reflected
 result values.
 @end deffn
 
-@deffn {Procedure} compile-value reflector exp
+@deffn {Procedure} compile-value reflector exp [imports '()]
 Compile @var{exp} and return the result using the reflection module
 @var{reflector}.
+
+Optionally, @var{imports} may contain a 2-tier association list
+structure of imported functions, globals, tables, and memories.  See
+@code{hoot-instantiate} for an example of such a structure.
 @end deffn
 
 @deffn {Procedure} compile-call reflector proc-exp arg-exps ...
@@ -1012,6 +1019,142 @@ instruction is evaluated.
 
 When not in a debugger, set WASM execution to pause before each
 instruction is evaluated.
+@end deffn
+
+@node Scheme reference
+@chapter Scheme reference
+
+In addition to supporting standard Scheme and Guile-specific features,
+Hoot includes some of its own Scheme extensions.  This chapter
+documents the APIs of these extensions.
+
+@menu
+* Foreign function interface::    Call host functions from Scheme.
+@end menu
+
+@node Foreign function interface
+@section Foreign function interface
+
+WebAssembly follows the capability security model, which means that
+modules cannot do much on their own.  WASM modules are guests within a
+host.  They must be given capabilities by the host in order to
+interact with the outside world.  Modules request capabilities by
+declaring imports, which the host then fills out with concrete
+implementations at instantiation time.  Hoot provides a foreign
+function interface (FFI) to embed these import declarations within
+Scheme code.
+
+The @code{define-foreign} form declares an import with a given type
+signature (WASM is statically typed) and defines a procedure for
+calling it.  The FFI takes care of converting Scheme values to WASM
+values and vice versa.  For example, declaring an import for creating
+text nodes in a web browser could look like this:
+
+@lisp
+(define-foreign make-text-node
+  "document" "createTextNode"
+  (ref string) -> (ref null extern))
+@end lisp
+
+In the above example, the procedure is bound to the variable
+@code{make-text-node}.  In the WASM binary, this import is named
+``createTextNode'' and resides in the ``document'' namespace of the
+import table.  A WASM host is expected to satisfy this import by
+providing a function that accepts one argument, a string, and returns
+an arbitary host value which may be null.
+
+Note that declaring an import @emph{does not} do anything to bind that
+import to an implementation on the host.  The WASM guest cannot grant
+capabilities unto itself.  Furthermore, the host could be any WASM
+runtime, so the actual implementation will vary.  In the context of a
+web browser, the JavaScript code that instantiates a module with this
+import could look like this:
+
+@example
+@verbatim
+Scheme.load_main("hello.wasm", {}, {
+  document: {
+    createTextNode: Document.prototype.createTextNode.bind(document)
+  }
+});
+@end verbatim
+@end example
+
+And here's what it might look like when using the Hoot interpreter:
+
+@lisp
+(use-modules (hoot reflect) (wasm parse))
+(define reflector (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
+(hoot-instantiate reflector
+                  (call-with-input-file "hello.wasm" parse-wasm)
+                  `(("document" .
+                     (("createTextNode" . ,(lambda (str) `(text ,str)))))))
+@end lisp
+
+Once defined, @code{make-text-node} can be called like any other
+procedure:
+
+@lisp
+(define text-node (make-text-node "Hello, world!"))
+@end lisp
+
+Since the return type of @code{make-text-node} is @code{(ref null
+extern}), the value of @code{text-node} is an @emph{external
+reference}.  To check if a value is an external reference, use the
+@code{external?} predicate:
+
+@lisp
+(external? text-node) ; => #t
+@end lisp
+
+External references may be null, which could indicate failure, a cache
+miss, etc.  To check if an external value is null, use the
+@code{external-null?} predicate:
+
+@lisp
+(if (external-null? text-node) 'yay 'uh-oh)
+@end lisp
+
+@deffn {Syntax} define-foreign scheme-name namespace import-name param-types ... -> result-type
+
+Define @var{scheme-name}, a procedure wrapping the WASM import
+@var{import-name} in the namespace @var{namespace}.
+
+The signature of the function is specified by @var{param-types} and
+@var{result-type}, which are all WASM types expressed in WAT form.
+
+Valid parameter types are:
+
+@itemize
+@item i32: 32-bit integer
+@item i64: 64-bit integer
+@item f32: 32-bit float
+@item f64: 64-bit float
+@item (ref string): a string
+@item (ref null extern): an external reference
+@item (ref eq): any Scheme value
+@end itemize
+
+Valid result types are:
+
+@itemize
+@item none: no return value
+@item i32: 32-bit integer
+@item i64: 64-bit integer
+@item f32: 32-bit float
+@item f64: 64-bit float
+@item (ref string): a string
+@item (ref null extern): an external reference
+@end itemize
+
+@end deffn
+
+@deffn {Procedure} external? obj
+Return @code{#t} if @var{obj} is an external reference.
+@end deffn
+
+@deffn {Procedure} external-null? extern
+Return @code{#t} if @var{extern} is null.
 @end deffn
 
 @node Toolchain reference

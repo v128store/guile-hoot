@@ -639,7 +639,7 @@
                      (cons name (wasm-instance-export-ref instance name)))
                    (wasm-instance-export-names instance)))))
 
-(define* (hoot-instantiate reflector scheme-wasm #:optional (user-imports '()))
+(define* (hoot-instantiate reflector scheme-wasm #:optional (imports '()))
   (define (debug-str str)
     (format #t "debug: ~a\n" str))
   (define (debug-str-i32 str x)
@@ -658,7 +658,7 @@
        (("procedure_to_extern" . ,procedure->extern)))))
   (define (instantiate wasm abi-imports)
     (instantiate-wasm (validate-wasm wasm)
-                      #:imports (append user-imports
+                      #:imports (append imports
                                         abi-imports
                                         debug-imports
                                         ffi-imports)))
@@ -701,7 +701,7 @@
      (let* (($load (wasm-instance-export-ref instance "$load")))
        ((wasm->guile reflector (wasm-global-ref $load)))))))
 
-(define* (compile-value reflect-wasm exp #:key (imports '()))
+(define* (compile-value reflect-wasm exp #:optional (imports '()))
   (hoot-load (hoot-instantiate reflect-wasm (compile exp) imports)))
 
 (define (compile-call reflect-wasm proc-exp . arg-exps)

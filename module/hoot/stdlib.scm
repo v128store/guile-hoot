@@ -642,7 +642,7 @@
      (func $fexp (import "rt" "fexp") (param f64) (result f64))
 
      (func $jiffies-per-second (import "rt" "jiffies_per_second") (result i32))
-     (func $current-jiffy (import "rt" "current_jiffy") (result i64))
+     (func $current-jiffy (import "rt" "current_jiffy") (result f64))
      (func $current-second (import "rt" "current_second") (result f64))
 
      (func $die (import "rt" "die")

@@ -101,6 +101,10 @@ standard for all dynamic languages.
 @node Status
 @section Status
 
+Hoot's Wasm output is compatible with Google Chrome starting with
+version 119 and Mozilla Firefox starting with version 121.  As of
+writing, WebKit/Apple Safari is not yet compatible.
+
 Hoot is still in an early phase of active development and its API
 should be considered unstable and subject to change in future
 releases.  Hoot currently supports a subset of the R7RS-small Scheme
@@ -111,15 +115,8 @@ Missing R7RS-small features include:
 
 @enumerate
 @item Libraries (@code{define-library}, @code{import}, etc.)
-@item Record types (@code{define-record-type})
 @item Complex numbers (constants are supported, math procedures are not)
-@item Bignum constants (bignums can be computed, however)
-@item Symbols/keywords (in secondary Wasm modules with imported Scheme ABI)
-@item Mutable strings (@code{string-set!})
-@item Scheme reader (@code{read})
 @item Environments and evaluation (@code{environment}, @code{eval}, etc.)
-@item System interface (@code{get-environment-variable}, @code{current-jiffy}, etc.)
-@item Promises (@code{delay}, @code{force})
 @end enumerate
 
 Future releases will add support for all of R7RS-small and eventually
@@ -134,10 +131,7 @@ allow for heap allocated objects (and immediates via the @code{i31}
 type) that are managed by the Wasm runtime.  This allows Hoot to take
 advantage of production garbage collectors already present in web
 browsers, obviating the need to implement and ship our own which would
-be both inferior to the host's and a major source of binary bloat.  As
-of writing, Wasm GC and tail calls are transitioning from being gated
-by experimental feature flags to being generally available in all
-major web browsers.
+be both inferior to the host's and a major source of binary bloat.
 
 There's an additional Wasm proposal that Hoot has been built on that
 has, unfortunately, not found its way into the core Wasm

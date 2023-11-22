@@ -109,7 +109,9 @@ Hoot is still in an early phase of active development and its API
 should be considered unstable and subject to change in future
 releases.  Hoot currently supports a subset of the R7RS-small Scheme
 specification, along with a small set of Guile-specific functionality
-such as @ref{Prompts,,,Guile Reference}.
+such as @inlinefmtifelse{html,
+@url{https://www.gnu.org/software/guile/manual/html_node/Prompts.html,
+prompts}, @ref{Prompts,,,Guile Reference}}.
 
 Missing R7RS-small features include:
 

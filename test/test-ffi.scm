@@ -34,7 +34,7 @@
 (define-syntax-rule (test-ffi name expected source imports)
   (test-equal name
     expected
-    (compile-value reflector 'source #:imports imports)))
+    (compile-value reflector 'source imports)))
 
 (test-ffi
  "i32 param and result"

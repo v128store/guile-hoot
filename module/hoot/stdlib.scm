@@ -351,16 +351,6 @@
               (field $ret-stack (ref $raw-retvector))
               (field $dyn-stack (ref $raw-dynvector)))))
 
-     ;; FIXME: This is a throwaway definition.  Really exceptions need
-     ;; to be based on top of records, but we won't have records
-     ;; implemented for the MVP.
-     (type $simple-exception
-           (sub $vector
-             (struct
-              (field $hash (mut i32))
-              ;; #(key subr message irritants)
-              (field $vals (ref $raw-scmvector)))))
-
      (global $root-vtable (ref $vtable-vtable) (call $make-root-vtable))
 
      (global $empty-vector (ref $vector)
@@ -383,27 +373,6 @@
            (struct.set $vtable-vtable $vtable (local.get $ret) (local.get $ret))
            ;; Rely on Scheme to initialize printer, name, etc...
            (local.get $ret))
-
-     (func $make-throw-exn (param $key (ref $symbol)) (param $args (ref eq))
-           (result (ref $simple-exception))
-           (struct.new $simple-exception (i32.const 0)
-                       (array.new_fixed $raw-scmvector 4
-                                        (local.get $key)
-                                        (ref.i31 (i32.const 1))
-                                        (ref.i31 (i32.const 1))
-                                        (local.get $args))))
-     (func $make-throw/value-exn
-           (param $key (ref $symbol))
-           (param $subr (ref eq))
-           (param $message (ref $string))
-           (param $args (ref eq))
-           (result (ref $simple-exception))
-           (struct.new $simple-exception (i32.const 0)
-                       (array.new_fixed $raw-scmvector 4
-                                        (local.get $key)
-                                        (local.get $subr)
-                                        (local.get $message)
-                                        (local.get $args))))
 
      (func $raise-exception (param $exn (ref eq))
            (return_call_ref $kvarargs
@@ -842,11 +811,6 @@
      (func $maybe-grow-dyn-stack
            (if (i32.lt_u (table.size $dyn-stack) (global.get $dyn-sp))
                (then (call $grow-dyn-stack))))
-
-     (func $wrong-num-args (param $nargs i32)
-           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
-           (call $die (string.const "wrong-number-of-args") (local.get $arg0))
-           (unreachable))
 
      (func $collect-rest-args (param $nargs i32)
            (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
@@ -1763,9 +1727,9 @@
            (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (if (i32.lt_u (local.get $nargs) (i32.const 2))
                (then
-                (call $wrong-num-args (local.get $nargs) (local.get $arg0)
-                      (local.get $arg1) (local.get $arg2))
-                (unreachable)))
+                (return_call $raise-arity-error
+                             (string.const "abort-to-prompt")
+                             (global.get $abort-to-prompt-primitive))))
            ;; $arg0 is the closure, $arg1 is tag, and the values are in
            ;; $arg2 and up, which we collect to a rest list.
            (return_call $unwind-to-prompt (local.get $arg1)
@@ -1856,11 +1820,10 @@
            (param $arg1 (ref eq)) (param $arg2 (ref eq))
            (local $args (ref eq))
            (if (i32.lt_u (local.get $nargs) (i32.const 3))
-               (then (return_call $wrong-num-args
-                                  (local.get $nargs)
-                                  (local.get $arg0)
-                                  (local.get $arg1)
-                                  (local.get $arg2))))
+               (then
+                (return_call $raise-arity-error
+                             (string.const "apply")
+                             (global.get $apply-primitive))))
            (local.set $arg0 (local.get $arg1))
            (local.set $args
                       (if (ref eq)
@@ -4219,11 +4182,9 @@
            (local $prev (ref eq))
            (if (i32.eqz (local.get $nargs))
                (then
-                (return_call $wrong-num-args
-                             (local.get $nargs)
-                             (local.get $arg0)
-                             (local.get $arg1)
-                             (local.get $arg2))))
+                (return_call $raise-arity-error
+                             (string.const "[parameter conversion result]")
+                             (ref.i31 (i32.const 1)))))
            (global.set $scm-sp (i32.sub (global.get $scm-sp) (i32.const 1)))
            (local.set $fluid
                       (ref.cast $fluid
@@ -4255,11 +4216,9 @@
                                  (table.get $ret-stack (global.get $ret-sp)))))
            (if (i32.ne (local.get $nargs) (i32.const 2))
                (then
-                (return_call $wrong-num-args
-                             (local.get $nargs)
-                             (local.get $arg0)
-                             (local.get $arg1)
-                             (local.get $arg2))))
+                (return_call $raise-arity-error
+                             (string.const "[parameter]")
+                             (local.get $arg0))))
            (global.set $scm-sp (i32.add (global.get $scm-sp) (i32.const 1)))
            (call $maybe-grow-scm-stack)
            (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))

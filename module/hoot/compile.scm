@@ -426,6 +426,10 @@
         (match (intmap-ref cps kfun)
           (($ $kfun src meta self ktail kentry)
            (assq-ref meta 'elide-arity-check?))))
+      (define func-name
+        (match (intmap-ref cps kfun)
+          (($ $kfun src meta self ktail kentry)
+           (assq-ref meta 'name))))
       (define used-vars (compute-used-vars cps))
       (define (var-used? var) (intset-ref used-vars var))
       (define preds (compute-predecessors cps kfun))
@@ -852,18 +856,6 @@
              (error "unimplemented" exp))
             (('lookup-bound-private (mod name))
              (error "unimplemented" exp))
-
-            (('make-throw-exn #f key args)
-             `(,(local.get key)
-               (ref.cast ,(make-ref-type #f '$symbol))
-               ,(local.get args)
-               (call $make-throw-exn)))
-            (('make-throw/value-exn #(key subr message) val)
-             `(,@(compile-constant key)
-               ,@(compile-constant subr)
-               ,@(compile-constant message)
-               ,(local.get val)
-               (call $make-throw/value-exn)))
 
             ;; Object allocation.  Probably most of these need to be
             ;; replaced with `cons` et al; see log.md.
@@ -2305,19 +2297,21 @@
                               ((null? a) b)
                               ((null? b) a)
                               (else `(,@a ,@b (i32.or)))))
-                           (let ((checks (combine-checks check-req check-opt)))
-                             (if (null? checks)
-                                 '()
-                                 `(,@checks
-                                   (if #f ,void-block-type
-                                       ,(if kalt
-                                            (do-branch label kalt ctx)
-                                            '((local.get $nargs)
-                                              (local.get $arg0)
-                                              (local.get $arg1)
-                                              (local.get $arg2)
-                                              (return_call $wrong-num-args)))
-                                       ()))))))
+                           (match (combine-checks check-req check-opt)
+                             (() '())
+                             (checks
+                              `(,@checks
+                                (if #f ,void-block-type
+                                    ,(if kalt
+                                         (do-branch label kalt ctx)
+                                         `(,(match func-name
+                                              (#f '(ref.null string))
+                                              (name
+                                               `(string.const
+                                                 ,(symbol->string func-name))))
+                                           (local.get $arg0)
+                                           (return_call $raise-arity-error)))
+                                    ()))))))
                        (define (init-positional min max)
                          (define (add-closure n) (if has-closure? (1+ n) n))
                          (define init-req

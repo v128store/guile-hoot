@@ -413,6 +413,68 @@
                             (ref.i31 (i32.const 1))
                             (struct.get $proc $func (global.get $raise-exception))))
 
+     (func $raise-returned-value
+           (param $nargs i32)
+           (param $arg0 (ref eq)) (param $arg1 (ref eq)) (param $arg2 (ref eq))
+           (if (i32.ne (local.get $nargs) (i32.const 1))
+               (then (call $die0
+                           (string.const "unexpected raise-exception return"))))
+           (return_call $raise-exception (local.get $arg0)))
+
+     (func $push-raise-returned-value
+           (global.set $ret-sp (i32.add (global.get $ret-sp) (i32.const 1)))
+           (call $maybe-grow-ret-stack)
+           (table.set $ret-stack
+                      (i32.sub (global.get $ret-sp) (i32.const 1))
+                      (ref.func $raise-returned-value)))
+
+     (func $raise-type-error
+           (param $subr (ref string))
+           (param $what (ref string))
+           (param $val (ref eq))
+           (call $push-raise-returned-value)
+           (global.set $arg3 (struct.new $string (i32.const 0)
+                                         (local.get $what)))
+           (return_call_ref $kvarargs
+                            (i32.const 4)
+                            (global.get $make-type-error)
+                            (local.get $val)
+                            (struct.new $string (i32.const 0)
+                                        (local.get $subr))
+                            (struct.get $proc $func
+                                        (global.get $make-type-error))))
+
+     (func $raise-range-error
+           (param $subr (ref string))
+           (param $val (ref eq))
+           (call $push-raise-returned-value)
+           (global.set $arg3 (ref.i31 (i32.const 1)))
+           (global.set $arg4 (local.get $val))
+           (return_call_ref $kvarargs
+                            (i32.const 5)
+                            (global.get $make-range-error)
+                            (local.get $val)
+                            (ref.i31 (i32.const 1))
+                            (struct.get $proc $func
+                                        (global.get $make-range-error))))
+
+     (func $raise-arity-error
+           (param $subr (ref null string))
+           (param $val (ref eq))
+           (call $push-raise-returned-value)
+           (return_call_ref $kvarargs
+                            (i32.const 3)
+                            (global.get $make-arity-error)
+                            (local.get $val)
+                            (if (ref eq)
+                                (ref.is_null (local.get $subr))
+                                (then (ref.i31 (i32.const 1)))
+                                (else (struct.new $string (i32.const 0)
+                                                  (ref.as_non_null
+                                                   (local.get $subr)))))
+                            (struct.get $proc $func
+                                        (global.get $make-arity-error))))
+
      (func $string->bignum (import "rt" "bignum_from_string")
            (param (ref string))
            (result (ref extern)))
@@ -4270,6 +4332,8 @@
      (global ,@(maybe-import '$make-runtime-error-with-message+irritants) (mut (ref $proc))
              ,@maybe-init-proc)
      (global ,@(maybe-import '$make-match-error) (mut (ref $proc))
+             ,@maybe-init-proc)
+     (global ,@(maybe-import '$make-arity-error) (mut (ref $proc))
              ,@maybe-init-proc))))
 
 (define (memoize f)

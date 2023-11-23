@@ -74,7 +74,18 @@
 (define-syntax-rule (match e cs ...) (simple-match e cs ...))
 
 (define (raise exn) (%raise-exception exn))
-(define (raise-continuable exn) (%raise-exception exn #:continuable? #t))
+(define (raise-continuable exn)
+  ((%inline-wasm '(func (result (ref eq))
+                        (global.get $raise-exception)))
+   exn #:continuable? #t))
+(define raise-exception
+  (case-lambda*
+   ((exn) (%raise-exception exn))
+   ;; FIXME: keyword
+   ((exn #:optional continuable-keyword continuable?)
+    (if continuable?
+        (raise-continuable exn)
+        (%raise-exception exn)))))
 
 ;; Guile extensions.
 (define (1+ x) (%+ x 1))
@@ -146,6 +157,8 @@
   $make-runtime-error-with-message+irritants)
 (define-exception-constructor (%make-match-error v)
   $make-match-error)
+(define-exception-constructor (%make-arity-error v who)
+  $make-arity-error)
 
 (define error
   (case-lambda
@@ -3084,6 +3097,9 @@ object @var{exception}."
 (define-exception-type &assertion &violation
   (make-assertion-violation)
   assertion-violation?)
+(define-exception-type &arity-violation &violation
+  (make-arity-violation)
+  arity-violation?)
 (define-exception-type &implementation-restriction &violation
   (make-implementation-restriction-violation)
   implementation-restriction-violation?)
@@ -3684,57 +3700,57 @@ object @var{exception}."
       (let ((running? (make-fluid #f)))
         (with-fluids ((%exception-handler (cons running? handler)))
           (thunk))))))
-  ;; FIXME: Use #:key instead
-  (define* (raise-exception exn #:optional keyword continuable?)
-    (let lp ((depth 0))
-      ;; FIXME: fluid-ref* takes time proportional to depth, which
-      ;; makes this loop quadratic.
-      (match (fluid-ref* %exception-handler depth)
-        (#f
-         ;; No exception handlers bound; fall back.
-         ;(pk 'uncaught-exception exn)
-         (%inline-wasm
-          '(func (param $exn (ref eq))
-                 (call $die (string.const "uncaught exception")
-                       (local.get $exn))
-                 (unreachable))
-          exn))
-        ((#t . prompt-tag)
-         (abort-to-prompt prompt-tag exn)
-         (raise (make-non-continuable-violation)))
-        ((running? . handler)
-         (if (fluid-ref running?)
-             (begin
-               (lp (1+ depth)))
-             (with-fluids ((running? #t))
-               (cond
-                (continuable?
-                 (handler exn))
-                (else
-                 (handler exn)
-                 (raise (make-non-continuable-violation))))))))))
 
   (let ()
+    ;; FIXME: Use #:key instead
+    (define* (raise-exception exn #:optional keyword continuable?)
+      (let lp ((depth 0))
+        ;; FIXME: fluid-ref* takes time proportional to depth, which
+        ;; makes this loop quadratic.
+        (match (fluid-ref* %exception-handler depth)
+          (#f
+           ;; No exception handlers bound; fall back.
+                                        ;(pk 'uncaught-exception exn)
+           (%inline-wasm
+            '(func (param $exn (ref eq))
+                   (call $die (string.const "uncaught exception")
+                         (local.get $exn))
+                   (unreachable))
+            exn))
+          ((#t . prompt-tag)
+           (abort-to-prompt prompt-tag exn)
+           (raise (make-non-continuable-violation)))
+          ((running? . handler)
+           (if (fluid-ref running?)
+               (begin
+                 (lp (1+ depth)))
+               (with-fluids ((running? #t))
+                 (cond
+                  (continuable?
+                   (handler exn))
+                  (else
+                   (handler exn)
+                   (raise (make-non-continuable-violation))))))))))
+
     (define (make-with-irritants exn message origin irritants)
-      (let ((base (make-exception
-                   (make-exception-with-message message)
-                   (make-exception-with-origin origin)
-                   (make-exception-with-irritants irritants))))
-        (if exn (make-exception base exn) base)))
+      (make-exception exn
+                      (make-exception-with-message message)
+                      (make-exception-with-origin origin)
+                      (make-exception-with-irritants irritants)))
     (define-syntax-rule (define-exception-constructor (name arg ...) body ...)
       (cond-expand
        ((and) (define (name arg ...) body ...))
        (else (define (name arg ...) (list arg ...)))))
     (define-exception-constructor (make-size-error val max who)
-      (make-with-irritants #f "size out of range" who (list val)))
+      (make-with-irritants (make-error) "size out of range" who (list val)))
     (define-exception-constructor (make-index-error val size who)
-      (make-with-irritants #f "index out of range" who (list val)))
+      (make-with-irritants (make-error) "index out of range" who (list val)))
     (define-exception-constructor (make-range-error val min max who)
-      (make-with-irritants #f "value out of range" who (list val)))
+      (make-with-irritants (make-error) "value out of range" who (list val)))
     (define-exception-constructor (make-start-offset-error val size who)
-      (make-with-irritants #f "start offset out of range" who (list val)))
+      (make-with-irritants (make-error) "start offset out of range" who (list val)))
     (define-exception-constructor (make-end-offset-error val size who)
-      (make-with-irritants #f "end offset out of range" who (list val)))
+      (make-with-irritants (make-error) "end offset out of range" who (list val)))
     (define-exception-constructor (make-type-error val who what)
       (make-with-irritants (make-failed-type-check what)
                            "type check failed"
@@ -3760,6 +3776,15 @@ object @var{exception}."
       (make-exception (make-assertion-violation)
                       (make-exception-with-message "value failed to match")
                       (make-exception-with-irritants (list v))))
+    (define-exception-constructor (make-arity-error v who)
+      (define (annotate-with-origin exn)
+        (if who
+            (make-exception (make-exception-with-origin who) exn)
+            exn))
+      (annotate-with-origin
+       (make-exception (make-arity-violation)
+                       (make-exception-with-message "wrong number of arguments")
+                       (make-exception-with-irritants (list v)))))
 
     (define-syntax-rule (initialize-globals (global type proc) ...)
       (%inline-wasm
@@ -3783,12 +3808,10 @@ object @var{exception}."
      ($make-not-seekable-error make-not-seekable-error)
      ($make-runtime-error-with-message make-runtime-error-with-message)
      ($make-runtime-error-with-message+irritants make-runtime-error-with-message+irritants)
-     ($make-match-error make-match-error))))
+     ($make-match-error make-match-error)
+     ($make-arity-error make-arity-error))))
  (hoot-aux
   (define with-exception-handler
     (%inline-wasm
      '(func (result (ref eq))
-            (global.get $with-exception-handler))))
-  ;; FIXME: #:key
-  (define* (raise-exception exn #:optional keyword continuable?)
-    (%raise-exception exn #:continuable? continuable?))))
+            (global.get $with-exception-handler))))))

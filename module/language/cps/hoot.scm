@@ -38,7 +38,8 @@
             target-hash
             target-symbol-hash
             target-symbol-hash-bits
-            target-keyword-hash))
+            target-keyword-hash
+            target-has-unbound-boxes?))
 
 (define (hoot-primcall-raw-representations name param)
   (case name
@@ -140,3 +141,5 @@
 
 (define (target-keyword-hash str)
   (finish-heap-object-hash (target-symbol-hash str)))
+
+(define target-has-unbound-boxes? #f)

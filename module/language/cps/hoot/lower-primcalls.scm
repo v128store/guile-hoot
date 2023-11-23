@@ -38,16 +38,6 @@
   (with-fresh-name-state cps
     (intmap-fold
      (lambda (label cont out)
-       (define (emit-raise-exception out src exn)
-         (with-cps out
-           (letv prim)
-           (letk kstop ($kargs () () ($throw src 'unreachable #f ())))
-           (letk kraise ($kargs ('prim) (prim)
-                          ($continue kstop src
-                            ($call prim (exn)))))
-           (build-term
-             ($continue kraise src ($prim 'raise-exception)))))
-
        (match cont
          (($ $kargs names vars
              ($ $branch kf kt src 'vtable-has-unboxed-fields? nfields (vtable)))
@@ -237,25 +227,14 @@
             (setk label ($kargs names vars
                           ($continue k* src ($const y))))))
 
-         (($ $kargs names vars
-             ($ $throw src 'throw #f (key args)))
-          (with-cps out
-            (letv exn)
-            (let$ term (emit-raise-exception src exn))
-            (letk kraise ($kargs ('exn) (exn) ,term))
-            (setk label ($kargs names vars
-                          ($continue kraise src
-                            ($primcall 'make-throw-exn #f (key args)))))))
+         (($ $kargs names vars ($ $throw src op param args))
+          (match op
+            ((or 'raise-type-error
+                 'raise-range-error
+                 'raise-arity-error
+                 'raise-exception) out)
+            (_ (error "unexpected throw; fix to use raise-exception" op))))
 
-         (($ $kargs names vars
-             ($ $throw src (or 'throw/value 'throw/value+data) param (val)))
-          (with-cps out
-            (letv exn)
-            (let$ term (emit-raise-exception src exn))
-            (letk kraise ($kargs ('exn) (exn) ,term))
-            (setk label ($kargs names vars
-                          ($continue kraise src
-                            ($primcall 'make-throw/value-exn param (val)))))))
          (_ out)))
      cps
      cps)))

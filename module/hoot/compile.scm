@@ -145,7 +145,8 @@
           (make-export "$make-not-seekable-error" 'global '$make-not-seekable-error)
           (make-export "$make-runtime-error-with-message" 'global '$make-runtime-error-with-message)
           (make-export "$make-runtime-error-with-message+irritants" 'global '$make-runtime-error-with-message+irritants)
-          (make-export "$make-match-error" 'global '$make-match-error)))
+          (make-export "$make-match-error" 'global '$make-match-error)
+          (make-export "$make-arity-error" 'global '$make-arity-error)))
   (define (add-export export exports)
     (cons export exports))
   (match wasm
@@ -863,9 +864,6 @@
                ,@(compile-constant message)
                ,(local.get val)
                (call $make-throw/value-exn)))
-            (('raise-exception #f exn)
-             `(,(local.get exn)
-               (return_call $raise-exception)))
 
             ;; Object allocation.  Probably most of these need to be
             ;; replaced with `cons` et al; see log.md.
@@ -2134,8 +2132,28 @@
         ;; FIXME: Instead of dying, we need to implement exception
         ;; handling, as in Guile.
         (match (vector op param args)
-          (#('unreachable #f ())
-           '((unreachable)))))
+          (#('raise-type-error #(subr pos what) (val))
+           `((string.const ,subr)
+             (string.const ,what)
+             ,(local.get val)
+             (return_call $raise-type-error)))
+          (#('raise-range-error #(subr pos) (val))
+           `((string.const ,subr)
+             ,(local.get val)
+             (return_call $raise-range-error)))
+          (#('raise-arity-error #(subr) (val))
+           `(,(if subr
+                  `(string.const ,subr)
+                  '(ref.null string))
+             ,(local.get val)
+             (return_call $raise-arity-error)))
+          (#('raise-unbound-error #(subr) (val))
+           `((string.const ,subr)
+             ,(local.get val)
+             (return_call $raise-unbound-error)))
+          (#('raise-exception #f (exn))
+           `(,(local.get exn)
+             (return_call $raise-exception)))))
 
       ;; See "Beyond Relooper: Recursive Translation of Unstructured
       ;; Control Flow to Structured Control Flow", Norman Ramsey, ICFP

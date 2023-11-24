@@ -9,7 +9,7 @@
 
 @dircategory The Algorithmic Language Scheme
 @direntry
-* Hoot: (hoot).   Scheme to WASM compiler backend for Guile and WASM toolchain.
+* Hoot: (hoot).   Scheme to Wasm compiler backend for Guile and Wasm toolchain.
 @end direntry
 
 @finalout
@@ -27,17 +27,17 @@
 
 This is the manual for Guile Hoot, a Scheme to WebAssembly compiler
 backend for @url{https://gnu.org/software/guile,GNU Guile} and general
-purpose WASM toolchain.
+purpose Wasm toolchain.
 
 Both this manual and Guile Hoot itself are released under Apache v2.
 See @ref{License} for more information.
 @end ifnottex
 
 @menu
-* Introduction::                  What's the deal with WASM, anyway?
-* Compiling to WASM::             Using the compiler and development tools.
+* Introduction::                  What's the deal with Wasm, anyway?
+* Compiling to Wasm::             Using the compiler and development tools.
 * Scheme reference::              Hoot-specific Scheme extensions.
-* Toolchain reference::           General purpose WASM tools.
+* Toolchain reference::           General purpose Wasm tools.
 * Contributing::                  Lend a hand!
 * License::                       Copying, distributing, and using this text.
 * Index::
@@ -47,9 +47,9 @@ See @ref{License} for more information.
 @chapter Introduction
 
 Guile Hoot is a Scheme to WebAssembly (henceforth referred to as
-@emph{WASM}) compiler backend for
+@emph{Wasm}) compiler backend for
 @url{https://gnu.org/software/guile,GNU Guile} and a general purpose
-WASM toolchain.  WASM is an abstract but low-level binary compilation
+Wasm toolchain.  Wasm is an abstract but low-level binary compilation
 target that can run on all major web browsers, and increasingly in
 other, more ``native'' contexts, as well.  For over two decades,
 JavaScript has been @emph{the} official language of the web, and while
@@ -61,9 +61,9 @@ JavaScript!}  This approach worked in some sense but it was unideal
 because many languages do not map cleanly to JavaScript.  In the case
 of Scheme, for example, the lack of a tail call facility makes
 compiling tail-recursive Scheme code unpleasant.  At long last, thanks
-to WASM, it has become possible to use an alternative language with
+to Wasm, it has become possible to use an alternative language with
 fewer compromises and better performance.  Hoot aims to bring Guile's
-``whole self'' to the web, as well as to other WASM GC runtimes.
+``whole self'' to the web, as well as to other Wasm GC runtimes.
 
 Hoot is being developed by the
 @url{https://spritely.institute,Spritely Institute} in collaboration
@@ -74,73 +74,69 @@ than the web browser?
 @url{https://spritely.institute/goblins/,Goblins}, Spritely's
 distributed object programming environment, is primarily written in
 Guile.  So, to meet users where they are at @emph{and} not use
-JavaScript at the same time, Spritely needs a Guile to WASM compiler!
+JavaScript at the same time, Spritely needs a Guile to Wasm compiler!
 
 A secondary goal of Hoot is to advocate for all dynamic programming
 languages' (Python, Ruby, etc.) rightful place on the client-side web.
-The WASM 1.0 specification was not a habitable environment for
-languages that require a garbage collector.  The WASM GC proposal,
+The Wasm 1.0 specification was not a habitable environment for
+languages that require a garbage collector.  The Wasm GC proposal,
 among others, has made it possible for dynamic languages to target
-WASM in a real way.  However, such advances are not without their
+Wasm in a real way.  However, such advances are not without their
 detractors.  Without the necessary support, a useful proposal will
 never make it into the core specification.  For example, strings are a
 particularly controversial subject in the WebAssembly Community Group
 and proposals that would greatly benefit Hoot and other languages have
 not reached consensus.  Implementing and targeting emergent and useful
-WASM proposals helps those proposals find their way into the core
+Wasm proposals helps those proposals find their way into the core
 specification.  A rising tide lifts all boats, as they say, and while
-we may be little schemers, we want our work to help advance the WASM
+we may be little schemers, we want our work to help advance the Wasm
 standard for all dynamic languages.
 
 @menu
 * Status::                        What works.  What doesn't.
 * Installation::                  Setting up Hoot.
-* Tutorial::                      Compiling your first Scheme program to WASM.
+* Tutorial::                      Compiling your first Scheme program to Wasm.
 @end menu
 
 @node Status
 @section Status
 
+Hoot's Wasm output is compatible with Google Chrome starting with
+version 119 and Mozilla Firefox starting with version 121.  As of
+writing, WebKit/Apple Safari is not yet compatible.
+
 Hoot is still in an early phase of active development and its API
 should be considered unstable and subject to change in future
 releases.  Hoot currently supports a subset of the R7RS-small Scheme
 specification, along with a small set of Guile-specific functionality
-such as @ref{Prompts,,,Guile Reference}.
+such as @inlinefmtifelse{html,
+@url{https://www.gnu.org/software/guile/manual/html_node/Prompts.html,
+prompts}, @ref{Prompts,,,Guile Reference}}.
 
 Missing R7RS-small features include:
 
 @enumerate
 @item Libraries (@code{define-library}, @code{import}, etc.)
-@item Record types (@code{define-record-type})
 @item Complex numbers (constants are supported, math procedures are not)
-@item Bignum constants (bignums can be computed, however)
-@item Symbols/keywords (in secondary WASM modules with imported Scheme ABI)
-@item Mutable strings (@code{string-set!})
-@item Scheme reader (@code{read})
 @item Environments and evaluation (@code{environment}, @code{eval}, etc.)
-@item System interface (@code{get-environment-variable}, @code{current-jiffy}, etc.)
-@item Promises (@code{delay}, @code{force})
 @end enumerate
 
 Future releases will add support for all of R7RS-small and eventually
 full Guile-flavored Scheme.
 
-To compile Scheme to WASM, Hoot takes advantage of several new WASM
+To compile Scheme to Wasm, Hoot takes advantage of several new Wasm
 proposals.  The most important of these new features are tail calls
 and GC reference types.  The @code{return_call} family of instructions
 has made the implementation of Scheme's tail recursive procedure call
 semantics relatively straightforward.  GC reference type instructions
 allow for heap allocated objects (and immediates via the @code{i31}
-type) that are managed by the WASM runtime.  This allows Hoot to take
+type) that are managed by the Wasm runtime.  This allows Hoot to take
 advantage of production garbage collectors already present in web
 browsers, obviating the need to implement and ship our own which would
-be both inferior to the host's and a major source of binary bloat.  As
-of writing, WASM GC and tail calls are transitioning from being gated
-by experimental feature flags to being generally available in all
-major web browsers.
+be both inferior to the host's and a major source of binary bloat.
 
-There's an additional WASM proposal that Hoot has been built on that
-has, unfortunately, not found its way into the core WASM
+There's an additional Wasm proposal that Hoot has been built on that
+has, unfortunately, not found its way into the core Wasm
 specification: stringref.  We still emit stringref, but it is reduced
 to being an intermediate form.  A lowering pass replaces stringref
 instructions with something resembling the JS String Builtins
@@ -226,7 +222,7 @@ later chapters for an API reference.
 This is entirely optional, but if you'd like further verification that
 your build is good (or perhaps you're packaging Hoot for
 distribution), the test suite can be run via @command{make check}.  By
-default, the tests are run against two WASM runtimes: Hoot's own WASM
+default, the tests are run against two Wasm runtimes: Hoot's own Wasm
 interpreter and @url{https://v8.dev/,V8} via the @command{d8} tool.
 
 Getting V8 can be tricky, and will most likely require you to
@@ -235,17 +231,17 @@ To skip all of that trouble and just run the tests against the
 built-in interpreter, run:
 
 @example
-make check WASM_HOST=hoot
+make check Wasm_HOST=hoot
 @end example
 
 @node Tutorial
 @section Tutorial
 
 Let's compile some simple Scheme programs and learn how to work with
-their compiled WASM forms.
+their compiled Wasm forms.
 
 As we all know, the answer to everything is simply 42.  So, we should
-make sure that we can compile 42 to WASM.  To do so, import the
+make sure that we can compile 42 to Wasm.  To do so, import the
 @code{(hoot compile)} module and call the @code{compile} procedure.
 
 @lisp
@@ -255,16 +251,16 @@ scheme@(guile-user)> (define the-answer (compile 42))
 @end verbatim
 @end lisp
 
-The result is a WASM module.  There is a lot of stuff inside, but
+The result is a Wasm module.  There is a lot of stuff inside, but
 we're not going to focus on that right now.  We should load and run
 the module to verify that it outputs 42 like we expect.  We can do so
-from the comfort of our Guile REPL because Hoot includes a WASM
-interpreter.  There's no need to use a web browser or other WASM
+from the comfort of our Guile REPL because Hoot includes a Wasm
+interpreter.  There's no need to use a web browser or other Wasm
 runtime to try out small programs.
 
-In order to extract Scheme values from a WASM module, we actually need
-a second WASM module known as @file{reflect.wasm}.  This is a special
-binary that comes with Hoot that allows for a WASM host (Guile, a web
+In order to extract Scheme values from a Wasm module, we actually need
+a second Wasm module known as @file{reflect.wasm}.  This is a special
+binary that comes with Hoot that allows for a Wasm host (Guile, a web
 browser, etc.) to make sense of and manipulate Scheme values. To load
 that binary from disk we will use the @code{(wasm parse)} module.
 
@@ -282,7 +278,7 @@ located in the Hoot build directory.  Adjust as necessary for your
 context.
 
 Now that the reflection module has been loaded, we can load
-@code{the-answer} into the WASM interpreter to produce a WASM
+@code{the-answer} into the Wasm interpreter to produce a Wasm
 @emph{instance}:
 
 @lisp
@@ -302,7 +298,7 @@ $5 = 42
 @end verbatim
 @end lisp
 
-Ta-da!  It feels kind of funny to compile a Scheme program to WASM
+Ta-da!  It feels kind of funny to compile a Scheme program to Wasm
 only to load it back into Scheme, but it's a quick and easy way to
 test things out.
 
@@ -317,7 +313,7 @@ $6 = #<hoot (1 2 3)>
 @end verbatim
 @end lisp
 
-With @code{compile-value}, the compiled WASM module is thrown away,
+With @code{compile-value}, the compiled Wasm module is thrown away,
 which is just fine for testing throwaway code.
 
 Lists are cool and 42 is ultimately the answer to everything, but it
@@ -350,10 +346,10 @@ $7 = 120
 
 The Hoot reflection in Guile is great for quickly iterating on code,
 but what we really want is to get our programs running in a web
-browser.  We've compiled a couple of things to WASM now, but the
+browser.  We've compiled a couple of things to Wasm now, but the
 resulting modules have stayed within the confines of the Guile
 process.  To make something that can be loaded by a web browser, we
-need to use the assembler to create a WASM binary:
+need to use the assembler to create a Wasm binary:
 
 @lisp
 @verbatim
@@ -382,7 +378,7 @@ scheme@(guile-user)> (call-with-output-file "/path/to/hoot-tutorial/hello.wasm"
 
 To inspect Scheme values from JavaScript, Hoot provides the
 @file{js-runtime/reflect.js} library.  Copy that file and its
-associated WASM helper modules, @file{js-runtime/reflect.wasm} and
+associated Wasm helper modules, @file{js-runtime/reflect.wasm} and
 @file{js-runtime/wtf8.wasm}, to the @file{hoot-tutorial} directory:
 
 @example
@@ -487,19 +483,19 @@ guile web-server.scm
 @end example
 
 Visit @url{http://localhost:8080/index.html} in your web browser, and
-if it is new enough to have WASM GC enabled, you should see the text
+if it is new enough to have Wasm GC enabled, you should see the text
 ``Hello, world!'' printed in the developer console.
 
 We hope this tutorial has helped you get started with Hoot!  Read on
 for full API documentation.
 
-@node Compiling to WASM
-@chapter Compiling to WASM
+@node Compiling to Wasm
+@chapter Compiling to Wasm
 
 @menu
 * Invoking the compiler::         Compiling a Hoot module.
 * High-level development tools::  Using Hoot modules from the host environment.
-* Low-level development tools::   Inspecting and debugging WASM.
+* Low-level development tools::   Inspecting and debugging Wasm.
 @end menu
 
 @node Invoking the compiler
@@ -510,7 +506,7 @@ transformations before being compiled to VM bytecode.  Scheme is
 lowered to @ref{Tree-IL,,,Guile Reference}, which is then lowered to
 @ref{Continuation Passing Style,,,Guile Reference}(CPS), and then
 finally to @ref{Bytecode,,,Guile Reference}.  Hoot adds an additional
-backend that compiles CPS to WASM.
+backend that compiles CPS to Wasm.
 
 Currently, Hoot does not use Guile's module system and instead peforms
 whole program compilation using a prelude that provides R7RS-small
@@ -524,7 +520,7 @@ invoke the @command{guild compile-wasm} tool:
 guild compile-wasm -o foo.wasm foo.scm
 @end example
 
-When writing Scheme intended to be compiled to the WASM target, a
+When writing Scheme intended to be compiled to the Wasm target, a
 special form called @code{%inline-wasm} is available for implementing
 a section of code in WAT rather than Scheme.  For example, here's how
 @code{port?} is implemented:
@@ -540,14 +536,14 @@ a section of code in WAT rather than Scheme.  For example, here's how
                 x))
 @end lisp
 
-An inline WASM form specifies a single function using WAT expressions
+An inline Wasm form specifies a single function using WAT expressions
 whose parameters and result types are all @code{(ref eq)}, as well as
 the Scheme variables that map to the parameters.  The compiler then
 transforms and splices the function body into the procedure.
 
 Like Guile's built-in compiler, the Hoot compiler can also be invoked
 within Scheme.  The @code{(hoot compile)} module provides the
-interface to the WASM compiler backend.
+interface to the Wasm compiler backend.
 
 @deffn {Procedure} compile exp [#:import-abi? #f] [#:export-abi? #t] @
                    [#:from (current-language)] @
@@ -556,10 +552,10 @@ interface to the WASM compiler backend.
                    [#:warning-level (default-warning-level)] @
                    [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
 
-Compile the Scheme expression @var{exp} to WASM and return a WASM
-module.  When @var{import-abi?} is @code{#t}, the WASM module will be
+Compile the Scheme expression @var{exp} to Wasm and return a Wasm
+module.  When @var{import-abi?} is @code{#t}, the Wasm module will be
 built such that it needs to import its ABI from another module.  When
-@var{export-abi?} is @code{#t}, the WASM module will be built such
+@var{export-abi?} is @code{#t}, the Wasm module will be built such
 that it exports its ABI functions.  A typical use of these flags is to
 export the ABI from one ``main'' module and then import that ABI into
 any additional modules that are being used.
@@ -594,12 +590,12 @@ Like @code{compile}, but read the Scheme expression from
 @section High-level development tools
 
 The @code{(hoot reflect)} module provides an interface for inspecting
-and manipulating Scheme values that live within WASM modules.  This is
+and manipulating Scheme values that live within Wasm modules.  This is
 the primary interface for testing compiler output directly from Guile.
 
 @deffn {Procedure} hoot-instantiate reflector scheme-wasm [imports '()]
 Instantiate and return a new Hoot module using the compiled Scheme
-WASM module @var{scheme-wasm} and the reflection module
+Wasm module @var{scheme-wasm} and the reflection module
 @var{reflector}.
 
 Optionally, @var{imports} may contain a 2-tier association list
@@ -641,7 +637,7 @@ Return the reflection module for @var{module}.
 @end deffn
 
 @deffn {Procedure} hoot-module-instance module
-Return the WASM instance for @var{module}.
+Return the Wasm instance for @var{module}.
 @end deffn
 
 @deffn {Procedure} reflector? obj
@@ -649,7 +645,7 @@ Return @code{#t} if @var{obj} is a reflector.
 @end deffn
 
 @deffn {Procedure} reflector-instance reflector
-Return the WASM instance of @var{reflector}.
+Return the Wasm instance of @var{reflector}.
 @end deffn
 
 @deffn {Procedure} reflector-abi reflector
@@ -816,9 +812,9 @@ Return @code{#t} if @var{obj} is a Hoot struct.
 @section Low-level development tools
 
 The @code{(hoot repl)} module provides a set of REPL commands to
-assist with inspecting and debugging WASM modules.  As a matter of
-course, Hoot's Scheme compiler @emph{should not} cause low-level WASM
-runtime errors, but when it does, or when working with the WASM
+assist with inspecting and debugging Wasm modules.  As a matter of
+course, Hoot's Scheme compiler @emph{should not} cause low-level Wasm
+runtime errors, but when it does, or when working with the Wasm
 toolchain directly, these REPL tools may provide some assistance.
 
 To install the REPL commands, simply import the module:
@@ -827,7 +823,7 @@ To install the REPL commands, simply import the module:
 scheme@@(guile-user)> ,use (hoot repl)
 @end lisp
 
-To see a list of all the WASM commands, run:
+To see a list of all the Wasm commands, run:
 
 @lisp
 scheme@@(guile-user)> ,help wasm
@@ -859,7 +855,7 @@ scheme@(guile-user)> (define main (wasm-instance-export-ref instance "main"))
 @end verbatim
 @end lisp
 
-To trap the WASM runtime error and open a WASM debugging REPL, the
+To trap the Wasm runtime error and open a Wasm debugging REPL, the
 @command{wasm-catch} REPL command can be prefixed before an
 expression:
 
@@ -875,15 +871,15 @@ ERROR:
       stack: #<<wasm-stack> items: (7)>
       blocks: ((wasm-block))
       locals: #(7)
-  2. &message: "WASM runtime error: unreachable"
+  2. &message: "Wasm runtime error: unreachable"
   3. &irritants: ()
 
-Entering WASM debug prompt. Type `,help wasm' for info or `,q' to continue.
+Entering Wasm debug prompt. Type `,help wasm' for info or `,q' to continue.
 scheme@(guile-user) [1]>
 @end verbatim
 @end lisp
 
-Once in a WASM debug context, many of the other REPL commands become
+Once in a Wasm debug context, many of the other REPL commands become
 usable.  To highlight the instruction where execution has paused, use
 @command{wasm-pos}:
 
@@ -917,7 +913,7 @@ Locals:
 @end verbatim
 @end lisp
 
-To evaluate arbitary WASM instructions in the current context, either
+To evaluate arbitary Wasm instructions in the current context, either
 in an attempt to repair interpreter state or just for fun, use
 @command{wasm-eval}:
 
@@ -943,81 +939,81 @@ $5 = 14
 @end verbatim
 @end lisp
 
-Evaluating arbitrary WASM commands in a debugging context is very
+Evaluating arbitrary Wasm commands in a debugging context is very
 helpful when trying to understand the nature of a bug, but bear in
 mind that cursed things may happen during the process as there is no
 validation applied. This goes especially for when you try to resume
 execution.
 
-See @ref{Interpreter} for detailed information on running WASM within
-Guile and @ref{Toolchain reference} in general for working with WASM
+See @ref{Interpreter} for detailed information on running Wasm within
+Guile and @ref{Toolchain reference} in general for working with Wasm
 directly.
 
 @deffn {REPL Command} wasm-trace exp
-Evaluate @var{exp} with verbose WASM tracing enabled.  This will print
+Evaluate @var{exp} with verbose Wasm tracing enabled.  This will print
 out every instruction along with the state of the value stack and
 function locals at the time of evaluation.
 @end deffn
 
 @deffn {REPL Command} wasm-freq exp
 Evaluate @var{exp} and print out a table showing how many times each
-kind of WASM instruction was executed as well as a total instruction
+kind of Wasm instruction was executed as well as a total instruction
 count.
 @end deffn
 
 @deffn {REPL Command} wasm-catch exp
-Catch and debug WASM runtime errors that are raised by evaluating
+Catch and debug Wasm runtime errors that are raised by evaluating
 @var{exp}.
 @end deffn
 
-The following commands are usable only in the context of a WASM debug
+The following commands are usable only in the context of a Wasm debug
 REPL:
 
 @deffn {REPL Command} wasm-stack
-Print the state of the WASM stack.
+Print the state of the Wasm stack.
 @end deffn
 
 @deffn {REPL Command} wasm-locals
-Print the state of the WASM function locals.
+Print the state of the Wasm function locals.
 @end deffn
 
 @deffn {REPL Command} wasm-pos
 Print the current function disassembly and highlight the instruction
-where WASM execution has paused.
+where Wasm execution has paused.
 @end deffn
 
 @deffn {REPL Command} wasm-eval instr
-Evaluate the WASM instruction @var{instr} in the current debug
-context.  Use this when attempting to fix the state of the WASM stack
+Evaluate the Wasm instruction @var{instr} in the current debug
+context.  Use this when attempting to fix the state of the Wasm stack
 or locals before attempting to resume with @code{,wasm-continue}.
 @end deffn
 
 The following commands behave differently depending on if they are run
-within a WASM debug REPL or not.
+within a Wasm debug REPL or not.
 
 @deffn {REPL Command} wasm-dump [wasm]
-Display information about @var{wasm}, or the current WASM instance
+Display information about @var{wasm}, or the current Wasm instance
 when debugging.
 @end deffn
 
 @deffn {REPL Command} wasm-continue
-When in a debugger, exit and resume WASM execution.  In the event that
+When in a debugger, exit and resume Wasm execution.  In the event that
 this is run after trapping a runtime error, your warranty is void and
 all bets are off!  While it may be dangerous, this does allow one to
-manually fix the WASM interpreter state manually with
+manually fix the Wasm interpreter state manually with
 @code{,wasm-eval} and attempt to proceed, which can come in handy
 sometimes.
 
-When not in a debugger, set the WASM execution mode to continue
+When not in a debugger, set the Wasm execution mode to continue
 without interruption.  In other words, deactive the instruction
 stepper if it is active.
 @end deffn
 
 @deffn {REPL Command} wasm-step
-When in a debugger, resume WASM execution but pause before the next
+When in a debugger, resume Wasm execution but pause before the next
 instruction is evaluated.
 
-When not in a debugger, set WASM execution to pause before each
+When not in a debugger, set Wasm execution to pause before each
 instruction is evaluated.
 @end deffn
 
@@ -1036,7 +1032,7 @@ documents the APIs of these extensions.
 @section Foreign function interface
 
 WebAssembly follows the capability security model, which means that
-modules cannot do much on their own.  WASM modules are guests within a
+modules cannot do much on their own.  Wasm modules are guests within a
 host.  They must be given capabilities by the host in order to
 interact with the outside world.  Modules request capabilities by
 declaring imports, which the host then fills out with concrete
@@ -1045,8 +1041,8 @@ function interface (FFI) to embed these import declarations within
 Scheme code.
 
 The @code{define-foreign} form declares an import with a given type
-signature (WASM is statically typed) and defines a procedure for
-calling it.  The FFI takes care of converting Scheme values to WASM
+signature (Wasm is statically typed) and defines a procedure for
+calling it.  The FFI takes care of converting Scheme values to Wasm
 values and vice versa.  For example, declaring an import for creating
 text nodes in a web browser could look like this:
 
@@ -1057,15 +1053,15 @@ text nodes in a web browser could look like this:
 @end lisp
 
 In the above example, the procedure is bound to the variable
-@code{make-text-node}.  In the WASM binary, this import is named
+@code{make-text-node}.  In the Wasm binary, this import is named
 ``createTextNode'' and resides in the ``document'' namespace of the
-import table.  A WASM host is expected to satisfy this import by
+import table.  A Wasm host is expected to satisfy this import by
 providing a function that accepts one argument, a string, and returns
 an arbitary host value which may be null.
 
 Note that declaring an import @emph{does not} do anything to bind that
-import to an implementation on the host.  The WASM guest cannot grant
-capabilities unto itself.  Furthermore, the host could be any WASM
+import to an implementation on the host.  The Wasm guest cannot grant
+capabilities unto itself.  Furthermore, the host could be any Wasm
 runtime, so the actual implementation will vary.  In the context of a
 web browser, the JavaScript code that instantiates a module with this
 import could look like this:
@@ -1117,11 +1113,11 @@ miss, etc.  To check if an external value is null, use the
 
 @deffn {Syntax} define-foreign scheme-name namespace import-name param-types ... -> result-type
 
-Define @var{scheme-name}, a procedure wrapping the WASM import
+Define @var{scheme-name}, a procedure wrapping the Wasm import
 @var{import-name} in the namespace @var{namespace}.
 
 The signature of the function is specified by @var{param-types} and
-@var{result-type}, which are all WASM types expressed in WAT form.
+@var{result-type}, which are all Wasm types expressed in WAT form.
 
 Valid parameter types are:
 
@@ -1160,40 +1156,40 @@ Return @code{#t} if @var{extern} is null.
 @node Toolchain reference
 @chapter Toolchain reference
 
-Hoot is not just a Scheme to WASM compiler.  It's also a
-self-contained and general purpose WASM toolchain.  Hoot does not use
+Hoot is not just a Scheme to Wasm compiler.  It's also a
+self-contained and general purpose Wasm toolchain.  Hoot does not use
 binaryen, wabt, emscripten, etc. in order to assemble and disassemble
-WASM.  The entire toolchain is implemented as a set of Scheme modules
-that can be used to automate other WASM targeted build workflows.
+Wasm.  The entire toolchain is implemented as a set of Scheme modules
+that can be used to automate other Wasm targeted build workflows.
 Since everything is implemented in one place, in a single language,
 and because Guile encourages a REPL-driven development workflow, Hoot
-makes a great platform for learning WASM in a hands-on, interactive
+makes a great platform for learning Wasm in a hands-on, interactive
 way!
 
 @menu
-* Data types::                    Core WASM module data types.
+* Data types::                    Core Wasm module data types.
 * GWAT::                          Guile-flavored WebAssembly Text format.
 * Resolver::                      Lower human-readable identifiers to index values.
-* Linker::                        Add a standard library to a WASM module.
-* Assembler::                     Create WASM binaries.
-* Binary Parser::                 Parse WASM binaries.
-* Printer::                       Print the contents of a WASM module.
-* Interpreter::                   Execute WASM within Guile.
+* Linker::                        Add a standard library to a Wasm module.
+* Assembler::                     Create Wasm binaries.
+* Binary Parser::                 Parse Wasm binaries.
+* Printer::                       Print the contents of a Wasm module.
+* Interpreter::                   Execute Wasm within Guile.
 @end menu
 
 @node Data types
 @section Data types
 
 The @code{(wasm types)} module contains all the core data types that
-comprise a WASM module.
+comprise a Wasm module.
 
 @subsection Modules
 
-The WASM module type is the top type, incorporating values of all the
+The Wasm module type is the top type, incorporating values of all the
 types that are to follow.
 
 @deffn {Procedure} wasm? obj
-Return @code{#t} if @var{obj} is a WASM module.
+Return @code{#t} if @var{obj} is a Wasm module.
 @end deffn
 
 @deffn {Procedure} wasm-types wasm
@@ -1250,7 +1246,7 @@ Return the start function index for @var{wasm}.
 
 @subsection Types
 
-WASM has four numeric types:
+Wasm has four numeric types:
 
 @enumerate
 @item @code{i32}:
@@ -1360,8 +1356,8 @@ Return @code{#t} if @var{obj} is a recursive type group.
 Return the types within @var{rec-group}.
 @end deffn
 
-Note that while each WASM module contains a full inventory of its
-types, structurally identical type groups across WASM modules are
+Note that while each Wasm module contains a full inventory of its
+types, structurally identical type groups across Wasm modules are
 canonicalized at runtime and are considered to be identical
 (@code{eq?} in Scheme terms.)  This allows for passing references
 between modules.
@@ -1457,7 +1453,7 @@ Both arrays and struct fields allow for packed data using the special
 
 @subsection Globals
 
-WASM supports both mutable and immutable global variables.
+Wasm supports both mutable and immutable global variables.
 
 @deffn {Procedure} global? obj
 Return @code{#t} if @var{obj} is a global.
@@ -1510,7 +1506,7 @@ Return the locals of @var{func}.
 Return the body instructions of @var{func}.
 @end deffn
 
-The type of a function is its signature.  Notably, WASM supports
+The type of a function is its signature.  Notably, Wasm supports
 multiple return values, just like Scheme.
 
 @deffn {Procedure} func-sig? obj
@@ -1557,7 +1553,7 @@ Return the type descriptor of @var{local}.
 @subsection Imports/exports
 
 Functions, globals, memories, and tables can be imported from the host
-or another WASM module.  They are organized into a two layer
+or another Wasm module.  They are organized into a two layer
 hierarchy.  An import module groups many imports under an umbrella
 name, and then the individual item names distinguish imported data
 within a module.
@@ -1612,7 +1608,7 @@ Return the index of @var{export}.
 Memory objects specify linear chunks of bytes that a module can write
 to/read from at runtime.  The size of a memory is specified in terms
 of 64KiB pages.  While many memory objects coud be included in a
-module, the WASM specification currently only allows the use of a
+module, the Wasm specification currently only allows the use of a
 single memory at index 0.
 
 @deffn {Procedure} memory? obj
@@ -1811,7 +1807,7 @@ Return the symbolic ID of @var{tag}.
 Return the type of @var{tag}.
 @end deffn
 
-Custom segments specify arbitrary data that is not covered by the WASM
+Custom segments specify arbitrary data that is not covered by the Wasm
 specification.
 
 @deffn {Procedure} custom? obj
@@ -1866,8 +1862,8 @@ This form looks more like Scheme procedure calls and is generally
 easier to write and reason about.
 
 @deffn {Procedure} wat->wasm expr
-Parse @var{expr}, a WASM module expressed as WAT code, and return a
-WASM module.
+Parse @var{expr}, a Wasm module expressed as WAT code, and return a
+Wasm module.
 
 @lisp
 (parse-wat
@@ -1877,7 +1873,7 @@ WASM module.
                   (local.get $b)))))
 @end lisp
 
-The returned WASM module preserves named references, among other
+The returned Wasm module preserves named references, among other
 things, and is thus unsuitable as input to the assembler or
 interpreter.  To lower the module into a usable form, see
 @code{resolve-wasm} in @ref{Resolver}.
@@ -1892,60 +1888,60 @@ Disassemble @var{wasm} and return its symbolic WAT form.
 @section Resolver
 
 The @code{(wasm resolve)} module provides the @code{resolve-wasm}
-procedure which lowers WASM modules into a form that can be used by
+procedure which lowers Wasm modules into a form that can be used by
 the assembler or interpreter.  The resolver replaces named references
 with their respective integer index values, fills out the type table,
 and adjusts i32 and i64 constants into their canonical form.
 
 @deffn {Procedure} resolve-wasm mod
-Lower the WASM module @var{mod} into a form that can be assembled or
-interpreted.  Returns a new WASM module and does not modify @var{mod}.
+Lower the Wasm module @var{mod} into a form that can be assembled or
+interpreted.  Returns a new Wasm module and does not modify @var{mod}.
 @end deffn
 
 @node Linker
 @section Linker
 
-The @code{(wasm link)} module provides a means for extending a WASM
+The @code{(wasm link)} module provides a means for extending a Wasm
 module with the standard library that it needs at runtime.  Hoot uses
 the linker to add the Scheme runtime to the compiled form of user
 code.  The linker uses a form of tree-shaking to remove anything that
 is not used by the base module.
 
 @deffn {Procedure} add-stdlib wasm stdlib
-Return a new WASM module that is the combination of the WASM module
-@var{wasm} with the WASM module @var{stdlib}.
+Return a new Wasm module that is the combination of the Wasm module
+@var{wasm} with the Wasm module @var{stdlib}.
 @end deffn
 
 @node Assembler
 @section Assembler
 
-The @code{(wasm assemble)} module is used to lower WASM modules into
-the WASM binary format.
+The @code{(wasm assemble)} module is used to lower Wasm modules into
+the Wasm binary format.
 
 @deffn {Procedure} assemble-wasm wasm
-Return a bytevector containing the assembled binary form of the WASM
+Return a bytevector containing the assembled binary form of the Wasm
 module @var{wasm}.
 @end deffn
 
 @node Binary Parser
 @section Binary Parser
 
-The @code{(wasm parse)} module parses the WASM binary format.
+The @code{(wasm parse)} module parses the Wasm binary format.
 
 @deffn {Procedure} parse-wasm port
-Parse the WASM binary data from @var{port} and return a WASM module.
+Parse the Wasm binary data from @var{port} and return a Wasm module.
 @end deffn
 
 @node Printer
 @section Printer
 
 The @code{(wasm dump)} module provides the @code{dump-wasm} procedure
-for generating a detailed print-out of a WASM module's contents.  See
+for generating a detailed print-out of a Wasm module's contents.  See
 also @ref{Low-level development tools} for the @code{wasm-dump} REPL
 command.
 
 @deffn {Procedure} dump-wasm mod [#:port] [#:dump-func-defs? #t]
-Write a detailed inventory of the WASM module @var{mod} to @var{port}
+Write a detailed inventory of the Wasm module @var{mod} to @var{port}
 or the current output port if @var{port} is not specified.  If
 @var{dump-func-defs?} is @code{#t}, which is the default, all function
 definitions are printed, including the instructions in the body of
@@ -1957,13 +1953,13 @@ overwhelming amount of data, thus it is made optional.
 @section Interpreter
 
 The @code{(wasm vm)} module provides a virtual machine for
-interpreting WASM functions.  To use the interpreter, a WASM module is
+interpreting Wasm functions.  To use the interpreter, a Wasm module is
 first validated for type safety (among other things) and then
 instantiated, at which point exported functions become callable from
 Scheme.
 
-The interpreter only accepts validated WASM.  The @code{validate-wasm}
-procedure validates and wraps a WASM module to indicate successful
+The interpreter only accepts validated Wasm.  The @code{validate-wasm}
+procedure validates and wraps a Wasm module to indicate successful
 validation:
 
 @lisp
@@ -1977,7 +1973,7 @@ validation:
             (i32.const 42))))))
 @end lisp
 
-When starting with a WASM binary, the convenient
+When starting with a Wasm binary, the convenient
 @code{load-and-validate-wasm} procedure parses the binary and then
 performs validation:
 
@@ -1985,54 +1981,54 @@ performs validation:
 (call-with-input-file "hello.wasm" load-and-validate-wasm)
 @end lisp
 
-Once the WASM module has been validated, the runtime data needed for
+Once the Wasm module has been validated, the runtime data needed for
 interpretation can be created by instantiating the module:
 
 @lisp
 (define instance (instantiate-wasm validated-wasm))
 @end lisp
 
-Exported WASM functions then become usable as Scheme procedures:
+Exported Wasm functions then become usable as Scheme procedures:
 
 @lisp
 (define wasm-main (wasm-instance-export-ref instance "main"))
 (wasm-main) ;; => 42
 @end lisp
 
-WASM functions are statically typed, which means that calls from
-Scheme to WASM require runtime type checking for each call.
+Wasm functions are statically typed, which means that calls from
+Scheme to Wasm require runtime type checking for each call.
 
 @subsection Validation
 
 @deffn {Procedure} validate-wasm wasm
-Validate the WASM module @var{wasm} and return a validated WASM
+Validate the Wasm module @var{wasm} and return a validated Wasm
 object.
 @end deffn
 
 @deffn {Procedure} load-and-validate-wasm obj
-Load and validate the WASM module within @var{obj} then return a
-validated WASM object.  @var{obj} may be a @code{<wasm>} record as
+Load and validate the Wasm module within @var{obj} then return a
+validated Wasm object.  @var{obj} may be a @code{<wasm>} record as
 produced by @code{resolve-wasm}(@pxref{Resolver}), a bytevector
-containing a WASM binary, or an input port from which to read a WASM
+containing a Wasm binary, or an input port from which to read a Wasm
 binary.
 @end deffn
 
 @deffn {Procedure} validated-wasm? obj
-Return @code{#t} if @var{obj} is a validated WASM object.
+Return @code{#t} if @var{obj} is a validated Wasm object.
 @end deffn
 
 @deffn {Procedure} validated-wasm-ref validated-wasm
-Unbox and return the WASM module within @var{validated-wasm}.
+Unbox and return the Wasm module within @var{validated-wasm}.
 @end deffn
 
 @subsection Instantiation
 
 @deffn {Procedure} instantiate-wasm wasm [#:imports '()]
-Return a new WASM instance for the validated WASM module @var{wasm}.
+Return a new Wasm instance for the validated Wasm module @var{wasm}.
 
 @var{imports} is a nested association list of imported functions,
-globals, memories, and tables.  WASM imports are identified by a
-module name and an object name.  Consider the following WASM module
+globals, memories, and tables.  Wasm imports are identified by a
+module name and an object name.  Consider the following Wasm module
 that computes 2D polar coordinates and prints them to a log:
 
 @lisp
@@ -2071,12 +2067,12 @@ the module instantiation code would look like this:
 @subsection Globals
 
 @deffn {Procedure} make-wasm-global value mutable?
-Return a new WASM global containing @var{value}.  When @var{mutable?}
+Return a new Wasm global containing @var{value}.  When @var{mutable?}
 is @code{#f}, the value cannot be modified later.
 @end deffn
 
 @deffn {Procedure} wasm-global? obj
-Return @code{#t} if @var{obj} is a WASM global.
+Return @code{#t} if @var{obj} is a Wasm global.
 @end deffn
 
 @deffn {Procedure} wasm-global-ref global
@@ -2095,7 +2091,7 @@ Return @code{#t} if @var{global} is mutable.
 @subsection Memories
 
 @deffn {Procedure} make-wasm-memory size [#:limits (make-limits 1 #f)]
-Return a new WASM linear memory containing @var{size} 64KiB pages.
+Return a new Wasm linear memory containing @var{size} 64KiB pages.
 @var{limits} determines the lower and upper bounds of how many pages
 this memory can store.  The default limits are a minimum of 1 page and
 no maximum page limit.  @xref{Data types} for more information on
@@ -2103,7 +2099,7 @@ limit objects.
 @end deffn
 
 @deffn {Procedure} wasm-memory? obj
-Return @code{#t} if @var{obj} is a WASM memory.
+Return @code{#t} if @var{obj} is a Wasm memory.
 @end deffn
 
 @deffn {Procedure} wasm-memory-bytes memory
@@ -2126,7 +2122,7 @@ raised if growing by @var{n} exceeds the limits of @var{memory}.
 @subsection Tables
 
 @deffn {Procedure} make-wasm-table size [#:limits (make-limits 1 #f)]
-Return a new WASM reference table containing @var{size} element slots.
+Return a new Wasm reference table containing @var{size} element slots.
 @var{limits} determines the lower and upper bounds of how many
 elements this table can store.  The default limits are a minimum of 1
 element and no maximum element limit.  @xref{Data types} for more
@@ -2134,7 +2130,7 @@ information on limit objects.
 @end deffn
 
 @deffn {Procedure} wasm-table?
-Return @code{#t} if @var{obj} is a WASM table.
+Return @code{#t} if @var{obj} is a Wasm table.
 @end deffn
 
 @deffn {Procedure} wasm-table-size table
@@ -2146,7 +2142,7 @@ Return the reference at the @var{i}th index in @var{table}.
 @end deffn
 
 @deffn {Procedure} wasm-table-set! table i x
-Set the @var{i}th element of @var{table} to @var{x}, a WASM reference
+Set the @var{i}th element of @var{table} to @var{x}, a Wasm reference
 type.
 @end deffn
 
@@ -2168,9 +2164,9 @@ raised if growing by @var{n} exceeds the limits of @var{table}.
 
 @subsection Observation
 
-Every WASM instruction evaluated by interpreter can be observed via
+Every Wasm instruction evaluated by interpreter can be observed via
 the @code{current-instruction-listener} parameter.  Use this hook to
-instrument WASM modules.
+instrument Wasm modules.
 
 The following instruction listener would print every instruction's
 name on a separate line:
@@ -2191,25 +2187,25 @@ accepts the following arguments:
 
 @enumerate
 @item @strong{Instruction:}
-The symbolic WASM instruction to be evaluated.
+The symbolic Wasm instruction to be evaluated.
 @item @strong{Path:}
-The symbolic location of the instruction within the WASM module.
+The symbolic location of the instruction within the Wasm module.
 @item @strong{Instance:}
 The instance that is evaluating the instruction.
 @item @strong{Stack:}
-The WASM value stack.
+The Wasm value stack.
 @item @strong{Blocks:}
-The WASM block stack, which is just a list of prompt tags.
+The Wasm block stack, which is just a list of prompt tags.
 @item @strong{Locals:}
-The WASM function locals.
+The Wasm function locals.
 @end enumerate
 
 @end defvar
 
-The WASM value stack is a special data type with the following API:
+The Wasm value stack is a special data type with the following API:
 
 @deffn {Procedure} wasm-stack? obj
-Return @code{#t} if @var{obj} is a WASM value stack.
+Return @code{#t} if @var{obj} is a Wasm value stack.
 @end deffn
 
 @deffn {Procedure} wasm-stack-items stack

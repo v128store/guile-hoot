@@ -2807,7 +2807,8 @@
 
 (define (current-jiffy)
   (%inline-wasm
-   '(func (result i64) (call $current-jiffy))))
+   '(func (result i64)
+          (i64.trunc_f64_u (call $current-jiffy)))))
 
 (define (current-second)
   (%inline-wasm

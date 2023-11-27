@@ -81,12 +81,9 @@ dvi: # Don't build dvi docs
 html-local:
 	$(GUILE) --no-auto-compile doc/build-html.scm
 
-jsdir = $(pkgdatadir)/js
-dist_js_DATA =					\
-  js-runtime/reflect.js
-
-jsruntimedir = $(pkgdatadir)/js/js-runtime
+jsruntimedir = $(pkgdatadir)/js-runtime
 dist_jsruntime_DATA = 				\
+  js-runtime/reflect.js				\
   js-runtime/reflect.wasm			\
   js-runtime/wtf8.wasm
 

@@ -405,7 +405,7 @@
            ((= i k))
          (display (hoot-bitvector-ref obj i) port))))
     ((? mutable-hoot-string?)
-     (display (mutable-hoot-string->string obj) port))
+     (write (mutable-hoot-string->string obj) port))
     ((? hoot-symbol?)
      (display (hoot-symbol-name obj) port))
     ((? hoot-keyword?)

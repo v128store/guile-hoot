@@ -1368,7 +1368,7 @@
   (check-type v char? 'string-set!)
   (let ((x* (string-append (string-copy x 0 i)
                            (string v)
-                           (string-copy x (+ i 2) (string-length x)))))
+                           (string-copy x (1+ i) (string-length x)))))
     (%mutable-string-set-str! x x*)))
 (define (string . chars) (list->string chars))
 (define* (make-string n #:optional (init #\space))

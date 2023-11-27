@@ -33,6 +33,7 @@
             use-d8?
             use-hoot-vm?
             scope-file
+            reflect-wasm
             call-with-compiled-wasm-file
             test-compilation
             test-call

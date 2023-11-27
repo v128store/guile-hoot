@@ -29,12 +29,10 @@
 
 (test-begin "test-ffi")
 
-(define reflector (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
-
 (define-syntax-rule (test-ffi name expected source imports)
   (test-equal name
     expected
-    (compile-value reflector 'source imports)))
+    (compile-value reflect-wasm 'source imports)))
 
 (test-ffi
  "i32 param and result"

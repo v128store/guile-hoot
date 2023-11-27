@@ -1351,7 +1351,7 @@
 (define (%mutable-string-set-str! x x*)
   (check-type x mutable-string? '%mutable-string-set-str!)
   (check-type x* string? '%mutable-string-set-str!)
-  (pk '%msss! x x*)
+  ;;(pk '%msss! x x*)
   (%inline-wasm '(func (param $s (ref $mutable-string))
                        (param $new-s (ref $string))
                        (struct.set $mutable-string

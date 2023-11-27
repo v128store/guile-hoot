@@ -226,7 +226,14 @@
   ;; finalizing constant table
   ;; setting init function.
   (define imports '())
-  (define strings '())
+  (define datas '())
+  (define data-count 0)
+  (define (intern-data! bv)
+    (let ((name (string->symbol
+                 (format #f "$data~a" data-count))))
+      (set! data-count (1+ data-count))
+      (set! datas (cons (make-data name 'passive #f #f bv) datas))
+      name))
   (define heap-constants '())
   (define heap-constant-count 0)
   (define heap-constant-names (make-hash-table))
@@ -253,14 +260,13 @@
                   (array.new_fixed $raw-scmvector ,(vector-length x))
                   (struct.new $vector))))
       ((? bytevector?)
-       ;; FIXME: Probably we should put the initializers in the data
-       ;; section instead of using new_fixed.
-       (intern! (make-ref-type #f '$bytevector)
-                `((i32.const ,(target-hashq x))
-                  ,@(map (lambda (u8) `(i32.const ,u8))
-                         (bytevector->u8-list x))
-                  (array.new_fixed $raw-bytevector ,(bytevector-length x))
-                  (struct.new $bytevector))))
+       (let ((name (intern-data! x)))
+         (intern! (make-ref-type #f '$bytevector)
+                  `((i32.const ,(target-hashq x))
+                    (i32.const 0)
+                    (i32.const ,(bytevector-length x))
+                    (array.new_data $raw-bytevector ,name)
+                    (struct.new $bytevector)))))
       ((? bitvector?)
        ;; FIXME: Probably we should put the initializers in the data
        ;; section instead of using new_fixed.
@@ -2507,8 +2513,9 @@
          (exports (compute-exports))
          (start '$start)
          (elems '())
-         (datas '())
          (tags '())
+         (datas (reverse datas))
+         (strings '())
          (custom '()))
     (make-wasm types imports
                (cons start-func funcs)

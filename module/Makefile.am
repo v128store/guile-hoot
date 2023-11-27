@@ -42,7 +42,7 @@ hoot/char-prelude.scm: hoot/generate-char-prelude.scm
 
 SUFFIXES = .scm .go
 GOBJECTS = $(SOURCES:%.scm=%.go)
-CLEANFILES = $(GOBJECTS)
+CLEANFILES = $(GOBJECTS) $(GENERATED_NOCOMP_SOURCES)
 EXTRA_DIST = $(SOURCES) $(NOCOMP_SOURCES)
 nobase_mod_DATA = $(SOURCES) $(NOCOMP_SOURCES) $(GENERATED_NOCOMP_SOURCES)
 nobase_go_DATA = $(GOBJECTS)

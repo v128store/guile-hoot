@@ -106,7 +106,7 @@ class MutableBitvector extends Bitvector {
 
 class MutableString extends HeapObject {
     toString() { return "#<mutable-string>"; }
-    repr() { return this.reflector.string_value(this); }
+    repr() { return string_repr(this.reflector.string_value(this)); }
 }
 
 class Procedure extends HeapObject {
@@ -323,6 +323,11 @@ class SchemeTrapError extends Error {
     // FIXME: data is raw Scheme object; would need to be reflected to
     // have a toString.
     toString() { return `SchemeTrap(${this.tag}, <data>)`; }
+}
+
+function string_repr(str) {
+    // FIXME: Improve to match Scheme.
+    return '"' + str.replace(/(["\\])/g, '\\$1').replace(/\n/g, '\\n') + '"';
 }
 
 function flonum_to_string(f64) {
@@ -557,7 +562,6 @@ function repr(obj) {
     if (typeof obj === 'number')
         return flonum_to_string(obj);
     if (typeof obj === 'string')
-        // FIXME: Improve to match Scheme.
-        return '"' + obj.replace(/(["\\])/g, '\\$1').replace(/\n/g, '\\n') + '"';
+        return string_repr(obj);
     return obj + '';
 }

@@ -930,6 +930,9 @@
      (global $values-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $values)))
 
+     (global $append-primitive (mut (ref $proc))
+             (struct.new $proc (i32.const 0) (ref.func $invalid-continuation)))
+
      (func $make-hash-table (result (ref $hash-table))
            (struct.new $hash-table (i32.const 0) (i32.const 0)
                        (array.new $raw-scmvector

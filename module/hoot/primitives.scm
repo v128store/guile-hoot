@@ -117,6 +117,7 @@
 
                  ;; R7RS lists
                  null?
+                 append
 
                  ;; R7RS numerics
                  *
@@ -233,6 +234,7 @@
 
    ;; R7RS lists
    (null? . %null?)
+   (append . %append)
 
    ;; R7RS bytevectors
    (bytevector-length . %bytevector-length)

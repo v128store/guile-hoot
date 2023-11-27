@@ -716,6 +716,7 @@
            (match name
              ('values `((global.get $values-primitive)))
              ('apply `((global.get $apply-primitive)))
+             ('append `((global.get $append-primitive)))
              ('abort-to-prompt '((global.get $abort-to-prompt-primitive)))
              ('raise-exception '((global.get $raise-exception)))
              (_ (error "unhandled $prim" name))))

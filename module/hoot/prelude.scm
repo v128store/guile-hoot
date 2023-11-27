@@ -570,14 +570,12 @@
     (match l
       (() out)
       ((head . tail) (lp (cons head out) tail)))))
-(define (append . args)
-  (match args
-    (() '())
-    ((l) l)
-    ((l1 l2)
-     (fold-right cons l2 l1))
-    ((l1 . l*)
-     (append l1 (apply append l*)))))
+(define append
+  (case-lambda
+   (() '())
+   ((x) x)
+   ((x y) (%append x y))
+   ((x y . z) (%append x (apply append y z)))))
 (define (list-copy l)
   (append l '()))
 
@@ -3816,3 +3814,12 @@ object @var{exception}."
     (%inline-wasm
      '(func (result (ref eq))
             (global.get $with-exception-handler))))))
+
+(%inline-wasm
+ '(func (param $append (ref $proc))
+        (global.set $append-primitive (local.get $append)))
+ (lambda (x z)
+   (let lp ((x x))
+     (if (null? x)
+         z
+         (cons (car x) (lp (cdr x)))))))

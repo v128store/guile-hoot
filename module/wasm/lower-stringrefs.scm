@@ -379,7 +379,7 @@
            (drop)
            (local.set $len
                       (i32.sub (struct.get $stringview-iter $pos
-                                           (local.get $iter))
+                                           (local.get $temp))
                                (local.get $start)))
            (local.set $out (array.new_default $wtf8 (local.get $len)))
            (array.copy $wtf8 $wtf8

@@ -1,6 +1,6 @@
 dnl -*- Autoconf -*-
 
-AC_INIT(guile-hoot, 0.1.0)
+AC_INIT(guile-hoot, 0.2.0)
 AC_CONFIG_SRCDIR(module)
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([1.12 foreign silent-rules subdir-objects  color-tests parallel-tests -Woverride -Wno-portability])

@@ -258,33 +258,13 @@ from the comfort of our Guile REPL because Hoot includes a Wasm
 interpreter.  There's no need to use a web browser or other Wasm
 runtime to try out small programs.
 
-In order to extract Scheme values from a Wasm module, we actually need
-a second Wasm module known as @file{reflect.wasm}.  This is a special
-binary that comes with Hoot that allows for a Wasm host (Guile, a web
-browser, etc.) to make sense of and manipulate Scheme values. To load
-that binary from disk we will use the @code{(wasm parse)} module.
-
-@lisp
-@verbatim
-scheme@(guile-user)> ,use (wasm parse)
-scheme@(guile-user)> (define reflector
-                       (call-with-input-file "js-runtime/reflect.wasm"
-                         parse-wasm))
-@end verbatim
-@end lisp
-
-The file name @file{js-runtime/reflect.wasm} assumes you are currently
-located in the Hoot build directory.  Adjust as necessary for your
-context.
-
-Now that the reflection module has been loaded, we can load
-@code{the-answer} into the Wasm interpreter to produce a Wasm
-@emph{instance}:
+First, import the @code{(hoot reflect)} module.  Then, instantiate
+@code{the-answer} to load it into the Wasm interpreter:
 
 @lisp
 @verbatim
 scheme@(guile-user)> ,use (hoot reflect)
-scheme@(guile-user)> (define instance (hoot-instantiate reflector the-answer))
+scheme@(guile-user)> (define instance (hoot-instantiate the-answer))
 @end verbatim
 @end lisp
 
@@ -308,7 +288,7 @@ result immediately, there is a faster method. Just use the
 
 @lisp
 @verbatim
-scheme@(guile-user)> (compile-value reflector '(list 1 2 3))
+scheme@(guile-user)> (compile-value '(list 1 2 3))
 $6 = #<hoot (1 2 3)>
 @end verbatim
 @end lisp
@@ -324,14 +304,14 @@ How about good ol' factorial?
 @lisp
 @verbatim
 scheme@(guile-user)> (define hoot-factorial
-                       (compile-value reflector
-                                      '(let ()
-                                         (define (factorial x result)
-                                           (if (= x 1)
-                                               result
-                                               (factorial (- x 1)
-                                                          (* result x))))
-                                         factorial)))
+                       (compile-value
+                        '(let ()
+                           (define (factorial x result)
+                             (if (= x 1)
+                                 result
+                                 (factorial (- x 1)
+                                            (* result x))))
+                           factorial)))
 @end verbatim
 @end lisp
 
@@ -593,10 +573,11 @@ The @code{(hoot reflect)} module provides an interface for inspecting
 and manipulating Scheme values that live within Wasm modules.  This is
 the primary interface for testing compiler output directly from Guile.
 
-@deffn {Procedure} hoot-instantiate reflector scheme-wasm [imports '()]
+@deffn {Procedure} hoot-instantiate scheme-wasm [imports '()] [reflector]
 Instantiate and return a new Hoot module using the compiled Scheme
 Wasm module @var{scheme-wasm} and the reflection module
-@var{reflector}.
+@var{reflector}.  If @var{reflector} is not specified, a new reflector
+instance will be created.
 
 Optionally, @var{imports} may contain a 2-tier association list
 structure of imported functions, globals, tables, and memories:
@@ -612,20 +593,17 @@ Invoke the load thunk of @var{module} and return the reflected
 result values.
 @end deffn
 
-@deffn {Procedure} compile-value reflector exp [imports '()]
-Compile @var{exp} and return the result using the reflection module
-@var{reflector}.
+@deffn {Procedure} compile-value exp [imports '()]
+Compile @var{exp} and return the result.
 
 Optionally, @var{imports} may contain a 2-tier association list
 structure of imported functions, globals, tables, and memories.  See
 @code{hoot-instantiate} for an example of such a structure.
 @end deffn
 
-@deffn {Procedure} compile-call reflector proc-exp arg-exps ...
+@deffn {Procedure} compile-call proc-exp arg-exps ...
 Compile @var{proc-exp} and all @var{arg-exps}, call the procedure with
-the arguments, then return the results.  The reflection module
-@var{reflector} is used to make the procedure call and query the type
-and contents of the results.
+the arguments, then return the results.
 @end deffn
 
 @deffn {Procedure} hoot-module? obj
@@ -1079,10 +1057,8 @@ Scheme.load_main("hello.wasm", {}, {
 And here's what it might look like when using the Hoot interpreter:
 
 @lisp
-(use-modules (hoot reflect) (wasm parse))
-(define reflector (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
-(hoot-instantiate reflector
-                  (call-with-input-file "hello.wasm" parse-wasm)
+(use-modules (hoot reflect))
+(hoot-instantiate (call-with-input-file "hello.wasm" parse-wasm)
                   `(("document" .
                      (("createTextNode" . ,(lambda (str) `(text ,str)))))))
 @end lisp

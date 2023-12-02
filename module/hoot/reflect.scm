@@ -22,6 +22,7 @@
 
 (define-module (hoot reflect)
   #:use-module (hoot compile)
+  #:use-module (hoot config)
   #:use-module (ice-9 match)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 binary-ports)
@@ -29,6 +30,7 @@
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-9 gnu)
   #:use-module (wasm canonical-types)
+  #:use-module (wasm parse)
   #:use-module (wasm types)
   #:use-module (wasm vm)
   #:export (hoot-object?
@@ -639,7 +641,8 @@
                      (cons name (wasm-instance-export-ref instance name)))
                    (wasm-instance-export-names instance)))))
 
-(define* (hoot-instantiate reflector scheme-wasm #:optional (imports '()))
+(define* (hoot-instantiate scheme-wasm #:optional (imports '())
+                           (reflector (force reflect-wasm)))
   (define (debug-str str)
     (format #t "debug: ~a\n" str))
   (define (debug-str-i32 str x)
@@ -701,18 +704,24 @@
      (let* (($load (wasm-instance-export-ref instance "$load")))
        ((wasm->guile reflector (wasm-global-ref $load)))))))
 
-(define* (compile-value reflect-wasm exp #:optional (imports '()))
-  (hoot-load (hoot-instantiate reflect-wasm (compile exp) imports)))
+(define reflect-wasm
+  (delay
+    (call-with-input-file (string-append %hoot-datadir "/js-runtime/reflect.wasm")
+      parse-wasm)))
 
-(define (compile-call reflect-wasm proc-exp . arg-exps)
-  (let* ((proc-module (hoot-instantiate reflect-wasm (compile proc-exp)))
+(define* (compile-value exp #:optional (imports '()))
+  (hoot-load (hoot-instantiate (compile exp) imports (force reflect-wasm))))
+
+(define (compile-call proc-exp . arg-exps)
+  (let* ((proc-module (hoot-instantiate (compile proc-exp) '() (force reflect-wasm)))
          (proc (hoot-load proc-module))
          (reflector (hoot-module-reflector proc-module))
          (args (map (lambda (exp)
                       (hoot-load
-                       (hoot-instantiate reflector
-                                         (compile exp
+                       (hoot-instantiate (compile exp
                                                   #:import-abi? #t
-                                                  #:export-abi? #f))))
+                                                  #:export-abi? #f)
+                                         '()
+                                         reflector)))
                     arg-exps)))
     (apply proc args)))

@@ -21,6 +21,7 @@ SOURCES = 					\
   wasm/stack.scm				\
   wasm/symbolify.scm				\
   wasm/vm.scm					\
+  hoot/config.scm				\
   hoot/compile.scm				\
   hoot/inline-wasm.scm				\
   hoot/primitives.scm				\

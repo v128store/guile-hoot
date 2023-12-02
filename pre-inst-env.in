@@ -6,6 +6,7 @@ abs_top_builddir="`cd "@abs_top_builddir@" > /dev/null; pwd`"
 export GUILE_LOAD_COMPILED_PATH="$abs_top_builddir/module${GUILE_LOAD_COMPILED_PATH:+:}$GUILE_LOAD_COMPILED_PATH"
 export GUILE_LOAD_PATH="$abs_top_builddir/module:$abs_top_srcdir/module${GUILE_LOAD_PATH:+:}$GUILE_LOAD_PATH"
 
+export HOOT_DATADIR="$abs_top_builddir"
 export SRCDIR="$abs_top_srcdir"
 export D8="@D8@"
 

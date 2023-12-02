@@ -32,7 +32,7 @@
 (define-syntax-rule (test-ffi name expected source imports)
   (test-equal name
     expected
-    (compile-value reflect-wasm 'source imports)))
+    (compile-value 'source imports)))
 
 (test-ffi
  "i32 param and result"

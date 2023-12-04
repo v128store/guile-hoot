@@ -972,6 +972,21 @@
                        (br $lp))))))
            (unreachable))
 
+     ;; TODO: Use hashq-lookup directly in %hashq-get-handle. This
+     ;; function allows the inline wasm to avoid using a nullable ref.
+     (func $hashq-lookup-or-false
+           (param $table (ref $hash-table))
+           (param $key (ref eq))
+           (result (ref eq))
+           (local $handle (ref null $pair))
+           (local.set $handle (call $hashq-lookup
+                                    (local.get $table)
+                                    (local.get $key)))
+           (if (ref eq)
+               (ref.is_null (local.get $handle))
+               (then (ref.i31 (i32.const 1)))
+               (else (ref.as_non_null (local.get $handle)))))
+
      (func $hashq-insert (param $tab (ref $hash-table)) (param $k (ref eq))
            (param $v (ref eq))
            (local $idx i32)
@@ -1020,8 +1035,61 @@
      (func $hashq-set! (param $tab (ref $hash-table)) (param $k (ref eq))
            (param $v (ref eq))
            (call $hashq-update (local.get $tab) (local.get $k)
-                 (local.get $v) (ref.i31 (i32.const 0)))
+                 (local.get $v) (ref.i31 (i32.const 1)))
            (drop))
+
+     (func $hashq-delete! (param $tab (ref $hash-table)) (param $k (ref eq))
+           (local $idx i32)
+           (local $buckets (ref $raw-scmvector))
+           (local $chain (ref eq))
+           (local $head (ref $pair))
+           (local $link (ref $pair))
+           (local $last (ref null $pair))
+           (local.set $buckets
+                      (struct.get $hash-table $buckets (local.get $tab)))
+           (local.set $idx
+                      (i32.rem_u (call $hashq (local.get $k))
+                                 (array.len (local.get $buckets))))
+           (local.set $chain
+                      (array.get $raw-scmvector
+                                 (local.get $buckets) (local.get $idx)))
+           (loop $lp
+             (if (i32.eqz (ref.test $pair (local.get $chain)))
+                 (then (return))
+                 (else
+                  (local.set $link (ref.cast $pair (local.get $chain)))
+                  (local.set $head
+                             (ref.cast $pair
+                                       (struct.get $pair $car
+                                                   (local.get $link))))
+                  (if (ref.eq (struct.get $pair $car (local.get $head))
+                              (local.get $k))
+                      (then
+                       (struct.set $hash-table $size
+                                   (local.get $tab)
+                                   (i32.sub (struct.get $hash-table $size
+                                                        (local.get $tab))
+                                            (i32.const 1)))
+                       (if (ref.is_null (local.get $last))
+                           (then
+                            (array.set $raw-scmvector
+                                       (local.get $buckets)
+                                       (local.get $idx)
+                                       (struct.get $pair $cdr
+                                                   (local.get $link)))
+                            (return))
+                           (else
+                            (struct.set $pair $cdr
+                                        (ref.as_non_null (local.get $last))
+                                        (struct.get $pair $cdr
+                                                    (local.get $link)))
+                            (return))))
+                      (else
+                       (local.set $chain
+                                  (struct.get $pair $cdr (local.get $link)))
+                       (local.set $last (local.get $link))
+                       (br $lp))))))
+           (unreachable))
 
      ;; A specialized hash table, because it's not a hashq lookup.
      (type $symtab-entry

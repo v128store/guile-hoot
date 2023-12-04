@@ -3919,6 +3919,256 @@ object @var{exception}."
           (newline port)
           (loop (+ i 1) rest)))))))
 
+;;;; (rnrs hashtables (6))
+;;; Constructors
+(define* (make-eq-hashtable #:optional k)
+  k                                     ;ignore
+  (%inline-wasm
+   '(func (result (ref eq))
+          (call $make-hash-table))))
+
+(define* (make-eqv-hashtable #:optional k)
+  k                                     ;ignore
+  (raise (%make-unimplemented-error 'make-eqv-hashtable)))
+
+(define* (make-hashtable hash-function equiv #:optional k)
+  k                                     ;ignore
+  (raise (%make-unimplemented-error 'make-hashtable)))
+
+;;; Procedures
+(define (hashtable? hashtable)
+  (%inline-wasm
+   '(func (param $obj (ref eq)) (result (ref eq))
+          (if (ref eq)
+              (ref.test $hash-table (local.get $obj))
+              (then (ref.i31 (i32.const 17)))
+              (else (ref.i31 (i32.const 1)))))
+   hashtable))
+
+(define (hashtable-size hashtable)
+  (check-type hashtable hashtable? 'hashtable-size)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (result (ref eq))
+          (call $i32->fixnum
+                (struct.get $hash-table $size (local.get $table))))
+   hashtable))
+
+(define* (hashtable-ref hashtable key default)
+  (check-type hashtable hashtable? 'hashtable-ref)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (param $key (ref eq))
+          (param $default (ref eq))
+          (result (ref eq))
+          (call $hashq-ref
+                (local.get $table)
+                (local.get $key)
+                (local.get $default)))
+   hashtable key default))
+
+(define (hashtable-set! hashtable key obj)
+  (check-type hashtable hashtable? 'hashtable-set!)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (param $key (ref eq))
+          (param $val (ref eq))
+          (result (ref eq))
+          (call $hashq-update
+                (local.get $table)
+                (local.get $key)
+                (local.get $val)
+                (local.get $val)))
+   hashtable key obj)
+  (if #f #f))
+
+(define (hashtable-delete! hashtable key)
+  (check-type hashtable hashtable? 'hashtable-delete!)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (param $key (ref eq))
+          (call $hashq-delete! (local.get $table) (local.get $key)))
+   hashtable key)
+  (if #f #f))
+
+(define (hashtable-contains? hashtable key)
+  (check-type hashtable hashtable? 'hashtable-contains?)
+  ;; TODO: early exit on match
+  (%hash-fold (lambda (k v seed)
+                (or ((hashtable-equivalence-function hashtable) k key)
+                    seed))
+              #f
+              hashtable))
+
+(define (hashtable-update! hashtable key proc default)
+  (check-type hashtable hashtable? 'hashtable-update!)
+  (check-type proc procedure? 'hashtable-update!)
+  (let ((handle (%hashq-get-handle hashtable key)))
+    (if (pair? handle)
+        (set-cdr! handle (proc (cdr handle)))
+        (hashtable-set! hashtable key (proc default))))
+  (if #f #f))
+
+(define* (hashtable-copy hashtable #:optional (mutable #t))
+  (check-type hashtable hashtable? 'hashtable-copy)
+  (unless mutable
+    (error "immutable hash-tables not supported"))
+  (let ((hashtable* (make-eq-hashtable)))
+    (%hash-for-each (lambda (k v)
+                      (hashtable-set! hashtable* k v))
+                    hashtable)
+    hashtable*))
+
+(define* (hashtable-clear! hashtable #:optional k)
+  k                                     ;ignore
+  (check-type hashtable hashtable? 'hashtable-clear!)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (struct.set $hash-table
+                      $size
+                      (local.get $table)
+                      (i32.const 0))
+          (array.fill $raw-scmvector
+                      (struct.get $hash-table $buckets
+                                  (local.get $table))
+                      (i32.const 0)
+                      (ref.i31 (i32.const 13))
+                      (array.len (struct.get $hash-table $buckets
+                                             (local.get $table)))))
+   hashtable)
+  (if #f #f))
+
+(define (hashtable-keys hashtable)
+  (check-type hashtable hashtable? 'hashtable-keys)
+  (list->vector
+   (%hash-fold (lambda (k v seed) (cons k seed))
+               '()
+               hashtable)))
+
+(define (hashtable-entries hashtable)
+  (check-type hashtable hashtable? 'hashtable-entries)
+  (list->vector
+   (%hash-fold (lambda (k v seed) (cons v seed))
+               '()
+               hashtable)))
+
+;;; Inspection
+;; TODO: non-eq hashtables
+(define (hashtable-equivalence-function hashtable)
+  (check-type hashtable hashtable? 'hashtable-equivalence-function)
+  eq?)
+
+;; TODO: non-eq hashtables
+(define (hashtable-hash-function hashtable)
+  (check-type hashtable hashtable? 'hashtable-hash-function)
+  %hashq)
+
+;; TODO: implement immutable hashtables
+(define (hashtable-mutable? hashtable)
+  (check-type hashtable hashtable? 'hashtable-mutable?)
+  #t)
+
+;;; Hash functions
+(define (equal-hash obj)
+  (raise (%make-unimplemented-error 'equal-hash)))
+
+(define (string-hash string)
+  (raise (%make-unimplemented-error 'string-hash)))
+
+(define (string-ci-hash string)
+  (raise (%make-unimplemented-error 'string-ci-hash)))
+
+(define (symbol-hash symbol)
+  (raise (%make-unimplemented-error 'symbol-hash)))
+
+;;; Internal hash-table procedures
+(define (%hashq-get-handle table key)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (param $key (ref eq))
+          (result (ref eq))
+          (call $hashq-lookup-or-false
+                (local.get $table)
+                (local.get $key)))
+   table key))
+
+(define (%hashq-create-handle! table key init)
+  (or (%hashq-get-handle table key)
+      (begin
+        (hashtable-set! table key init)
+        (%hashq-get-handle table key))))
+
+(define (%hashq key size)
+  size                                  ;ignore
+  (%inline-wasm
+   '(func (param $v (ref eq))
+          (result (ref eq))
+          (call $i32->fixnum (call $hashq (local.get $v))))
+   key))
+
+(define (%buckets-length table)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (result (ref eq))
+          (call $i32->fixnum
+                (array.len (struct.get $hash-table
+                                       $buckets
+                                       (local.get $table)))))
+   table))
+
+(define (%bucket-ref table i)
+  (%inline-wasm
+   '(func (param $table (ref $hash-table))
+          (param $i i32)
+          (result (ref eq))
+          (array.get $raw-scmvector
+                     (struct.get $hash-table
+                                 $buckets
+                                 (local.get $table))
+                     (local.get $i)))
+   table i))
+
+(define (%hash-fold-handles proc init table)
+  (let ((len (%buckets-length table)))
+    (let loop ((i 0)
+               (seed init))
+      (if (= i len)
+          seed
+          (loop (1+ i)
+                (fold proc seed (%bucket-ref table i)))))))
+
+(define (%hash-fold proc init table)
+  (%hash-fold-handles (lambda (h seed) (proc (car h) (cdr h) seed))
+                      init
+                      table))
+
+(define (%hash-map->list proc table)
+  (%hash-fold (lambda (k v seed) (cons (proc k v) seed))
+              '()
+              table))
+
+(define (%hash-for-each proc table)
+  (%hash-fold (lambda (k v ignore) ignore (proc k v))
+              #f
+              table))
+
+(define (%hash-for-each-handle proc table)
+  (%hash-fold-handles (lambda (h ignore) ignore (proc h))
+                      #f
+                      table))
+
+(define (%hash-count pred table)
+  (%hash-fold (lambda (k v count) (+ count (if (pred k v) 1 0)))
+              0
+              table))
+
+;; (ice-9 hash-table)
+(define (%alist->hashq-table alist)
+  (let ((table (make-eq-hashtable)))
+    (for-each (lambda (x) (hashtable-set! table (car x) (cdr x)))
+              alist)
+    table))
+
 (cond-expand
  (hoot-main
   (define %exception-handler (make-fluid #f))

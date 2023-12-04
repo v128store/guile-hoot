@@ -41,6 +41,7 @@ SCM_TESTS = 					\
   test/test-complex.scm				\
   test/test-fluids.scm				\
   test/test-fractions.scm			\
+  test/test-hash-tables.scm			\
   test/test-inline-wasm.scm			\
   test/test-ints.scm				\
   test/test-keywords.scm			\

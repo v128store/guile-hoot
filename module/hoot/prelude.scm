@@ -1400,6 +1400,8 @@
                                              (i32.sub (local.get $end)
                                                       (local.get $start)))))
    str start end))
+(define (substring str start end)
+  (string-copy str start end))
 (define* (string-copy! to at from #:optional (start 0) (end (string-length from)))
   (check-type to mutable-string? 'string-copy!)
   (check-range at 0 (string-length to) 'string-copy!)

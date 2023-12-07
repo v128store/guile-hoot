@@ -26,9 +26,9 @@
 (test-call "3" (lambda (str) (string-length str)) "fox")
 (test-call "#\\f" (lambda (str) (string-ref str 0)) "fox")
 (test-call "#\\x" (lambda (str) (string-ref str 2)) "fox")
-(test-call "#t" (lambda (a b) (string-=? a b)) "Even" "Even")
-(test-call "#t" (lambda (a b) (string->? a b)) "Odd" "Even")
-(test-call "#t" (lambda (a b) (string-<? a b)) "Even" "Odd")
+(test-call "#t" (lambda (a b) (string=? a b)) "Even" "Even")
+(test-call "#t" (lambda (a b) (string>? a b)) "Odd" "Even")
+(test-call "#t" (lambda (a b) (string<? a b)) "Even" "Odd")
 
 (test-call "\"abc\"" (lambda (a) (string-copy a)) "abc")
 

@@ -1193,6 +1193,7 @@
    (else (exp (* y (log x))))))
 
 ;; (scheme complex)
+(define (make-rectangular x y) (raise (%make-unimplemented-error 'make-rectangular)))
 (define (make-polar x y) (raise (%make-unimplemented-error 'make-polar)))
 (define (magnitude z) (raise (%make-unimplemented-error 'magnitude)))
 (define (angle z) (raise (%make-unimplemented-error 'angle)))

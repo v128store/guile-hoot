@@ -32,6 +32,22 @@
 
 (test-call "\"abc\"" (lambda (a) (string-copy a)) "abc")
 
+(test-call "\"IBM\""
+           (lambda (str)
+             (string-map (lambda (c)
+                           (integer->char (+ 1 (char->integer c))))
+                         str))
+           "HAL")
+;; Enable when string-map supports 2+ strings.
+;; (test-call "\"StUdLyCaPs\""
+;;            (lambda (a b)
+;;              (string-map
+;;               (lambda (c k)
+;;                 ((if (eqv? k #\u) char-upcase char-downcase) c))
+;;               a b))
+;;            "studlycaps xxx"
+;;            "ululululul")
+
 ;; String mutation
 (test-call "#f" (lambda (a) (mutable-string? a)) "abc")
 (test-call "#t" (lambda () (mutable-string? (make-string 1))))

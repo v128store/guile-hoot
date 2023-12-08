@@ -1925,6 +1925,13 @@
     (when (output-port? port) (flush-output-port port))
     (%set-port-open?! port #f))
   (values))
+(define (call-with-port port proc)
+  (check-type port port? 'call-with-port)
+  (check-type proc procedure? 'call-with-port)
+  (call-with-values (lambda () (proc port))
+    (lambda vals
+      (close-port port)
+      (apply values vals))))
 
 (define (seek port offset whence)
   (check-type port port? 'seek)

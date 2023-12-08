@@ -33,7 +33,6 @@
             use-d8?
             use-hoot-vm?
             scope-file
-            reflect-wasm
             call-with-compiled-wasm-file
             test-compilation
             test-call
@@ -93,9 +92,6 @@
         (lambda (file)
           (lp rest (cons file files) #f)))))))
 
-(define reflect-wasm
-  (call-with-input-file (scope-file "js-runtime/reflect.wasm") parse-wasm))
-
 (define (call-with-printed-values thunk)
   (string-trim-both
    (with-output-to-string
@@ -110,17 +106,17 @@
 (define (compile-value/hoot wasm)
   (call-with-printed-values
    (lambda ()
-     (hoot-load (hoot-instantiate reflect-wasm wasm)))))
+     (hoot-load (hoot-instantiate wasm)))))
 
 (define (compile-call/hoot proc . args)
   (call-with-printed-values
    (lambda ()
-     (let* ((proc-module (hoot-instantiate reflect-wasm proc))
+     (let* ((proc-module (hoot-instantiate proc))
             (proc* (hoot-load proc-module))
             (reflector (hoot-module-reflector proc-module))
             (args* (map (lambda (arg)
                           (hoot-load
-                           (hoot-instantiate reflector arg)))
+                           (hoot-instantiate arg '() reflector)))
                         args)))
        (apply proc* args*)))))
 

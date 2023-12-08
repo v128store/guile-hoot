@@ -19,3 +19,4 @@ Makefile.in
 /js-runtime/wtf8.wasm
 /doc/.dirstamp
 /module/hoot/char-prelude.scm
+/module/hoot/config.scm

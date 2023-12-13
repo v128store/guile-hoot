@@ -120,4 +120,11 @@
                              (f (read-line p)))
                         (vector a b c d e f))))
 
+(test-call "#f"
+           (lambda (str)
+             (let ((port (open-input-string str)))
+               (call-with-port port read-char)
+               (input-port-open? port)))
+           "foo")
+
 (test-end* "test-ports")

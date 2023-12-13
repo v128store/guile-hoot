@@ -1427,6 +1427,9 @@
    ((f str) (for-each f (string->list str)))
    ((f str . strs)
     (apply for-each f (string->list str) (map string->list strs)))))
+;; TODO: Support n strings, our 'map' doesn't support n lists yet.
+(define (string-map f str)
+  (list->string (map f (string->list str))))
 (define (%string-compare a b)
   (if (eq? a b)
       0

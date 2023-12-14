@@ -714,7 +714,7 @@
           (%f zero y)
           (let lp ((y y) (tail tail))
             (let ((y (%f y (car tail)))
-                  (tail (cdr (tail))))
+                  (tail (cdr tail)))
               (if (null? tail)
                   y
                   (lp y tail))))))

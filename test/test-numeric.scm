@@ -294,4 +294,10 @@
 (test-call "0.25" (lambda (a b) (rationalize a b)) 0.2 1/10)
 (test-call "0.25" (lambda (a b) (rationalize a b)) 2/10 0.1)
 
+;; eta expansion
+(test-call "3" (lambda (f a b) (f a b)) + 1 2)
+(test-call "1" (lambda (f a b) (f a b)) - 2 1)
+(test-call "6" (lambda (f a b) (f a b)) * 2 3)
+(test-call "2" (lambda (f a b) (f a b)) / 6 3)
+
 (test-end* "test-numeric")

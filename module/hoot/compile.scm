@@ -2386,6 +2386,7 @@
         (match name
           ((or '$raw-sp '$scm-sp '$ret-sp '$dyn-sp) 'i32)
           ((or '$i0 '$i1 '$i2) 'i32)
+          ((or '$f0 '$f1 '$f2) 'f64)
           ('$str_iter (make-ref-type #f 'stringview_iter))
           ('$s0 scm-type)
           ('$vu0 (make-ref-type #f '$raw-bytevector))

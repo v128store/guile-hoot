@@ -1710,8 +1710,8 @@
     (%inline-wasm
      '(func (param $read (ref eq))
             (param $write (ref eq))
-            (param $seek (ref eq))
             (param $input-waiting? (ref eq))
+            (param $seek (ref eq))
             (param $close (ref eq))
             (param $truncate (ref eq))
             (param $repr (ref eq))
@@ -1871,7 +1871,7 @@
       to-copy))
   (define (bv-seek offset whence)    ; seek
     (define len (bytevector-length src))
-    (define base (match whence ('start 0) ('cur len) ('end len)))
+    (define base (match whence ('start 0) ('cur pos) ('end len)))
     (define dst (+ base offset))
     (check-range dst 0 len 'seek)
     (set! pos dst)
@@ -1887,7 +1887,7 @@
               #f                      ; filename
               default-buffer-size     ; read-buf-size
               #f                      ; write-buf-size
-              #f                      ; r/w-random-access
+              #t                      ; r/w-random-access
               #f                      ; fold-case?
               #f                      ; private data
               ))

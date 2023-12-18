@@ -4132,11 +4132,6 @@ object @var{exception}."
                       init
                       table))
 
-(define (%hash-map->list proc table)
-  (%hash-fold (lambda (k v seed) (cons (proc k v) seed))
-              '()
-              table))
-
 (define (%hash-for-each proc table)
   (let ((len (%buckets-length table)))
     (do ((i 0 (1+ i)))
@@ -4149,18 +4144,6 @@ object @var{exception}."
   (%hash-fold-handles (lambda (h ignore) (proc h))
                       #f
                       table))
-
-(define (%hash-count pred table)
-  (%hash-fold (lambda (k v count) (+ count (if (pred k v) 1 0)))
-              0
-              table))
-
-;; (ice-9 hash-table)
-(define (%alist->hashq-table alist)
-  (let ((table (make-eq-hashtable)))
-    (for-each (lambda (x) (hashtable-set! table (car x) (cdr x)))
-              alist)
-    table))
 
 (cond-expand
  (hoot-main

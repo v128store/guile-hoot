@@ -153,4 +153,17 @@
 ;; - string-ci-hash
 ;; - symbol-hash
 
+;; Extensions:
+
+(test-call "(a b)"
+           (lambda ()
+             (let ((ht (make-eq-hashtable))
+                   (lst '()))
+               (hashtable-set! ht 'a 'b)
+               (hashtable-for-each
+                (lambda (k v)
+                  (set! lst (cons k (cons v lst))))
+                ht)
+               lst)))
+
 (test-end* "test-hash-tables")

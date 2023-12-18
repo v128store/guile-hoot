@@ -4072,6 +4072,13 @@ object @var{exception}."
 (define (symbol-hash symbol)
   (raise (%make-unimplemented-error 'symbol-hash)))
 
+;;; Hoot extensions
+(define (hashtable-for-each proc hashtable)
+  (check-type proc procedure? 'hashtable-for-each)
+  (check-type hashtable hashtable? 'hashtable-for-each)
+  (%hash-for-each proc hashtable)
+  (values))
+
 ;;; Internal hash-table procedures
 (define (%hashq-get-handle table key)
   (%inline-wasm

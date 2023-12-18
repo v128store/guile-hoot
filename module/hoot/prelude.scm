@@ -3990,12 +3990,7 @@ object @var{exception}."
 
 (define (hashtable-contains? hashtable key)
   (check-type hashtable hashtable? 'hashtable-contains?)
-  ;; TODO: early exit on match
-  (%hash-fold (lambda (k v seed)
-                (or ((hashtable-equivalence-function hashtable) k key)
-                    seed))
-              #f
-              hashtable))
+  (not (not (%hashq-get-handle hashtable key))))
 
 (define (hashtable-update! hashtable key proc default)
   (check-type hashtable hashtable? 'hashtable-update!)

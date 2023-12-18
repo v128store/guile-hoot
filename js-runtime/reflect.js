@@ -20,7 +20,8 @@ class Complex {
         this.imag = imag;
     }
     toString() {
-        return `${flonum_to_string(this.real)}+${flonum_to_string(this.imag)}i`;
+        const sign = this.imag >= 0 && Number.isFinite(this.imag) ? "+": "";
+        return `${flonum_to_string(this.real)}${sign}${flonum_to_string(this.imag)}i`;
     }
 }
 class Fraction {

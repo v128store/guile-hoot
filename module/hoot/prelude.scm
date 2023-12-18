@@ -1016,131 +1016,220 @@
                    (number->string (imag-part n) radix)
                    "i"))))
 (define* (string->number str #:optional (radix 10))
-  (cond
-    ((or (string=? str "+nan.0")
-         (string=? str "-nan.0"))
-     +nan.0)
-    ((string=? str "+inf.0") +inf.0)
-    ((string=? str "-inf.0") -inf.0)
-    (else
-     (let ((port (open-input-string str)))
-       (define (read-bin-digit)
-         (case (peek-char port)
-           ((#\0 #\1)
-            (- (char->integer (read-char port)) (char->integer #\0)))
-           (else #f)))
-       (define (read-oct-digit)
-         (case (peek-char port)
-           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)
-            (- (char->integer (read-char port)) (char->integer #\0)))
-           (else #f)))
-       (define (read-dec-digit)
-         (case (peek-char port)
-           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
-            (- (char->integer (read-char port)) (char->integer #\0)))
-           (else #f)))
-       (define (read-hex-digit)
-         (case (peek-char port)
-           ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
-            (- (char->integer (read-char port)) (char->integer #\0)))
-           ((#\a #\b #\c #\d #\e #\f)
-            (+ 10 (- (char->integer (read-char port)) (char->integer #\a))))
-           ((#\A #\B #\C #\D #\E #\F)
-            (+ 10 (- (char->integer (read-char port)) (char->integer #\A))))
-           (else #f)))
-       (define (read-digits read-digit)
-         (let loop ((digits '()))
-           (let ((n (read-digit)))
-             (if n
-                 (loop (cons n digits))
-                 digits))))
-       (define (reader-for-radix radix)
-         (case radix
-           ((2) read-bin-digit)
-           ((8) read-oct-digit)
-           ((10) read-dec-digit)
-           ((16) read-hex-digit)
-           (else #f)))
-       (define (read-unsigned-int radix)
-         (let ((read-digit (reader-for-radix radix)))
-           (and read-digit
-                (match (read-digits read-digit)
-                  (() #f)
-                  (digits
-                   (let loop ((mag 0) (digits digits))
-                     (match digits
-                       (() 0)
-                       ((digit . rest)
-                        (+ (* digit (expt radix mag)) (loop (+ mag 1) rest))))))))))
-       (define (read-sign)
-         (let ((ch (peek-char port)))
-           (cond
-            ((eof-object? ch) #f)
-            ((eqv? ch #\-)
-             (read-char port)
-             -1)
-            ((eqv? ch #\+)
-             (read-char port)
-             1)
-            (else 1))))
-       (define (read-int radix)
-         (let ((sign (read-sign)))
-           (and sign
-                (let ((n (read-unsigned-int radix)))
-                  (and n (* sign n))))))
-       (define (read-int-or-float radix)
-         (let ((n (read-int radix)))
-           (and n
-                (let ((ch (peek-char port)))
-                  (cond
-                   ;; TODO: Parse fractional part of float.
-                   ((eqv? ch #\.) #f)
-                   (else n))))))
-       (define (read-number radix)
-         (let ((n (read-int-or-float radix)))
-           (and n
-                (let ((ch (peek-char port)))
-                  (cond
-                   ((eqv? ch #\e)
+  (let ((port (open-input-string str)))
+    (define (read-bin-digit)
+      (case (peek-char port)
+        ((#\0 #\1)
+         (- (char->integer (read-char port)) (char->integer #\0)))
+        (else #f)))
+    (define (read-oct-digit)
+      (case (peek-char port)
+        ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7)
+         (- (char->integer (read-char port)) (char->integer #\0)))
+        (else #f)))
+    (define (read-dec-digit)
+      (case (peek-char port)
+        ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+         (- (char->integer (read-char port)) (char->integer #\0)))
+        (else #f)))
+    (define (read-hex-digit)
+      (case (peek-char port)
+        ((#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)
+         (- (char->integer (read-char port)) (char->integer #\0)))
+        ((#\a #\b #\c #\d #\e #\f)
+         (+ 10 (- (char->integer (read-char port)) (char->integer #\a))))
+        ((#\A #\B #\C #\D #\E #\F)
+         (+ 10 (- (char->integer (read-char port)) (char->integer #\A))))
+        (else #f)))
+    (define (read-unsigned-int radix)
+      (case radix
+        ((2)
+         (let ((x (read-bin-digit)))
+           (and x
+                (let loop ((x x))
+                  (let ((y (read-bin-digit)))
+                    (if y (loop (+ (* x 2) y)) x))))))
+        ((8)
+         (let ((x (read-oct-digit)))
+           (and x
+                (let loop ((x x))
+                  (let ((y (read-oct-digit)))
+                    (if y (loop (+ (* x 8) y)) x))))))
+        ((10)
+         (let ((x (read-dec-digit)))
+           (and x
+                (let loop ((x x))
+                  (let ((y (read-dec-digit)))
+                    (if y (loop (+ (* x 10) y)) x))))))
+        ((16)
+         (let ((x (read-hex-digit)))
+           (and x
+                (let loop ((x x))
+                  (let ((y (read-hex-digit)))
+                    (if y (loop (+ (* x 16) y)) x))))))))
+    (define (read-sign)
+      (let ((ch (peek-char port)))
+        (cond
+         ((eof-object? ch) #f)
+         ((eqv? ch #\+)
+          (read-char port)
+          '+)
+         ((eqv? ch #\-)
+          (read-char port)
+          '-)
+         (else 'none))))
+    (define (read-decimal n exactness)
+      (case (peek-char port)
+        ;; Decimal point
+        ((#\.)
+         (read-char port)
+         (let ((x (read-dec-digit)))
+           (and x
+                (let loop ((i -2) (x (* x (expt 10 -1))))
+                  (let ((y (read-dec-digit)))
+                    (if y
+                        (loop (- i 1) (+ x (* y (expt 10 i))))
+                        (let ((z (+ n x)))
+                          (or (read-decimal z exactness)
+                              (if (eq? exactness 'exact) z (inexact z))))))))))
+        ;; Exponent
+        ((#\e #\E)
+         (read-char port)
+         (let* ((sign (read-sign))
+                (x (read-unsigned-int 10)))
+           (and x
+                (let ((y (* n (expt 10 (if (eq? sign '-) (- x) x)))))
+                  (if (eq? exactness 'exact) y (inexact y))))))
+        (else #f)))
+    (define (read-unsigned radix exactness)
+      (let ((ch (peek-char port)))
+        (cond
+         ((eof-object? ch) #f)
+         ;; NaN
+         ((or (eqv? ch #\n) (eqv? ch #\N))
+          (read-char port)
+          (case (read-char port)
+            ((#\a #\A)
+             (case (read-char port)
+               ((#\n #\N)
+                (case (read-char port)
+                  ((#\.)
+                   (case (read-char port)
+                     ((#\0) +nan.0)
+                     (else #f)))
+                  (else #f)))
+               (else #f)))
+            (else #f)))
+         ;; Infinity
+         ((or (eqv? ch #\i) (eqv? ch #\I))
+          (read-char port)
+          (let ((ch (peek-char port)))
+            (cond
+             ;; This might be a valid complex number, either '+i' or
+             ;; '-i', so back up a char so the caller can check for
+             ;; that case.
+             ((eof-object? ch)
+              (seek port -1 'cur)
+              #f)
+             ((or (eqv? ch #\n) (eqv? ch #\N))
+              (read-char port)
+              (case (read-char port)
+                ((#\f #\F)
+                 (case (read-char port)
+                   ((#\.)
+                    (case (read-char port)
+                      ((#\0) +inf.0)
+                      (else #f)))
+                   (else #f)))
+                (else #f)))
+             (else #f))))
+         ;; Decimal with no leading digits.
+         ((eqv? ch #\.)
+          (and (eqv? radix 10) (read-decimal 0 exactness)))
+         (else
+          (let ((x (read-unsigned-int radix)))
+            (and x
+                 (case (peek-char port)
+                   ;; Fraction
+                   ((#\/)
                     (read-char port)
-                    (let ((exp (read-int radix)))
-                      (and exp (* n (inexact (expt radix exp))))))
-                   (else n))))))
-       ;; Composite as in it could be a fraction or complex number
-       ;; which is a combination of two numbers.
-       (define (read-composite-number radix)
-         (let ((n (read-number radix)))
-           (and n
-                (let ((ch (peek-char port)))
-                  (cond
-                   ((eof-object? ch) n)
-                   ((eqv? ch #\/)
-                    (read-char port)
-                    (and (exact-integer? n)
-                         (let ((d (read-unsigned-int radix)))
-                           (and d (/ n d)))))
-                   ((eqv? ch #\+)
-                    ;; TODO: needs make-rectangular.
-                    #f)
-                   (else #f))))))
-       (define (read-composite-number-with-radix)
-         (let ((ch (read-char port)))
-           (cond
-            ((eof-object? ch) #f)
-            ((eqv? ch #\b) (read-composite-number 2))
-            ((eqv? ch #\o) (read-composite-number 8))
-            ((eqv? ch #\d) (read-composite-number 10))
-            ((eqv? ch #\x) (read-composite-number 16))
-            (else #f))))
-       ;; The string may specify the radix, otherwise use the radix
-       ;; provided by the caller.
-       (let ((ch (peek-char port)))
-         (cond
-          ((eof-object? ch) #f)
-          ((eqv? ch #\#)
-           (read-char port)
-           (read-composite-number-with-radix))
-          (else (read-composite-number radix))))))))
+                    (let ((y (read-unsigned-int radix)))
+                      (and y
+                           (let ((z (/ x y)))
+                             (if (eq? exactness 'inexact) (inexact z) z)))))
+                   ;; Decimal point or exponent
+                   ((#\. #\e #\E)
+                    (and (eqv? radix 10) (read-decimal x exactness)))
+                   (else
+                    (if (eq? exactness 'inexact) (inexact x) x)))))))))
+    (define (read-complex radix exactness)
+      (let ((sign (read-sign)))
+        (and sign
+             (let ((x (read-unsigned radix exactness)))
+               (cond
+                ((or (and (not x) (eq? sign 'none))
+                     ;; Infinities and NaNs need explicit sign.
+                     (and x (or (infinite? x) (nan? x)) (eq? sign 'none)))
+                 #f)
+                ;; +i and -i cases.
+                ((not x)
+                 (let ((ch (read-char port)))
+                   (and (or (eqv? ch #\i) (eqv? ch #\I))
+                        (if (eq? sign '+) +i -i))))
+                ;; We've successfully read one real, now to check for
+                ;; a polar or imaginary part.
+                (else
+                 (let ((x (if (eq? sign '-) (- x) x)))
+                   (let ((ch (peek-char port)))
+                     (cond
+                      ((eof-object? ch) x)
+                      ;; Complex number in polar form.
+                      ((eqv? ch #\@)
+                       (read-char port)
+                       (let* ((sign (read-sign))
+                              (y (read-unsigned radix exactness)))
+                         (and y (make-polar x (if (eq? sign '-) (- y) y)))))
+                      ;; Complex number in rectangular form.
+                      ((or (eqv? ch #\+) (eqv? ch #\-))
+                       (let ((sign (read-sign))
+                             (y (or (read-unsigned radix exactness) 1.0)))
+                         (case (read-char port)
+                           ((#\i #\I)
+                            (make-rectangular x (if (eq? sign '-) (- y) y)))
+                           (else #f))))
+                      (else #f))))))))))
+    (define (read-number)
+      ;; First, read the radix and exactness prefix.  These could be
+      ;; specified in either order (like #x#e or #e#x), one could be
+      ;; omitted (just #x or #e), or both could be omitted.  When
+      ;; exactness is omitted, exactness becomes implicit.  For
+      ;; example, '1.2' will produce an inexact value.
+      (let loop ((radix* #f) (exactness #f))
+        (let ((ch (peek-char port)))
+          (cond
+           ((eof-object? ch) #f)
+           ((eqv? ch #\#)
+            (read-char port)
+            (let ((ch (read-char port)))
+              (cond
+               ((and (or (eqv? ch #\b) (eqv? ch #\B)) (not radix*))
+                (loop 2 exactness))
+               ((and (or (eqv? ch #\o) (eqv? ch #\O)) (not radix*))
+                (loop 8 exactness))
+               ((and (or (eqv? ch #\d) (eqv? ch #\D)) (not radix*))
+                (loop 10 exactness))
+               ((and (or (eqv? ch #\x) (eqv? ch #\X)) (not radix*))
+                (loop 16 exactness))
+               ((and (or (eqv? ch #\e) (eqv? ch #\E)) (not exactness))
+                (loop radix* 'exact))
+               ((and (or (eqv? ch #\i) (eqv? ch #\I)) (not exactness))
+                (loop radix* 'inexact))
+               (else #f))))
+           (else
+            (read-complex (or radix* radix) exactness))))))
+    (let ((x (read-number)))
+      ;; Input should be completely consumed at this point.
+      (and (eof-object? (peek-char port)) x))))
 
 ;; Adapted from the comments for scm_rationalize in libguile's numbers.c
 (define (rationalize x y)
@@ -1193,9 +1282,63 @@
    (else (exp (* y (log x))))))
 
 ;; (scheme complex)
-(define (make-polar x y) (raise (%make-unimplemented-error 'make-polar)))
-(define (magnitude z) (raise (%make-unimplemented-error 'magnitude)))
-(define (angle z) (raise (%make-unimplemented-error 'angle)))
+;; Adapted from Guile's numbers.c
+(define (make-rectangular real imag)
+  (check-type real real? 'make-rectangular)
+  (check-type imag real? 'make-rectangular)
+  (if (eq? imag 0)
+      real
+      (%inline-wasm
+       '(func (param $real f64) (param $imag f64) (result (ref eq))
+              (struct.new $complex
+                          (i32.const 0)
+                          (local.get $real)
+                          (local.get $imag)))
+       (inexact real) (inexact imag))))
+(define (make-polar mag ang)
+  (check-type mag real? 'make-polar)
+  (check-type ang real? 'make-polar)
+  (cond
+   ((eq? mag 0) 0)
+   ((eq? ang 0) mag)
+   (else
+    (%inline-wasm
+     '(func (param $mag f64) (param $ang f64) (result (ref eq))
+            (local $f0 f64) (local $f1 f64)
+            (local.set $f0 (call $fcos (local.get $ang)))
+            (local.set $f1 (call $fsin (local.get $ang)))
+            ;; If sin/cos are NaN and magnitude is 0, return a complex
+            ;; zero.
+            (if (ref eq)
+                (i32.and (call $f64-is-nan (local.get $f0))
+                         (call $f64-is-nan (local.get $f1))
+                         (f64.eq (local.get $mag) (f64.const 0.0)))
+                (then (struct.new $complex
+                                  (i32.const 0)
+                                  (f64.const 0.0)
+                                  (f64.const 0.0)))
+                (else (struct.new $complex
+                                  (i32.const 0)
+                                  (f64.mul (local.get $mag) (local.get $f0))
+                                  (f64.mul (local.get $mag) (local.get $f1))))))
+     (inexact mag) (inexact ang)))))
+(define (magnitude z)
+  (cond
+   ((real? z) (abs z))
+   (else
+    (check-type z complex? 'magnitude)
+    (let ((r (real-part z))
+          (i (imag-part z)))
+      (sqrt (+ (* r r) (* i i)))))))
+(define (angle z)
+  (cond
+   ((real? z)
+    (if (negative? z)
+        (atan 0.0 -1.0)
+        0.0))
+   (else
+    (check-type z complex? 'angle)
+    (atan (imag-part z) (real-part z)))))
 (define (real-part z)
   (cond
    ((real? z) z)
@@ -1656,8 +1799,8 @@
     (%inline-wasm
      '(func (param $read (ref eq))
             (param $write (ref eq))
-            (param $seek (ref eq))
             (param $input-waiting? (ref eq))
+            (param $seek (ref eq))
             (param $close (ref eq))
             (param $truncate (ref eq))
             (param $repr (ref eq))
@@ -1817,7 +1960,7 @@
       to-copy))
   (define (bv-seek offset whence)    ; seek
     (define len (bytevector-length src))
-    (define base (match whence ('start 0) ('cur len) ('end len)))
+    (define base (match whence ('start 0) ('cur pos) ('end len)))
     (define dst (+ base offset))
     (check-range dst 0 len 'seek)
     (set! pos dst)
@@ -1833,7 +1976,7 @@
               #f                      ; filename
               default-buffer-size     ; read-buf-size
               #f                      ; write-buf-size
-              #f                      ; r/w-random-access
+              #t                      ; r/w-random-access
               #f                      ; fold-case?
               #f                      ; private data
               ))

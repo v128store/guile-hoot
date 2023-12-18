@@ -4143,9 +4143,12 @@ object @var{exception}."
               table))
 
 (define (%hash-for-each proc table)
-  (%hash-fold (lambda (k v ignore) ignore (proc k v))
-              #f
-              table))
+  (let ((len (%buckets-length table)))
+    (do ((i 0 (1+ i)))
+        ((= i len))
+      (for-each (lambda (handle)
+                  (proc (car handle) (cdr handle)))
+                (%bucket-ref table i)))))
 
 (define (%hash-for-each-handle proc table)
   (%hash-fold-handles (lambda (h ignore) (proc h))

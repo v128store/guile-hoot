@@ -3977,7 +3977,7 @@ object @var{exception}."
                 (local.get $val)
                 (local.get $val)))
    hashtable key obj)
-  (if #f #f))
+  (values))
 
 (define (hashtable-delete! hashtable key)
   (check-type hashtable hashtable? 'hashtable-delete!)
@@ -3986,7 +3986,7 @@ object @var{exception}."
           (param $key (ref eq))
           (call $hashq-delete! (local.get $table) (local.get $key)))
    hashtable key)
-  (if #f #f))
+  (values))
 
 (define (hashtable-contains? hashtable key)
   (check-type hashtable hashtable? 'hashtable-contains?)
@@ -4027,7 +4027,7 @@ object @var{exception}."
                       (array.len (struct.get $hash-table $buckets
                                              (local.get $table)))))
    hashtable)
-  (if #f #f))
+  (values))
 
 (define (hashtable-keys hashtable)
   (check-type hashtable hashtable? 'hashtable-keys)

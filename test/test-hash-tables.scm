@@ -36,9 +36,10 @@
                  (let ((ht (make-eq-hashtable)))
                    (hashtable-ref ht 'a 'b))))
 
-(test-call "#<unspecified>" (lambda ()
-                              (let ((ht (make-eq-hashtable)))
-                                (hashtable-set! ht 'a 'b))))
+(test-call ""                           ; zero values
+           (lambda ()
+             (let ((ht (make-eq-hashtable)))
+               (hashtable-set! ht 'a 'b))))
 
 (test-call "b" (lambda ()
                  (let ((ht (make-eq-hashtable)))

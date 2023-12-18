@@ -4004,7 +4004,7 @@ object @var{exception}."
 (define* (hashtable-copy hashtable #:optional (mutable #t))
   (check-type hashtable hashtable? 'hashtable-copy)
   (unless mutable
-    (error "immutable hash-tables not supported"))
+    (raise (%make-unimplemented-error 'hashtable-copy)))
   (let ((hashtable* (make-eq-hashtable)))
     (%hash-for-each (lambda (k v)
                       (hashtable-set! hashtable* k v))

@@ -3922,17 +3922,14 @@ object @var{exception}."
 ;;;; (rnrs hashtables (6))
 ;;; Constructors
 (define* (make-eq-hashtable #:optional k)
-  k                                     ;ignore
   (%inline-wasm
    '(func (result (ref eq))
           (call $make-hash-table))))
 
 (define* (make-eqv-hashtable #:optional k)
-  k                                     ;ignore
   (raise (%make-unimplemented-error 'make-eqv-hashtable)))
 
 (define* (make-hashtable hash-function equiv #:optional k)
-  k                                     ;ignore
   (raise (%make-unimplemented-error 'make-hashtable)))
 
 ;;; Procedures
@@ -4020,7 +4017,6 @@ object @var{exception}."
     hashtable*))
 
 (define* (hashtable-clear! hashtable #:optional k)
-  k                                     ;ignore
   (check-type hashtable hashtable? 'hashtable-clear!)
   (%inline-wasm
    '(func (param $table (ref $hash-table))
@@ -4099,7 +4095,6 @@ object @var{exception}."
         (%hashq-get-handle table key))))
 
 (define (%hashq key size)
-  size                                  ;ignore
   (%inline-wasm
    '(func (param $v (ref eq))
           (result (ref eq))
@@ -4153,7 +4148,7 @@ object @var{exception}."
               table))
 
 (define (%hash-for-each-handle proc table)
-  (%hash-fold-handles (lambda (h ignore) ignore (proc h))
+  (%hash-fold-handles (lambda (h ignore) (proc h))
                       #f
                       table))
 

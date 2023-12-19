@@ -3990,7 +3990,7 @@ object @var{exception}."
 
 (define (hashtable-contains? hashtable key)
   (check-type hashtable hashtable? 'hashtable-contains?)
-  (not (not (%hashq-get-handle hashtable key))))
+  (pair? (%hashq-get-handle hashtable key)))
 
 (define (hashtable-update! hashtable key proc default)
   (check-type hashtable hashtable? 'hashtable-update!)

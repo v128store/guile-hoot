@@ -4006,9 +4006,9 @@ object @var{exception}."
   (unless mutable
     (raise (%make-unimplemented-error 'hashtable-copy)))
   (let ((hashtable* (make-eq-hashtable)))
-    (%hash-for-each (lambda (k v)
-                      (hashtable-set! hashtable* k v))
-                    hashtable)
+    (hashtable-for-each (lambda (k v)
+                          (hashtable-set! hashtable* k v))
+                        hashtable)
     hashtable*))
 
 (define* (hashtable-clear! hashtable #:optional k)
@@ -4076,8 +4076,12 @@ object @var{exception}."
 (define (hashtable-for-each proc hashtable)
   (check-type proc procedure? 'hashtable-for-each)
   (check-type hashtable hashtable? 'hashtable-for-each)
-  (%hash-for-each proc hashtable)
-  (values))
+  (let ((len (%buckets-length hashtable)))
+    (do ((i 0 (1+ i)))
+        ((= i len) (values))
+      (for-each (lambda (handle)
+                  (proc (car handle) (cdr handle)))
+                (%bucket-ref hashtable i)))))
 
 ;;; Internal hash-table procedures
 (define (%hashq-get-handle table key)
@@ -4139,14 +4143,6 @@ object @var{exception}."
   (%hash-fold-handles (lambda (h seed) (proc (car h) (cdr h) seed))
                       init
                       table))
-
-(define (%hash-for-each proc table)
-  (let ((len (%buckets-length table)))
-    (do ((i 0 (1+ i)))
-        ((= i len))
-      (for-each (lambda (handle)
-                  (proc (car handle) (cdr handle)))
-                (%bucket-ref table i)))))
 
 (define (%hash-for-each-handle proc table)
   (%hash-fold-handles (lambda (h ignore) (proc h))

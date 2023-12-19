@@ -4095,12 +4095,6 @@ object @var{exception}."
                 (ref.i31 (i32.const 1))))
    table key))
 
-(define (%hashq-create-handle! table key init)
-  (or (%hashq-get-handle table key)
-      (begin
-        (hashtable-set! table key init)
-        (%hashq-get-handle table key))))
-
 (define (%hashq key size)
   (%inline-wasm
    '(func (param $v (ref eq))
@@ -4142,11 +4136,6 @@ object @var{exception}."
 (define (%hash-fold proc init table)
   (%hash-fold-handles (lambda (h seed) (proc (car h) (cdr h) seed))
                       init
-                      table))
-
-(define (%hash-for-each-handle proc table)
-  (%hash-fold-handles (lambda (h ignore) (proc h))
-                      #f
                       table))
 
 (cond-expand

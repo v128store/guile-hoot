@@ -3900,6 +3900,25 @@ object @var{exception}."
         ch
         (read-expr ch))))
 
+(define (format-exception exception port)
+  (display "Scheme error:\n")
+  (match (simple-exceptions exception)
+    (() (display "Empty exception object" port))
+    (components
+     (let loop ((i 1) (components components))
+       (define (format-numbered-exception exception)
+         (display "  " port)
+         (display i port)
+         (display ". " port)
+         (write exception port))
+       (match components
+         ((component)
+          (format-numbered-exception component))
+         ((component . rest)
+          (format-numbered-exception component)
+          (newline port)
+          (loop (+ i 1) rest)))))))
+
 (cond-expand
  (hoot-main
   (define %exception-handler (make-fluid #f))
@@ -3939,7 +3958,10 @@ object @var{exception}."
         (match (fluid-ref* %exception-handler depth)
           (#f
            ;; No exception handlers bound; fall back.
-                                        ;(pk 'uncaught-exception exn)
+           (let ((port (current-error-port)))
+             (format-exception exn port)
+             (newline port)
+             (flush-output-port port))
            (%inline-wasm
             '(func (param $exn (ref eq))
                    (call $die (string.const "uncaught exception")

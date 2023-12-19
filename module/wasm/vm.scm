@@ -625,8 +625,8 @@ binary, or an input port from which a WASM binary is read."
 
 (set-record-type-printer! <wasm-struct>
                           (lambda (struct port)
-                            (format port "#<wasm-struct ~s>"
-                                    (wasm-struct-fields struct))))
+                            (format port "#<wasm-struct ~a>"
+                                    (object-address struct))))
 
 (define (make-wasm-struct type fields)
   (%make-wasm-struct type (list->vector fields)))
@@ -661,8 +661,8 @@ binary, or an input port from which a WASM binary is read."
 
 (set-record-type-printer! <wasm-array>
                           (lambda (array port)
-                            (format port "#<wasm-array ~s>"
-                                    (wasm-array-vector array))))
+                            (format port "#<wasm-array ~a>"
+                                    (object-address array))))
 
 (define* (make-wasm-array type k #:optional (fill *unspecified*))
   (%make-wasm-array type (make-vector k fill)))

@@ -4085,9 +4085,10 @@ object @var{exception}."
    '(func (param $table (ref $hash-table))
           (param $key (ref eq))
           (result (ref eq))
-          (call $hashq-lookup-or-false
+          (call $hashq-lookup/default
                 (local.get $table)
-                (local.get $key)))
+                (local.get $key)
+                (ref.i31 (i32.const 1))))
    table key))
 
 (define (%hashq-create-handle! table key init)

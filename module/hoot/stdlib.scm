@@ -972,11 +972,10 @@
                        (br $lp))))))
            (unreachable))
 
-     ;; TODO: Use hashq-lookup directly in %hashq-get-handle. This
-     ;; function allows the inline wasm to avoid using a nullable ref.
-     (func $hashq-lookup-or-false
+     (func $hashq-lookup/default
            (param $table (ref $hash-table))
            (param $key (ref eq))
+           (param $default (ref eq))
            (result (ref eq))
            (local $handle (ref null $pair))
            (local.set $handle (call $hashq-lookup
@@ -984,7 +983,7 @@
                                     (local.get $key)))
            (if (ref eq)
                (ref.is_null (local.get $handle))
-               (then (ref.i31 (i32.const 1)))
+               (then (local.get $default))
                (else (ref.as_non_null (local.get $handle)))))
 
      (func $hashq-insert (param $tab (ref $hash-table)) (param $k (ref eq))

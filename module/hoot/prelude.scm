@@ -3999,7 +3999,7 @@ object @var{exception}."
     (if (pair? handle)
         (set-cdr! handle (proc (cdr handle)))
         (hashtable-set! hashtable key (proc default))))
-  (if #f #f))
+  (values))
 
 (define* (hashtable-copy hashtable #:optional (mutable #t))
   (check-type hashtable hashtable? 'hashtable-copy)

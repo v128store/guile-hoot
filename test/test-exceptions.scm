@@ -69,4 +69,18 @@
            "hey"
            '(ho))
 
+(test-call "42"
+           (lambda ()
+             (guard (condition
+                     ((assq 'a condition) => cdr)
+                     ((assq 'b condition)))
+               (raise (list (cons 'a 42))))))
+
+(test-call "(b . 23)"
+           (lambda ()
+             (guard (condition
+                     ((assq 'a condition) => cdr)
+                     ((assq 'b condition)))
+               (raise (list (cons 'b 23))))))
+
 (test-end* "test-exceptions")

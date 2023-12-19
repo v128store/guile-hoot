@@ -3346,6 +3346,38 @@ object @var{exception}."
 (define error-object-irritants exception-irritants)
 (define read-error? lexical-violation?)
 (define file-error? i/o-error?)
+;; Snarfed from Guile's (ice-9 exceptions).  Deviates a bit from R7RS.
+(define-syntax guard
+  (lambda (stx)
+    (define (dispatch tag exn clauses)
+      (define (build-clause test handler clauses)
+        #`(let ((t #,test))
+            (if t
+                (abort-to-prompt #,tag #,handler t)
+                #,(dispatch tag exn clauses))))
+      (syntax-case clauses (=> else)
+        (() #`(raise-continuable #,exn))
+        (((test => f) . clauses)
+         (build-clause #'test #'(lambda (res) (f res)) #'clauses))
+        (((else e e* ...) . clauses)
+         (build-clause #'#t #'(lambda (res) e e* ...) #'clauses))
+        (((test) . clauses)
+         (build-clause #'test #'(lambda (res) res) #'clauses))
+        (((test e* ...) . clauses)
+         (build-clause #'test #'(lambda (res) e* ...) #'clauses))))
+    (syntax-case stx ()
+      ((guard (exn clause clause* ...) body body* ...)
+       (identifier? #'exn)
+       #`(let ((tag (make-prompt-tag)))
+           (call-with-prompt
+               tag
+             (lambda ()
+               (with-exception-handler
+                   (lambda (exn)
+                     #,(dispatch #'tag #'exn #'(clause clause* ...)))
+                 (lambda () body body* ...)))
+             (lambda (_ h v)
+               (h v))))))))
 
 (define* (read #:optional (port (current-input-port)))
   ;; For read-syntax, we'd define these annotate / strip functions

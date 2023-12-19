@@ -1213,7 +1213,7 @@
                 (loop $lp
                   (if (local.get $sp)
                       (then
-                       (local.set $sp (i32.sub (local.get $sp (i32.const 1))))
+                       (local.set $sp (i32.sub (local.get $sp) (i32.const 1)))
                        (local.set $dyn (ref.as_non_null
                                         (table.get $dyn-stack (local.get $sp))))
                        (br_if $lp (i32.eqz

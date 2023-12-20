@@ -1813,6 +1813,17 @@
      (global $abort-to-prompt-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $abort-to-prompt)))
 
+     (func $maybe-grow-argv (param $size i32)
+           (local $diff i32)
+           (local.set $diff (i32.sub (local.get $size)
+                                     (table.size $argv)))
+           (if (i32.gt_s (local.get $diff) (i32.const 0))
+               (then
+                (table.grow $argv
+                            (ref.null eq)
+                            (local.get $diff))
+                (drop))))
+
      (func $arg-ref (param $n i32)
            (result (ref eq))
            (block

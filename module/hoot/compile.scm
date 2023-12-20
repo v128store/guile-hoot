@@ -222,6 +222,7 @@
     cps empty-intset)))
 
 (define* (lower-to-wasm cps #:key import-abi?)
+  (define max-args 0)
   ;; interning constants into constant table
   ;; finalizing constant table
   ;; setting init function.
@@ -498,19 +499,27 @@
                             ,(local.get arg)
                             (table.set $argv))))
                         (lp args (1+ idx))))))))
+        ;; Keep track of the maximum number of arguments passed in a
+        ;; single call so that we can size the $argv table
+        ;; appropriately in the start function.
+        (define (update-max-args args)
+          (set! max-args (max max-args (length args))))
         (match exp
           (($ $call proc args)
+           (update-max-args args)
            `(,@(pass-abi-arguments (cons proc args))
              ,(local.get proc)
              (ref.cast ,(make-ref-type #f '$proc))
              (struct.get $proc 1)
              (return_call_ref $kvarargs)))
           (($ $calli args callee)
+           (update-max-args args)
            ;; This is a return.
            `(,@(pass-abi-arguments args)
              ,(local.get callee)
              (return_call_ref $kvarargs)))
           (($ $callk k proc args)
+           (update-max-args args)
            (let ((args (if proc (cons proc args) args)))
              `(,@(if (known-arity k)
                      (map local.get args)
@@ -2494,10 +2503,16 @@
                   (append (make-reloc name) relocs))))
              heap-constants
              '()))
+    (define maybe-grow-argv
+      (if (> max-args 8)
+          `((i32.const ,(- max-args 8))
+            (call $maybe-grow-argv))
+          '()))
     (make-func '$start
                void-block-type
                '()
-               `((i32.const 0)
+               `(,@maybe-grow-argv
+                 (i32.const 0)
                  (ref.func ,load-function-id)
                  (struct.new $proc)
                  (global.set $load)

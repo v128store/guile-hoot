@@ -749,6 +749,16 @@
 (define (floor x) (%floor x))
 (define (ceiling x) (%ceiling x))
 (define (round x) (%floor (+ x 0.5)))
+(define (truncate x)
+  (check-type x real? 'truncate)
+  (if (exact? x)
+      (if (integer? x)
+          x
+          (truncate-quotient (numerator x) (denominator x)))
+      (%inline-wasm
+       '(func (param $x f64) (result f64)
+              (f64.trunc (local.get $x)))
+       x)))
 (define (number? x) (%number? x))
 (define (complex? x) (%complex? x))
 (define (real? x) (%real? x))

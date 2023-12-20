@@ -44,8 +44,13 @@
              (cons* a b c d e f g h i j args))
            1 2 3 4 5 6 7 8 9 10 11 12)
 ;; inner call that grows argv
-(compile-call '(lambda (f) (f 1 2 3 4 5 6 7 8))
-              '(lambda (a b c d e f g h) (+ a b c d e f g h)))
+(test-call "36"
+           (lambda (f) (f 1 2 3 4 5 6 7 8))
+           (lambda (a b c d e f g h) (+ a b c d e f g h)))
+;; inner apply that grows argv
+(test-call "(1 2 3 4 5 6 7 8 9 10 11 12 13 14)"
+           (lambda (args) (apply cons* args))
+           (list 1 2 3 4 5 6 7 8 9 10 11 12 13 14 '()))
 
 (test-call "#f" (lambda* (#:optional a) a))
 (test-call "(42 69)" (lambda* (#:optional (a 42) (b 69)) (list a b)))

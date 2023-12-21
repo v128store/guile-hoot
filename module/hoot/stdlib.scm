@@ -2925,7 +2925,7 @@
                    (call $fixnum? (local.get $d1))
                    (then (i32.eq (i31.get_s (ref.cast i31 (local.get $d1)))
                                  (i32.const #b10)))
-                   (else (f64.eq (call $bignum->f64 (ref.cast $bignum (local.get $a)))
+                   (else (f64.eq (call $bignum->f64 (ref.cast $bignum (local.get $d1)))
                                  (f64.const 1))))
                (then
                 (call $normalize-fraction

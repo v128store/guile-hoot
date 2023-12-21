@@ -46,6 +46,9 @@
            536870911 1 1 2)
 (test-call "7/6" (lambda (a b c d) (+ (/ a b) (/ c d))) 1 2 2 3)
 (test-call "7/6" (lambda (a b c d) (+ (/ a b) (/ c d))) 2 4 4 6)
+;; Adding fractions whose denominators have a bignum gcd.
+(test-call "65537/281474976710656"
+           (lambda (a b) (+ a b)) (/ 1 (ash 1 32)) (/ 1 (ash 1 48)))
 
 (test-call "1/2" (lambda (a b c) (- a (/ b c))) 1 1 2)
 (test-call "-1/2" (lambda (a b c) (- (/ a b) c)) 1 2 1)

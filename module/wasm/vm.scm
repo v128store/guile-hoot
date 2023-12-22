@@ -497,6 +497,49 @@ binary, or an input port from which a WASM binary is read."
         result
         (loop (- n 1) (cons (stack-pop! stack) result)))))
 
+;; This is similar to what's in (wasm dump), but our runtime type
+;; canonicalization introduces promises for recursive type groups that
+;; need special handling.
+(define (type-repr type)
+  (define (params-repr params)
+    (match params
+      (() '())
+      ((($ <param> #f type) ...)
+       `((param ,@(map type-repr type))))
+      ((($ <param> id type) . params)
+       (cons `(param ,id ,(type-repr type))
+             (params-repr params)))))
+  (define (results-repr results)
+    `((result ,@(map type-repr results))))
+  (define (field-repr field)
+    (define (wrap mutable? repr)
+      (if mutable? `(mut ,repr) repr))
+    (match field
+      (($ <field> id mutable? type)
+       (let ((repr (wrap mutable? (type-repr type))))
+         (if id
+             `(field ,id ,repr)
+             repr)))))
+  (match type
+    (($ <func-sig> params results)
+     `(func ,@(params-repr params) ,@(results-repr results)))
+    (($ <sub-type> final? supers type)
+     `(sub ,@(if final? '(final) '())
+           ,@(map type-repr supers)
+           ,(type-repr type)))
+    (($ <struct-type> fields)
+     `(struct ,@(map field-repr fields)))
+    (($ <array-type> mutable? type)
+     `(array ,(field-repr (make-field #f mutable? type))))
+    (($ <ref-type> #t ht)
+     `(ref null ,(type-repr ht)))
+    (($ <ref-type> #f ht)
+     `(ref ,(type-repr ht)))
+    ;; TODO: Figure out how to display useful information about
+    ;; recursive types without cycles.
+    ((? promise?) '_)
+    (_ type)))
+
 ;; TODO: Replace with global weak hash table that maps procedures to
 ;; signatures.
 (define-record-type <wasm-func>
@@ -507,8 +550,9 @@ binary, or an input port from which a WASM binary is read."
 
 (set-record-type-printer! <wasm-func>
                           (lambda (f port)
-                            (format port "#<wasm-func ~s>"
-                                    (wasm-func-proc f))))
+                            (format port "#<wasm-func ~a ~a>"
+                                    (type-repr (wasm-func-sig f))
+                                    (object-address f))))
 
 (define-record-type <wasm-global>
   (make-wasm-global value mutable?)
@@ -616,6 +660,11 @@ binary, or an input port from which a WASM binary is read."
   wasm-null?
   (type wasm-null-type))
 
+(set-record-type-printer! <wasm-null>
+                          (lambda (struct port)
+                            (format port "#<wasm-null ~a>"
+                                    (type-repr (wasm-null-type struct)))))
+
 ;; TODO: Packed fields.
 (define-record-type <wasm-struct>
   (%make-wasm-struct type fields)
@@ -625,7 +674,8 @@ binary, or an input port from which a WASM binary is read."
 
 (set-record-type-printer! <wasm-struct>
                           (lambda (struct port)
-                            (format port "#<wasm-struct ~a>"
+                            (format port "#<wasm-struct ~a ~a>"
+                                    (type-repr (wasm-struct-type struct))
                                     (object-address struct))))
 
 (define (make-wasm-struct type fields)
@@ -661,7 +711,8 @@ binary, or an input port from which a WASM binary is read."
 
 (set-record-type-printer! <wasm-array>
                           (lambda (array port)
-                            (format port "#<wasm-array ~a>"
+                            (format port "#<wasm-array ~a ~a>"
+                                    (type-repr (wasm-array-type array))
                                     (object-address array))))
 
 (define* (make-wasm-array type k #:optional (fill *unspecified*))

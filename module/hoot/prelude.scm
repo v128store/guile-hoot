@@ -2870,16 +2870,39 @@
 (define (procedure? x) (%procedure? x))
 
 ;; Temp definitions!
-(define (map f l)
-  (let lp ((l l))
-    (match l
-      (() '())
-      ((x . l) (cons (f x) (lp l))))))
-(define (for-each f l)
-  (let lp ((l l))
-    (unless (null? l)
-      (f (car l))
-      (lp (cdr l)))))
+(define map
+  (case-lambda
+    ((f l)
+     (let lp ((l l))
+       (match l
+         (() '())
+         ((x . l) (cons (f x) (lp l))))))
+    ((f l1 l2)
+     (let lp ((l1 l1) (l2 l2))
+       (match l1
+         (() '())
+         ((x . l1)
+          (match l2
+            (() '())
+            ((y . l2)
+             (cons (f x y) (lp l1 l2))))))))))
+(define for-each
+  (case-lambda
+    ((f l)
+     (let lp ((l l))
+       (unless (null? l)
+         (f (car l))
+         (lp (cdr l)))))
+    ((f l1 l2)
+     (let lp ((l1 l1) (l2 l2))
+       (match l1
+         (() (values))
+         ((x . l1)
+          (match l2
+            (() (values))
+            ((y . l2)
+             (f x y)
+             (lp l1 l2)))))))))
 
 (define (environment . import-specs)
   (raise (%make-unimplemented-error 'environment)))

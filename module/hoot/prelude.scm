@@ -836,8 +836,16 @@
             (struct.get $fraction $denom (local.get $x)))
      x))
    (else (inexact (denominator (exact x))))))
-(define (exact-integer-sqrt x)
-  (raise (%make-unimplemented-error 'exact-integer-sqrt)))
+(define (exact-integer-sqrt n)
+  ;; FIXME: There's a compiler bug that makes this procedure return
+  ;; junk when this exact-integer? check is enabled.
+  ;;
+  ;; (check-type n exact-integer? 'exact-integer-sqrt)
+  (assert (>= n 0) 'exact-integer-sqrt)
+  (let loop ((x n) (y (quotient (+ n 1) 2)))
+    (if (< y x)
+        (loop y (quotient (+ y (quotient n y)) 2))
+        (values x (- n (* x x))))))
 
 (define (floor/ x y)
   (values (floor-quotient x y) (floor-remainder x y)))

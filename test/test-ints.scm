@@ -160,4 +160,16 @@
 (test-call "-536870913" (lambda (a b) (floor (+ a b))) -536870911 -2)
 (test-call "-536870913" (lambda (a b) (ceiling (+ a b))) -536870911 -2)
 
+;; exact-integer-sqrt
+(test-call "(2 0)"
+           (lambda (x)
+             (call-with-values (lambda () (exact-integer-sqrt x))
+               (lambda (s r) (list s r))))
+           4)
+(test-call "(2 1)"
+           (lambda (x)
+             (call-with-values (lambda () (exact-integer-sqrt x))
+               (lambda (s r) (list s r))))
+           5)
+
 (test-end* "test-ints")

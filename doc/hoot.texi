@@ -36,6 +36,7 @@ See @ref{License} for more information.
 @menu
 * Introduction::                  What's the deal with Wasm, anyway?
 * Compiling to Wasm::             Using the compiler and development tools.
+* Web deployment::                Scheme in the browser!
 * Scheme reference::              Hoot-specific Scheme extensions.
 * Toolchain reference::           General purpose Wasm tools.
 * Contributing::                  Lend a hand!
@@ -994,6 +995,269 @@ instruction is evaluated.
 When not in a debugger, set Wasm execution to pause before each
 instruction is evaluated.
 @end deffn
+
+@node Web deployment
+@chapter Web deployment
+
+On the client-side web, JavaScript is the host environment for Wasm
+modules and the
+@url{https://developer.mozilla.org/en-US/docs/WebAssembly,WebAssembly}
+API is used to load and run them.  Hoot includes a JavaScript library,
+@file{reflect.js} that wraps the @code{WebAssembly} API and
+furthermore can inspect Scheme values and call Scheme procedures.
+This chapter documents deploying Hoot artifacts and using the
+reflection API to run Scheme in the browser.
+
+@menu
+* Web server setup::            Prepare a server to run Hoot programs.
+* JavaScript API reference::    JavaScript reflection interface.
+@end menu
+
+@node Web server setup
+@section Web server setup
+
+In order to run Hoot binaries in the browser, a web server needs to
+host a copy of the Hoot JavaScript runtime.
+
+The runtime files can be found in the
+@file{$prefix/share/guile-hoot/js-runtime} directory, where
+@code{$prefix} is the directory where Hoot was installed on your
+system.  This is typically @file{/usr} or @file{/usr/local} on Linux
+distributions such as Debian, Ubuntu, Fedora, etc.
+
+Don't forget to upload the Wasm files for the Scheme programs, too!
+
+A bit of JavaScript code is needed to bootstrap a Scheme program using
+the @file{js-runtime/reflect.js} library.  For example, here's an
+example @file{boot.js} file that runs the Scheme program
+@file{hello.wasm} and prints the return values:
+
+@example
+@verbatim
+window.addEventListener("load", async () => {
+  const results = await Scheme.load_main("/hello.wasm", {});
+  console.log(results);
+});
+@end verbatim
+@end example
+
+The @code{Scheme} namespace is defined in @file{reflect.js}.
+@xref{JavaScript API reference} for more information.
+
+To run @file{boot.js} on a web page, add @code{<script>} tags for it
+and @file{reflect.js}:
+
+@example
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript" src="/js-runtime/reflect.js"></script>
+    <script type="text/javascript" src="/boot.js"></script>
+  </head>
+  <body>
+    <h1>Hello, Hoot!</h1>
+  </body>
+</html>
+@end example
+
+@node JavaScript API reference
+@section JavaScript API reference
+
+The @code{Scheme} class is used to load a Hoot binary, start the
+program, and initialize reflection.
+
+@deftp {Class} Scheme
+A Scheme runtime environment.
+@end deftp
+
+@defop {Static method} Scheme load_main path abi [user_imports @code{@{@}}]
+Fetch and execute the Hoot Wasm binary at the URL @var{path} and
+return an array of Scheme values produced by the program.
+
+The @var{abi} parameter is for more advanced usage where multiple Hoot
+binaries share a single application binary interface (ABI).  This
+should be set to @code{@{@}} when loading the first Scheme binary.  It
+is better to use the @code{load_extension} method for subsequent
+binaries, though.
+
+The @var{user_imports} parameter is for providing concrete
+implementations of functions declared using the @ref{Foreign function
+interface}.  It uses a two-tier nested object structure to map import
+names to the functions that implement them.
+
+For example, this Scheme code:
+
+@lisp
+(define-foreign make-text-node
+  "document" "createTextNode"
+  (ref string) -> (ref null extern))
+@end lisp
+
+Could be instantiated like so:
+
+@example
+@verbatim
+Scheme.load_main("hello.wasm", {}, {
+  document: {
+    createTextNode: Document.prototype.createTextNode.bind(document)
+  }
+});
+@end verbatim
+@end example
+
+@end defop
+
+@defmethod Scheme load_extension path [user_imports @code{@{@}}]
+Fetch and load an additional Hoot binary at the URL @var{path} that
+shares the ABI of @code{this}.  Optionally, a set of user-defined
+imported functions can be specified with the @var{user_imports}
+parameter.
+@end defmethod
+
+All of the fundamental Scheme types have an associated JavaScript
+class that can reflect their values.  Calling the @code{repr} function
+on an instance of a reflected Scheme object will return a Scheme-like
+printing of the object.
+
+@example
+repr(pair) // => "(1 . 2)"
+@end example
+
+@deftp {Class} Char
+A Unicode character.
+@end deftp
+
+@deftp {Class} Eof
+End-of-file object.
+@end deftp
+
+@deftp {Class} Null
+The empty list.
+@end deftp
+
+@deftp {Class} Unspecified
+The unspecified value.
+@end deftp
+
+@deftp {Class} Complex real imag
+Complex number with real part @var{real} and imaginary part
+@var{imag}.
+@end deftp
+
+@deftp {Class} Fraction num denom
+An exact fraction with numerator @var{num} and denominator
+@var{denom}.
+@end deftp
+
+The @code{HeapObject} class is the parent class of all of the
+remaining Scheme types.
+
+@deftp {Class} HeapObject
+A Scheme heap object.
+@end deftp
+
+@defivar HeapObject reflector
+The reflector for @code{this}, an instance of the @code{Scheme} class.
+@end defivar
+
+The @code{reflector} property can be used in conjuction with the
+@code{load_extension} method to load additional Hoot binaries that
+share the same ABI.
+
+@example
+heapObject.reflector.load_extension("/helper.wasm")
+@end example
+
+@deftp {Class} Procedure
+A Scheme procedure.
+@end deftp
+
+Procedure instances can be invoked with the @code{call} method to
+perform a Javascript to Scheme function call.
+
+@defmethod Procedure call args@dots{}
+Call procedure with @var{args} and return an array of result values.
+@end defmethod
+
+@deftp {Class} Pair
+An immutable cons cell.
+@end deftp
+
+@deftp {Class} MutablePair
+A mutable cons cell.
+@end deftp
+
+@deftp {Class} Vector
+An immutable vector.
+@end deftp
+
+@deftp {Class} MutableVector
+A mutable vector.
+@end deftp
+
+@deftp {Class} Bytevector
+An immutable bytevector.
+@end deftp
+
+@deftp {Class} MutableBytevector
+A mutable bytevector.
+@end deftp
+
+@deftp {Class} Bitvector
+An immutable bitvector.
+@end deftp
+
+@deftp {Class} MutableBitvector
+A mutable bitvector.
+@end deftp
+
+@deftp {Class} MutableString
+A mutable string.
+@end deftp
+
+@deftp {Class} Sym
+A symbol.
+@end deftp
+
+@deftp {Class} Keyword
+A keyword.
+@end deftp
+
+@deftp {Class} Variable
+A mutable variable.
+@end deftp
+
+@deftp {Class} AtomicBox
+A mutable box with atomic updates.
+@end deftp
+
+@deftp {Class} HashTable
+A hash table.
+@end deftp
+
+@deftp {Class} WeakTable
+A weak key hash table.
+@end deftp
+
+@deftp {Class} Fluid
+A dynamic variable.
+@end deftp
+
+@deftp {Class} DynamicState
+A set of fluids.
+@end deftp
+
+@deftp {Class} Syntax
+A syntax object.
+@end deftp
+
+@deftp {Class} Port
+An I/O port.
+@end deftp
+
+@deftp {Class} Struct
+A user-defined structure.
+@end deftp
 
 @node Scheme reference
 @chapter Scheme reference

@@ -300,4 +300,9 @@
 (test-call "6" (lambda (f a b) (f a b)) * 2 3)
 (test-call "2" (lambda (f a b) (f a b)) / 6 3)
 
+;; truncate
+(test-call "42" (lambda (x) (truncate x)) 42)
+(test-call "42.0" (lambda (x) (truncate x)) 42.3)
+(test-call "1" (lambda (x) (truncate x)) 43/42)
+
 (test-end* "test-numeric")

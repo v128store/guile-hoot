@@ -205,28 +205,16 @@
   (newline))
 
 (define (wasm-trace path instr instance stack blocks locals)
-  (define (obj-repr obj)
-    (match obj
-      ((? wasm-struct? struct)
-       `(struct ,(object-address struct)))
-      ((? wasm-array? array)
-       `(array ,(object-address array)))
-      ((? wasm-func? func)
-       `(func ,(object-address func)))
-      ((? wasm-null? null) 'null)
-      (_ obj)))
   (let ((instr (match instr ; abbreviate blocks
                  (((and (or 'block 'loop) op) _ type . _)
                   `(,op ,(block-type-repr type) ...))
                  (('if _ type . _)
                   `(if ,(block-type-repr type) ...))
-                 (_ instr)))
-        (stack (map obj-repr (wasm-stack-items stack)))
-        (locals (map obj-repr (vector->list locals))))
+                 (_ instr))))
     (format #t "⌄ instr:  ~a\n" instr)
     (format #t "  loc:    ~a @ ~a\n" instance (reverse path))
-    (format #t "  stack:  ~s\n" stack)
-    (format #t "  locals: ~a\n" locals)))
+    (format #t "  stack:  ~s\n" (wasm-stack-items stack))
+    (format #t "  locals: ~a\n" (vector->list locals))))
 
 (define (->wasm x)
   (match x

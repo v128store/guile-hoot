@@ -441,9 +441,9 @@ class SchemeModule {
         string_downcase: Function.call.bind(String.prototype.toLowerCase),
 
         make_weak_map() { return new WeakMap; },
-        weak_map_get(map, k) {
+        weak_map_get(map, k, fail) {
             const val = map.get(k);
-            return val === undefined ? null: val;
+            return val === undefined ? fail: val;
         },
         weak_map_set(map, k, v) { return map.set(k, v); },
         weak_map_delete(map, k) { return map.delete(k); },

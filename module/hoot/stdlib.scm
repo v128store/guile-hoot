@@ -648,8 +648,8 @@
      (func $make-weak-map (import "rt" "make_weak_map")
            (result (ref extern)))
      (func $weak-map-get (import "rt" "weak_map_get")
-           (param (ref extern) (ref eq))
-           (result (ref null eq)))
+           (param (ref extern) (ref eq) (ref eq))
+           (result (ref eq)))
      (func $weak-map-set (import "rt" "weak_map_set")
            (param (ref extern) (ref eq) (ref eq)))
      (func $weak-map-delete (import "rt" "weak_map_delete")
@@ -4306,18 +4306,6 @@
                             (struct.get $proc $func
                                         (struct.get $parameter $convert
                                                     (local.get $parameter)))))
-
-     (func $weak-map-get-scm (param $weak-map (ref extern))
-           (param $key (ref eq)) (param $default (ref eq)) (result (ref eq))
-           (local $value (ref null eq))
-           (local.set $value
-                      (call $weak-map-get
-                            (local.get $weak-map)
-                            (local.get $key)))
-           (if (ref eq)
-               (ref.is_null (local.get $value))
-               (then (local.get $default))
-               (else (ref.as_non_null (local.get $value)))))
 
      (table ,@(maybe-import '$argv) 0 (ref null eq))
      (table ,@(maybe-import '$scm-stack) 0 (ref null eq))

@@ -4179,6 +4179,53 @@ object @var{exception}."
                       init
                       table))
 
+;; Weak key hashtables
+(define (make-weak-key-hashtable)
+  (%inline-wasm
+   '(func (result (ref eq))
+          (struct.new $weak-table
+                      (i32.const 0)
+                      (call $make-weak-map)))))
+(define (weak-key-hashtable? obj)
+  (%inline-wasm
+   '(func (param $obj (ref eq)) (result (ref eq))
+          (if (ref eq)
+              (ref.test $weak-table (local.get $obj))
+              (then (ref.i31 (i32.const 17)))
+              (else (ref.i31 (i32.const 1)))))
+   obj))
+(define* (weak-key-hashtable-ref table key #:optional default)
+  (check-type table weak-key-hashtable? 'weak-key-hashtable-ref)
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq))
+          (param $default (ref eq)) (result (ref eq))
+          (call $weak-map-get
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key)
+                (local.get $default)))
+   table key default))
+(define (weak-key-hashtable-set! table key value)
+  (check-type table weak-key-hashtable? 'weak-key-hashtable-set!)
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq)) (param $val (ref eq))
+          (call $weak-map-set
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key)
+                (local.get $val)))
+   table key value))
+(define (weak-key-hashtable-delete! table key)
+  (check-type table weak-key-hashtable? 'weak-key-hashtable-delete!)
+  (%inline-wasm
+   '(func (param $table (ref eq)) (param $key (ref eq))
+          (call $weak-map-delete
+                (struct.get $weak-table $val
+                            (ref.cast $weak-table (local.get $table)))
+                (local.get $key))
+          (drop))
+   table key))
+
 (cond-expand
  (hoot-main
   (define %exception-handler (make-fluid #f))

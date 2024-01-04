@@ -3506,14 +3506,23 @@
                                  (ref.cast $fraction (local.get $b)))))))))
 
      (func $quo (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (local $a-i32 i32)
+           (local $b-i32 i32)
            ,(arith-cond
              `((call $fixnum? (local.get $a))
                ,(arith-cond
+                 ;; Adapted from the `quo' fixnum fast path in (hoot compile).
                  ;; TODO: implement for b = -1
                  '((call $fixnum? (local.get $b))
-                   (i31.get_s (ref.cast i31 (local.get $a))) (i32.const 1) (i32.shr_s)
-                   (i31.get_s (ref.cast i31 (local.get $b))) (i32.const 1) (i32.shr_s)
-                   (i32.div_s)
+                   (local.set $a-i32 (call $fixnum->i32
+                                           (ref.cast i31 (local.get $a))))
+                   (local.set $b-i32 (call $fixnum->i32
+                                           (ref.cast i31 (local.get $b))))
+                   (if (i32.eqz (local.get $b-i32))
+                       (then
+                        (call $die0 (string.const "$quo"))
+                        (unreachable)))
+                   (i32.div_s (local.get $a-i32) (local.get $b-i32))
                    (i32.const 1) (i32.shl)
                    (ref.i31))
                  '((ref.test $bignum (local.get $b))
@@ -3576,16 +3585,27 @@
                     (unreachable))))))
 
      (func $rem (param $a (ref eq)) (param $b (ref eq)) (result (ref eq))
+           (local $a-i32 i32)
+           (local $b-i32 i32)
            ,(arith-cond
              `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 ;; TODO: signal overflow error ($b = 0)
                  ;; Adapted from the `rem' fixnum fast path in (hoot compile).
                  '((call $fixnum? (local.get $b))
+                   (local.set $a-i32
+                              (call $fixnum->i32
+                                    (ref.cast i31 (local.get $a))))
+                   (local.set $b-i32
+                              (call $fixnum->i32
+                                    (ref.cast i31 (local.get $b))))
+                   (if (i32.eqz (local.get $b-i32))
+                       (then
+                        (call $die0 (string.const "$rem"))
+                        (unreachable)))
                    (call $i32->fixnum
                          (i32.rem_s
-                          (call $fixnum->i32 (ref.cast i31 (local.get $a)))
-                          (call $fixnum->i32 (ref.cast i31 (local.get $b))))))
+                          (local.get $a-i32)
+                          (local.get $b-i32))))
                  '((ref.test $bignum (local.get $b))
                    (return (call $normalize-bignum
                                  (call $bignum-rem*
@@ -3652,13 +3672,16 @@
            ,(arith-cond
              `((call $fixnum? (local.get $a))
                ,(arith-cond
-                 ;; TODO: signal overflow error ($b = 0)
                  ;; Adapted from the `mod' fixnum fast path in (hoot compile).
                  '((call $fixnum? (local.get $b))
                    (local.set $a-i32 (call $fixnum->i32
                                            (ref.cast i31 (local.get $a))))
                    (local.set $b-i32 (call $fixnum->i32
                                            (ref.cast i31 (local.get $b))))
+                   (if (i32.eqz (local.get $b-i32))
+                       (then
+                        (call $die0 (string.const "$mod"))
+                        (unreachable)))
                    (local.set $tem
                               (i32.rem_s (local.get $a-i32)
                                          (local.get $b-i32)))

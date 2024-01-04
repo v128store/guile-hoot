@@ -166,4 +166,22 @@
                 ht)
                lst)))
 
+;; Weak key hashtables
+(test-call "42"
+           (lambda ()
+             (let ((table (make-weak-key-hashtable)))
+               (weak-key-hashtable-set! table 'foo 42)
+               (weak-key-hashtable-ref table 'foo))))
+(test-call "uh-oh"
+           (lambda ()
+             (let ((table (make-weak-key-hashtable)))
+               (weak-key-hashtable-ref table 'foo 'uh-oh))))
+(test-call "#f"
+           (lambda ()
+             (let ((table (make-weak-key-hashtable)))
+               (weak-key-hashtable-set! table 'foo 42)
+               (weak-key-hashtable-delete! table 'foo)
+               (weak-key-hashtable-ref table 'foo))))
+
+
 (test-end* "test-hash-tables")

@@ -2311,12 +2311,16 @@ Disassemble @var{wasm} and return its symbolic WAT form.
 The @code{(wasm resolve)} module provides the @code{resolve-wasm}
 procedure which lowers Wasm modules into a form that can be used by
 the assembler or interpreter.  The resolver replaces named references
-with their respective integer index values, fills out the type table,
+with their respective integer identifiers, fills out the type table,
 and adjusts i32 and i64 constants into their canonical form.
 
-@deffn {Procedure} resolve-wasm mod
+@deffn {Procedure} resolve-wasm mod [#:name-section? #f]
 Lower the Wasm module @var{mod} into a form that can be assembled or
 interpreted.  Returns a new Wasm module and does not modify @var{mod}.
+
+When @var{name-section?} is @code{#t}, the returned Wasm module will
+include a name map that maps the original, human-readable names to the
+resolved integer identifiers.
 @end deffn
 
 @node Linker

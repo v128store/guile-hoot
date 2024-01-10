@@ -35,6 +35,9 @@
       (() s0)
       ((elt . l) (lp l (f elt s0))))))
 
+(define (alist-sort alist)
+  (sort alist (lambda (a b) (< (car a) (car b)))))
+
 (define (make-name-store)
   (let ((count 0)
         (ids (make-hash-table)))
@@ -47,41 +50,92 @@
               (cond
                ((exact-integer? id) id)
                ((hashq-ref ids id))
-               (else (error "unbound identifier" id)))))))
+               (else (error "unbound identifier" id))))
+            (lambda ()
+              (alist-sort
+               (hash-fold (lambda (name idx result)
+                            (cons (cons idx name) result))
+                          '() ids))))))
 
-(define (resolve-wasm mod)
-  (define-values (add-type-id! resolve-type) (make-name-store))
-  (define-values (add-func-id! resolve-func) (make-name-store))
-  (define-values (add-table-id! resolve-table) (make-name-store))
-  (define-values (add-memory-id! resolve-memory) (make-name-store))
-  (define-values (add-global-id! resolve-global) (make-name-store))
-  (define-values (add-elem-id! resolve-elem) (make-name-store))
-  (define-values (add-data-id! resolve-data) (make-name-store))
-  (define-values (add-tag-id! resolve-tag) (make-name-store))
+(define (make-indirect-name-store)
+  (let ((table (make-hash-table)))
+    (values (lambda (parent-id parent-idx id)
+              (match (hashq-ref table parent-idx)
+                (#f
+                 (let-values (((add-id! resolve-id name-map) (make-name-store)))
+                   (let ((procs (list add-id! resolve-id name-map)))
+                     (hashq-set! table parent-idx procs)
+                     (when parent-id
+                       (hashq-set! table parent-id procs)))
+                   (add-id! id)))
+                ((add-id! resolve-id name-map)
+                 (add-id! id))))
+            (lambda (parent-id-or-idx id-or-idx)
+              (if (exact-integer? id-or-idx)
+                  id-or-idx
+                  (match (hashq-ref table parent-id-or-idx)
+                    ((add-id! resolve-id name-map)
+                     (resolve-id id-or-idx)))))
+            (lambda ()
+              (alist-sort
+               (hash-fold
+                (lambda (id-or-idx procs result)
+                  (if (exact-integer? id-or-idx)
+                      (match procs
+                        ((_ _ name-map)
+                         (match (name-map)
+                           ((name-map ..1) (cons (cons id-or-idx name-map) result))
+                           (_ result))))
+                      result))
+                '()
+                table))))))
+
+(define* (resolve-wasm mod #:key name-section?)
+  (define-values (add-type-id! resolve-type type-name-map) (make-name-store))
+  (define-values (add-func-id! resolve-func func-name-map) (make-name-store))
+  (define-values (add-table-id! resolve-table table-name-map) (make-name-store))
+  (define-values (add-memory-id! resolve-memory memory-name-map) (make-name-store))
+  (define-values (add-global-id! resolve-global global-name-map) (make-name-store))
+  (define-values (add-elem-id! resolve-elem elem-name-map) (make-name-store))
+  (define-values (add-data-id! resolve-data data-name-map) (make-name-store))
+  (define-values (add-tag-id! resolve-tag tag-name-map) (make-name-store))
+  (define-values (add-struct-field! resolve-struct-field struct-field-name-map)
+    (make-indirect-name-store))
+  (define-values (add-func-local! resolve-func-local func-local-name-map)
+    (make-indirect-name-store))
+  (define-values (add-func-label! resolve-func-label func-label-name-map)
+    (make-indirect-name-store))
+  (define (add-func-locals! func)
+    (match func
+      (($ <func> id ($ <type-use> _ type) locals)
+       (let ((idx (resolve-func id)))
+         (for-each (lambda (local-id)
+                     (add-func-local! id idx local-id))
+                   (append (map param-id (func-sig-params type))
+                           (map local-id locals)))))))
+  (define (add-func-labels! func)
+    (match func
+      (($ <func> id _ _ body)
+       (let ((idx (resolve-func id)))
+         (let loop ((insts body))
+           (match insts
+             (() #t)
+             ((((or 'block 'loop) label _ body) . rest)
+              (add-func-label! id idx label)
+              (loop body)
+              (loop rest))
+             ((('if label _ consequent alternate) . rest)
+              (add-func-label! id idx label)
+              (loop consequent)
+              (loop alternate)
+              (loop rest))
+             ((_ . rest)
+              (loop rest))))))))
 
   (define (resolve-memarg memarg)
     (match memarg
       (($ <mem-arg> id offset align)
        (make-mem-arg (resolve-memory id) offset align))))
-
-  (define struct-fields (make-hash-table))
-  (define (add-struct-field! struct-id struct-idx field-id)
-    (match (hashq-ref struct-fields struct-idx)
-      (#f
-       (let-values (((add-id! resolve-id) (make-name-store)))
-         (let ((pair (cons add-id! resolve-id)))
-           (hashq-set! struct-fields struct-idx pair)
-           (when struct-id
-             (hashq-set! struct-fields struct-id pair)))
-         (add-id! field-id)))
-      ((add-id! . resolve-id)
-       (add-id! field-id))))
-  (define (resolve-struct-field struct-id-or-idx field)
-    (if (exact-integer? field)
-        field
-        (match (hashq-ref struct-fields struct-id-or-idx)
-          ((add-id! . resolve-id)
-           (resolve-id field)))))
 
   (define interned-strings (make-hash-table))
   (define interned-string-count 0)
@@ -170,6 +224,19 @@
   (match mod
     (($ <wasm> id %types imports funcs tables memories globals exports start
         elems datas tags strings custom)
+     (define (generate-names)
+       (make-names id
+                   (func-name-map)
+                   (func-local-name-map)
+                   (func-label-name-map)
+                   (type-name-map)
+                   (table-name-map)
+                   (memory-name-map)
+                   (global-name-map)
+                   (elem-name-map)
+                   (data-name-map)
+                   (struct-field-name-map)
+                   (tag-name-map)))
      (define types (adjoin-types-from-type-uses %types funcs imports tags))
 
      (for-each (match-lambda (($ <type> id type) (add-type-id! id))
@@ -216,6 +283,9 @@
                     (_ (values)))
                   #f)
                 types)
+     (when name-section?
+       (for-each add-func-locals! funcs)
+       (for-each add-func-labels! funcs))
 
      (define (type-by-idx idx)
        (or (find-type (lambda (rec type-id type-idx supers type)
@@ -574,7 +644,10 @@
            (tables (map visit-table tables))
            (memories (map visit-memory memories))
            (globals (map visit-global globals))
-           (tags (map visit-tag tags)))
+           (tags (map visit-tag tags))
+           (custom (if name-section?
+                       (cons (generate-names) custom)
+                       custom)))
        (define strings
          (map car
               (sort (hash-map->list cons interned-strings)

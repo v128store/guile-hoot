@@ -1,5 +1,6 @@
 ;;; WebAssembly binary parser
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2024 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -1096,11 +1097,53 @@
              parsed)))
         (default)))
 
+  (define (parse-names port)
+    (define (parse-id port)
+      (string->symbol (string-append "$" (get-name port))))
+    (define (parse-name-map port)
+      (parse-vec port (lambda (port)
+                        (cons (get-uleb port) (parse-id port)))))
+    (define (parse-indirect-name-map port)
+      (parse-vec port (lambda (port)
+                        (cons (get-uleb port) (parse-name-map port)))))
+    (define (parse-subsection port)
+      (match (get-u8 port)
+        (0
+         (cons 0 (call-with-input-bytevector (parse-vec/u8 port)
+                                               parse-id)))
+        ((and n (or 1 4 5 6 7 8 9 11))
+         (cons n (call-with-input-bytevector (parse-vec/u8 port)
+                                               parse-name-map)))
+        ((and n (or 2 3 10))
+         (cons n (call-with-input-bytevector (parse-vec/u8 port)
+                                               parse-indirect-name-map)))
+        (n (error "unexpected name subsection" n))))
+    (let ((subs (let loop ()
+                  (if (eof-object? (lookahead-u8 port))
+                      '()
+                      (cons (parse-subsection port) (loop))))))
+      (define (lookup id default)
+        (or (assq-ref subs id) default))
+      (make-names (lookup 0 #f)
+                  (lookup 1 '())
+                  (lookup 2 '())
+                  (lookup 3 '())
+                  (lookup 4 '())
+                  (lookup 5 '())
+                  (lookup 6 '())
+                  (lookup 7 '())
+                  (lookup 8 '())
+                  (lookup 9 '())
+                  (lookup 10 '())
+                  (lookup 11 '()))))
+
   (define (parse-custom port custom)
     (match (parse-section port #x00
                           (lambda (port)
                             (let ((name (get-name port)))
-                              (make-custom name (get-bytevector-all port))))
+                              (if (string=? name "name")
+                                  (parse-names port)
+                                  (make-custom name (get-bytevector-all port)))))
                           (lambda () #f))
       (#f custom)
       (sec (parse-custom port (cons sec custom)))))

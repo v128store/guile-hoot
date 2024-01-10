@@ -1,7 +1,7 @@
 ;;; WebAssembly text format parser and unparser
 ;;; Copyright (C) 2023 Igalia, S.L.
 ;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
-;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
+;;; Copyright (C) 2023, 2024 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -820,74 +820,107 @@
   (match mod
     (($ <wasm> id types imports funcs tables memories globals exports start
                elems datas tags strings custom)
-     ;; TODO: Factorize type-repr code that is duplicated between here
-     ;; and (wasm dump).
+     ;; Imports
+     (define (select-imports kind)
+       (filter (lambda (import)
+                 (eq? (import-kind import) kind))
+               imports))
+     (define func-imports (select-imports 'func))
+     (define global-imports (select-imports 'global))
+     (define memory-imports (select-imports 'memory))
+     (define table-imports (select-imports 'table))
+     ;; Exports
+     (define (select-exports kind)
+       (filter-map (match-lambda
+                     (($ <export> name kind* idx)
+                      (and (eq? kind* kind)
+                           (cons idx name))))
+                   exports))
+     (define func-exports (select-exports 'func))
+     (define global-exports (select-exports 'global))
+     (define memory-exports (select-exports 'memory))
+     (define table-exports (select-exports 'table))
+     ;; WAT representations
+     (define (heap-type-repr ht)
+       (match ht
+         ((? symbol?) ht)
+         ((? exact-integer?) ht)))
      (define (val-type-repr vt)
        (match vt
+         ((? symbol?) vt)
+         ((? exact-integer?) vt)
          (($ <ref-type> #t ht)
-          `(ref null ,ht))
+          `(ref null ,(heap-type-repr ht)))
          (($ <ref-type> #f ht)
-          `(ref ,ht))
-         (_ vt)))
+          `(ref ,(heap-type-repr ht)))))
      (define (params-repr params)
-       (match params
-         (() '())
-         ((($ <param> #f type) ...)
-          `((param ,@(map val-type-repr type))))
-         ((($ <param> id type) . params)
-          (cons `(param ,id ,(val-type-repr type))
-                (params-repr params)))))
+       (map (match-lambda
+              (($ <param> id type)
+               `(param ,@(if id `(,id) '())
+                       ,(val-type-repr type))))
+            params))
+     (define (locals-repr locals)
+       (map (match-lambda
+              (($ <local> id type)
+               `(local ,id ,(val-type-repr type))))
+            locals))
      (define (results-repr results)
        (map (lambda (type) `(result ,(val-type-repr type))) results))
-     (define (field-repr field)
-       (define (wrap mutable? repr)
-         (if mutable? `(mut ,repr) repr))
-       (match field
-         (($ <field> id mutable? type)
-          (let ((repr (wrap mutable? (val-type-repr type))))
-            (if id
-                `(field ,id ,repr)
-                repr)))))
      (define (type-repr type)
        (match type
          (($ <func-sig> params results)
-          `(func ,@(params-repr params) ,@(results-repr results)))
+          `(func ,@(params-repr params)
+                 ,@(results-repr results)))
          (($ <sub-type> final? supers type)
-          `(sub ,@(if final? '(final) '()) ,@supers ,(type-repr type)))
+          `(sub ,@(if final? '(final) '())
+                ,@supers
+                ,(type-repr type)))
          (($ <struct-type> fields)
-          `(struct ,@(map field-repr fields)))
+          `(struct ,@(map (match-lambda
+                            (($ <field> #f mutable? type)
+                             (if mutable?
+                                 `(mut ,(val-type-repr type))
+                                 (val-type-repr type)))
+                            (($ <field> id mutable? type)
+                             `(field ,id
+                                     ,(if mutable?
+                                          `(mut ,(val-type-repr type))
+                                          (val-type-repr type)))))
+                          fields)))
          (($ <array-type> mutable? type)
-          `(array ,(field-repr (make-field #f mutable? type))))))
-     (define (type-use-repr type-use)
-       (match type-use
-         (($ <type-use> _ ($ <func-sig> params results))
-          (append (params-repr params) (results-repr results)))))
+          `(array ,(if mutable?
+                       `(mut ,(val-type-repr type))
+                       (val-type-repr type))))))
      (define (block-type-repr bt)
        (match bt
          (#f '())
-         ((? type-use? use)
-          (type-use-repr use))
+         ((? symbol?) `(,bt))
+         (($ <type-use> _ ($ <func-sig> _ results))
+          (results-repr results))
          ((? ref-type? rt)
-          `((param ,(val-type-repr rt))))))
+          `((result ,(val-type-repr rt))))))
      (define (instr-repr instr)
        (define (make-prefix-arg prefix x)
          (if (zero? x)
              '()
              (list (string->symbol (string-append prefix (number->string x))))))
        (match instr
-         (($ <mem-arg> id offset align)
-          `(,id
-            ,@(make-prefix-arg "offset=" offset)
-            ,@(make-prefix-arg "align=" align)))
-         (($ <ref-type> _ (? symbol? ht))
-          `(,ht))
-         (($ <type-use> idx)
-          `((type ,idx)))
          ;; Instructions that need special handling:
-         (('ref.cast ($ <ref-type> null? ht))
-          `(ref.cast ,@(if null? '(null) '()) ,ht))
-         (('string.const (? number? idx))
-          `(string.const ,(list-ref strings idx)))
+         (((and op (or 'i32.load 'i32.load16_s 'i32.load16_u 'i32.load8_s
+                       'i32.load8_u 'i32.store 'i32.store16 'i32.store8
+                       'i64.load 'i64.load32_s 'i64.load32_u 'i64.load16_s
+                       'i64.load16_u 'i64.load8_s 'i64.load8_u 'f32.load
+                       'f64.load 'i64.store 'i64.store32 'i64.store16
+                       'i64.store8 'f32.store 'f64.store))
+           ($ <mem-arg> id offset align))
+          `(,op ,id
+                ,@(make-prefix-arg "offset=" offset)
+                ,@(make-prefix-arg "align=" align)))
+         (((and op (or 'ref.cast 'ref.test)) ($ <ref-type> null? ht))
+          `(,op ,@(if null? '(null) '())
+                ,(heap-type-repr ht)))
+         (('string.const (? number? id))
+          `(string.const ,(list-ref strings id)))
          (('if label bt consequent alternate)
           `(if ,@(block-type-repr bt)
                ,@(if label `(,label) '())
@@ -897,9 +930,7 @@
           `(,op ,@(if label `(,label) '())
                 ,@(block-type-repr bt)
                 ,@(instrs-repr body)))
-         ((_ ...)
-          (append-map instr-repr instr))
-         (_ `(,instr))))
+         (_ instr)))
      (define (instrs-repr instrs)
        (map instr-repr instrs))
      (define (limits-repr limits)
@@ -907,60 +938,90 @@
          (($ <limits> min max)
           (if max (list min max) (list min)))))
      (define (elem-item-repr init)
-       `(item ,@(instrs-repr init)))
+       (match init
+         ((instr)
+          (instr-repr instr))
+         ((instrs ...)
+          `(item ,@(instrs-repr init)))))
      `(module
        ,@(if id `(,id) '())
        ;; Types
+       ,@(filter-map (match-lambda
+                       (($ <type> #f (? func-sig?))
+                        #f)
+                       (($ <type> id val)
+                        `(type ,id ,(type-repr val)))
+                       (($ <rec-group> types)
+                        `(rec
+                          ,@(map (match-lambda
+                                   (($ <type> id val)
+                                    `(type ,id ,(type-repr val))))
+                                 types))))
+                     types)
+       ;; Imported functions
        ,@(map (match-lambda
-                (($ <type> id val)
-                 `(type ,id ,(type-repr val)))
-                (($ <rec-group> types)
-                 `(rec ,@(map (match-lambda
-                               (($ <type> id val)
-                                `(type ,id ,(type-repr val))))
-                              types))))
-              types)
-       ;; Imports
+                (($ <import> mod name 'func id
+                    ($ <type-use> _ ($ <func-sig> params results)))
+                 `(func ,id (import ,mod ,name)
+                        ,@(params-repr params)
+                        ,@(results-repr results))))
+              func-imports)
+       ;; Imported tables
        ,@(map (match-lambda
-                (($ <import> mod name 'func id type)
-                 `(import ,mod ,name (func ,id ,@(type-use-repr type))))
+                (($ <import> mod name 'table id
+                    ($ <table-type> limits elem-type))
+                 `(table ,id (import ,mod ,name)
+                         ,@(limits-repr limits)
+                         ,(val-type-repr elem-type))))
+              table-imports)
+       ;; Imported memories
+       ,@(map (match-lambda
+                (($ <import> mod name 'memory id
+                    ($ <mem-type> limits))
+                 `(memory ,id (import ,mod ,name) ,@(limits-repr limits))))
+              memory-imports)
+       ;; Imported globals
+       ,@(map (match-lambda
                 (($ <import> mod name 'global id ($ <global-type> mutable? type))
-                 `(import ,mod ,name
-                          (global ,id ,(if mutable?
-                                           `(mut ,(val-type-repr type))
-                                           (val-type-repr type)))))
-                (($ <import> mod name 'memory id ($ <mem-type> limits))
-                 `(import ,mod ,name (memory ,id ,@(limits-repr limits))))
-                (($ <import> mod name 'table id ($ <table-type> limits elem-type))
-                 `(import ,mod ,name
-                          (table ,id ,@(limits-repr limits)
-                                 ,(val-type-repr elem-type)))))
-              imports)
-       ;; Exports
+                 `(global ,id (import ,mod ,name)
+                          ,(if mutable?
+                               `(mut ,(val-type-repr type))
+                               (val-type-repr type)))))
+              global-imports)
+       ;; Tables
        ,@(map (match-lambda
-                (($ <export> name kind idx)
-                 `(export ,name (,kind ,idx))))
-              exports)
+                (($ <table> id ($ <table-type> limits elem-type) init)
+                 `(table ,id
+                         ,@(match (assq-ref table-exports id)
+                             (#f '())
+                             (name `((export ,name))))
+                         ,@(limits-repr limits)
+                         ,(val-type-repr elem-type)
+                         ,@(if init
+                               `((elem ,@(map instrs-repr init)))
+                               '()))))
+              tables)
+       ;; Memories
+       ,@(map (match-lambda
+                (($ <memory> id ($ <mem-type> limits))
+                 `(memory ,id
+                          ,@(match (assq-ref memory-exports id)
+                              (#f '())
+                              (name `((export ,name))))
+                          ,@(limits-repr limits))))
+              memories)
        ;; Globals
        ,@(map (match-lambda
                 (($ <global> id ($ <global-type> mutable? type) init)
                  `(global ,id
+                          ,@(match (assq-ref global-exports id)
+                              (#f '())
+                              (name `((export ,name))))
                           ,(if mutable?
                                `(mut ,(val-type-repr type))
                                (val-type-repr type))
                           ,@(instrs-repr init))))
               globals)
-       ;; Tables
-       ,@(map (match-lambda
-                (($ <table> id ($ <table-type> limits elem-type))
-                 `(table ,id ,@(limits-repr limits)
-                         ,(val-type-repr elem-type))))
-              tables)
-       ;; Memories
-       ,@(map (match-lambda
-                (($ <memory> id ($ <mem-type> limits))
-                 `(memory ,id ,@(limits-repr limits))))
-              memories)
        ;; Element segments
        ,@(map (match-lambda
                 (($ <elem> id mode table type offset items)
@@ -974,31 +1035,29 @@
                            ,(val-type-repr type)
                            ,@(map elem-item-repr items)))
                    ('declarative
-                    `(elem ,id declare ,@(map elem-item-repr items))))))
+                    `(elem ,id declare
+                           ,(val-type-repr type)
+                           ,@(map elem-item-repr items))))))
               elems)
        ;; Data segments
        ,@(map (match-lambda
                 (($ <data> id mode mem offset init)
-                 (case mode
-                   ((active)
-                    `(data ,id ,mem ,@(instrs-repr offset) ,init))
-                   ((passive)
-                    `(data ,id ,init)))))
+                 (match mode
+                   ('active `(data ,id ,mem ,@(instrs-repr offset) ,init))
+                   ('passive `(data ,id ,init)))))
               datas)
        ;; Functions
        ,@(map (match-lambda
-                (($ <func> id type locals body)
-                 (match type
-                   (($ <type-use> idx sig)
-                    `(func ,(or id idx)
-                           ,@(match (type-repr sig)
-                               (('func . params+results)
-                                params+results))
-                           ,@(map (match-lambda
-                                    (($ <local> id type)
-                                     `(local ,id ,(val-type-repr type))))
-                                  locals)
-                           ,@(instrs-repr body))))))
+                (($ <func> id ($ <type-use> _ ($ <func-sig> params results))
+                    locals body)
+                 `(func ,id
+                        ,@(match (assq-ref func-exports id)
+                            (#f '())
+                            (name `((export ,name))))
+                        ,@(params-repr params)
+                        ,@(results-repr results)
+                        ,@(locals-repr locals)
+                        ,@(instrs-repr body))))
               funcs)
        ;; Start function
        ,@(if start `((start ,start)) '())))))

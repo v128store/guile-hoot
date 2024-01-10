@@ -2302,7 +2302,10 @@ interpreter.  To lower the module into a usable form, see
 @end deffn
 
 @deffn {Procedure} wasm->wat wasm
-Disassemble @var{wasm} and return its symbolic WAT form.
+Disassemble @var{wasm} and return its symbolic WAT form.  @var{wasm}
+is assumed to be in @emph{unresolved} form, like the output of
+@code{wat->wasm}.  To lift a resolved Wasm module into a form usable
+by @code{wasm->wat}, see @code{unresolve-wasm} in @ref{Resolver}.
 @end deffn
 
 @node Resolver

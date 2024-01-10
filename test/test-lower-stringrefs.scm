@@ -37,18 +37,14 @@
               (global $s0 (ref string) (string.const "hey"))))))
   (test-equal '(module
                 (type $wtf8 (array (mut i8)))
-                (import "app" "string-to-i32"
-                        (func $string-to-i32-stringref-0
-                              (param (ref extern)) (result i32)))
-                (import "app" "i32-to-string"
-                        (func $i32-to-string-stringref-1
-                              (param i32) (result (ref extern))))
-                (import "rt" "wtf8_to_string"
-                        (func $wtf8->extern-string
-                              (param $wtf8 (ref null $wtf8)) (result (ref extern))))
-                (import "rt" "string_to_wtf8"
-                        (func $extern-string->wtf8
-                              (param $str (ref null extern)) (result (ref $wtf8))))
+                (func $string-to-i32-stringref-0 (import "app" "string-to-i32")
+                      (param (ref extern)) (result i32))
+                (func $i32-to-string-stringref-1 (import "app" "i32-to-string")
+                      (param i32) (result (ref extern)))
+                (func $wtf8->extern-string (import "rt" "wtf8_to_string")
+                      (param $wtf8 (ref null $wtf8)) (result (ref extern)))
+                (func $extern-string->wtf8 (import "rt" "string_to_wtf8")
+                      (param $str (ref null extern)) (result (ref $wtf8)))
                 ;; This is an odd lowering: sure, it's correct, but why
                 ;; two globals?  But having a global which is itself a
                 ;; string.const is pretty unusual, we think:

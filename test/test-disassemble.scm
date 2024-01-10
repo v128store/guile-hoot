@@ -26,16 +26,16 @@
 
 (test-equal "disassemble"
   '(module
-    (import "math" "cos" (func $cos (param f64) (result f64)))
-    (export "factorial" (func $factorial))
-    (global $the-answer i32 (i32.const 42))
-    (global $mutable (mut i32) (i32.const 0))
+    $bloop
+    (func $cos (import "math" "cos") (param f64) (result f64))
     (table $objs 10 (ref eq))
     (memory $main 1)
+    (global $the-answer i32 (i32.const 42))
+    (global $mutable (mut i32) (i32.const 0))
     (elem $stuff (table $objs) (offset (i32.const 0)) (ref i31)
           (item (i32.const 42) (ref.i31)))
     (data $bytes $main (i32.const 0) #vu8(1 2 3 4))
-    (func $factorial (param $n i32) (result i32)
+    (func $factorial (export "factorial") (param $n i32) (result i32)
           (local $result i32)
           (i32.const 1)
           (local.set $result)
@@ -58,7 +58,8 @@
   (wasm->wat
    (wat->wasm
     '(module
-      (import "math" "cos" (func $cos (param f64) (result f64)))
+      $bloop
+      (func $cos (import "math" "cos") (param f64) (result f64))
       (global $the-answer i32 (i32.const 42))
       (global $mutable (mut i32) (i32.const 0))
       (table $objs 10 (ref eq))

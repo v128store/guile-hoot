@@ -1158,7 +1158,8 @@
       (when data-count
         (unless (= (length data) data-count)
           (error "bad data-count" data-count)))
-      (make-wasm types
+      (make-wasm #f
+                 types
                  (map resolve-import-type-use imports)
                  (map (match-lambda*
                        ((($ <type-use> idx #f)

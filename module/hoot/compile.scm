@@ -150,9 +150,9 @@
   (define (add-export export exports)
     (cons export exports))
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports
+    (($ <wasm> id types imports funcs tables memories globals exports
         start elems datas tags strings custom)
-     (make-wasm types imports funcs tables memories globals
+     (make-wasm id types imports funcs tables memories globals
                 (reverse (fold1 add-export abi-exports (reverse exports)))
                 start elems datas tags strings custom))))
 
@@ -2533,7 +2533,7 @@
          (datas (reverse datas))
          (strings '())
          (custom '()))
-    (make-wasm types imports
+    (make-wasm '$scheme types imports
                (cons start-func funcs)
                tables memories globals exports
                start elems datas tags strings custom)))

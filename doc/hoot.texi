@@ -1527,6 +1527,10 @@ types that are to follow.
 Return @code{#t} if @var{obj} is a Wasm module.
 @end deffn
 
+@deffn {Procedure} wasm-id wasm
+Return the symbolic ID of @var{wasm}.
+@end deffn
+
 @deffn {Procedure} wasm-types wasm
 Return the list of types in @var{wasm}.
 @end deffn

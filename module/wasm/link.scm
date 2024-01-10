@@ -640,7 +640,7 @@
                           (reverse datas))))))
 
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports
+    (($ <wasm> id types imports funcs tables memories globals exports
         start elems datas tags strings custom)
      ;; An export can pull in funcs, tables, globals, and memories,
      ;; possibly imported.
@@ -685,15 +685,15 @@
                                                globals exports elems))
                      (types (compute-types types imports funcs tables globals
                                            elems tags)))
-                 (make-wasm types imports funcs tables memories globals exports
-                            start elems datas tags strings custom)))
+                 (make-wasm id types imports funcs tables memories globals
+                            exports start elems datas tags strings custom)))
              (fixpoint funcs' tables' globals')))))))
 
 (define* (add-stdlib wasm stdlib #:key
                      (synthesize-type (lambda (id) #f))
                      (synthesize-import (lambda (id kind) #f)))
   (match stdlib
-    (($ <wasm> std-types std-imports std-funcs std-tables std-memories
+    (($ <wasm> std-id std-types std-imports std-funcs std-tables std-memories
         std-globals std-exports std-start std-elems std-datas std-tags
         std-strings std-custom)
      (define types (make-hash-table))

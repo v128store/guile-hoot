@@ -168,7 +168,7 @@
                   (fold1 adjoin-type-uses-from-import imports types))))
 
   (match mod
-    (($ <wasm> %types imports funcs tables memories globals exports start
+    (($ <wasm> id %types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (define types (adjoin-types-from-type-uses %types funcs imports tags))
 
@@ -581,5 +581,5 @@
                     (match-lambda*
                      (((s1 . idx1) (s2 . idx2)) (< idx1 idx2))))))
        (define elems (add-declarative-segment %elems))
-       (make-wasm types imports funcs tables memories globals exports start
+       (make-wasm #f types imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))

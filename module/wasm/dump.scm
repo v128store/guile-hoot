@@ -231,7 +231,7 @@
        imported)))
 
   (match mod
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (define (import-has-kind kind)
        (match-lambda

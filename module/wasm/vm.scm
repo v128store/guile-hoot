@@ -892,7 +892,7 @@ binary, or an input port from which a WASM binary is read."
     (assoc-ref (or (assoc-ref imports mod) '()) name))
   (match module
     (($ <validated-wasm>
-        ($ <wasm> types wasm-imports funcs tables memories globals exports
+        ($ <wasm> id types wasm-imports funcs tables memories globals exports
                   start elems datas tags strings custom))
      (define (count-imports kind)
        (fold (lambda (i sum)

@@ -99,6 +99,7 @@
       id))
 
   (define (partition-clauses x)
+    (define id #f)
     (define types '())
     (define imports '())
     (define funcs '())
@@ -130,10 +131,13 @@
         (('rec . _) (set! types (cons x types)))
         (_ (error "unexpected form in module" x))))
     (match x
+      (('module (? id? mod-id) . clauses)
+       (set! id mod-id)
+       (for-each collect-raw clauses))
       (('module . clauses) (for-each collect-raw clauses))
       ((clauses ...) (for-each collect-raw clauses))
       (_ (error "unexpected module" x)))
-    (make-wasm (reverse types) (reverse imports) (reverse funcs)
+    (make-wasm id (reverse types) (reverse imports) (reverse funcs)
                (reverse tables) (reverse memories) (reverse globals)
                (reverse exports) start (reverse elems)
                (reverse datas) (reverse tags) strings '()))
@@ -701,7 +705,7 @@
         (_ (error "bad start" x)))))
 
   (match (partition-clauses expr)
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (let ((types (map parse-type-def types))
            (imports (map parse-import imports))
@@ -809,12 +813,12 @@
              (tables (filter-map visit-table tables))
              (memories (filter-map visit-memory memories))
              (globals (filter-map visit-global globals)))
-         (make-wasm types imports funcs tables memories globals exports start
-                    elems datas tags strings custom))))))
+         (make-wasm id types imports funcs tables memories globals exports
+                    start elems datas tags strings custom))))))
 
 (define (wasm->wat mod)
   (match mod
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
                elems datas tags strings custom)
      ;; TODO: Factorize type-repr code that is duplicated between here
      ;; and (wasm dump).
@@ -905,6 +909,7 @@
      (define (elem-item-repr init)
        `(item ,@(instrs-repr init)))
      `(module
+       ,@(if id `(,id) '())
        ;; Types
        ,@(map (match-lambda
                 (($ <type> id val)

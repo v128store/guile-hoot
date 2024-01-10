@@ -841,7 +841,7 @@
                        (emit-vec port items emit-item))))))
 
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (call-with-output-bytevector
       (lambda (port)

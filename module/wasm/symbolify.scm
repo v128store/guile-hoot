@@ -42,7 +42,7 @@
 
 (define (symbolify-defs wasm)
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (define (make-namer stem)
        (define known-names (make-hash-table))
@@ -148,12 +148,12 @@
                        (($ <tag> id type)
                         (make-tag (tag-name id) type)))
                       tags)))
-       (make-wasm types imports funcs tables memories globals exports start
+       (make-wasm id types imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))
 
 (define (symbolify-uses wasm)
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
      (define (make-namer names)
        (define namev (list->vector names))
@@ -436,7 +436,7 @@
                        (($ <tag> id type)
                         (make-tag (tag-name id) (visit-type-use type))))
                       tags)))
-       (make-wasm types imports funcs tables memories globals exports start
+       (make-wasm id types imports funcs tables memories globals exports start
                   elems datas tags '() custom)))))
 
 (define (symbolify-wasm wasm)

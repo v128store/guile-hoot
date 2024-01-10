@@ -41,7 +41,7 @@
 
 (define (lower-globals wasm)
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags strings custom)
 
      (define imported-func-count
@@ -225,7 +225,8 @@
          (let ((funcs (map rewrite-global-get-in-func new-funcs))
                (globals (map rewrite-global-get-in-global lowered-globals))
                (elems (map rewrite-global-get-in-elem elems)))
-           (make-wasm new-types
+           (make-wasm id
+                      new-types
                       imports
                       funcs
                       tables

@@ -455,7 +455,7 @@
           id)))
 
   (match wasm
-    (($ <wasm> types imports funcs tables memories globals exports start
+    (($ <wasm> id types imports funcs tables memories globals exports start
         elems datas tags () custom)
      ;; need to replace string-typed imports with wrappers
      (define (visit-heap-type type)
@@ -809,7 +809,8 @@
                        (make-data id 'passive #f #f (string->utf8 str)))
                      %strings)))
          (add-stdlib
-          (make-wasm types
+          (make-wasm id
+                     types
                      (map cdr imports)
                      (append funcs
                              (filter-map car imports)

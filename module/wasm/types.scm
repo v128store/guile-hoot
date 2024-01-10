@@ -29,7 +29,7 @@
   #:use-module (ice-9 match)
   #:export (<wasm>
             make-wasm wasm?
-            wasm-types wasm-imports wasm-funcs wasm-tables wasm-memories
+            wasm-id wasm-types wasm-imports wasm-funcs wasm-tables wasm-memories
             wasm-globals wasm-exports wasm-start wasm-elems wasm-datas
             wasm-tags wasm-strings wasm-custom
 
@@ -141,10 +141,11 @@
             find-type))
 
 (define-record-type <wasm>
-  (make-wasm types imports funcs tables memories
+  (make-wasm id types imports funcs tables memories
              globals exports start elems datas tags
              strings custom)
   wasm?
+  (id wasm-id)
   (types wasm-types)
   (imports wasm-imports)
   (funcs wasm-funcs)

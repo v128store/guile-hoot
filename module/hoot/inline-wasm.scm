@@ -141,7 +141,7 @@
   (match args
     ((($ <const> _ wat) . args)
      (match (false-if-exception (wat->wasm (list wat)))
-       (($ <wasm> () ()
+       (($ <wasm> mod-id () ()
            (($ <func> id ($ <type-use> #f
                             ($ <func-sig> params results))
                locals body))
@@ -308,7 +308,7 @@
      (match (wat->wasm (list code))
        ;; We expect a single func and no other definitions (types,
        ;; tables, etc).
-       (($ <wasm> () ()
+       (($ <wasm> mod-id  () ()
            ((and func ($ <func> id ($ <type-use> #f
                                       ($ <func-sig> params results))
                          locals body)))
@@ -342,7 +342,7 @@
      (assert-match args () "wasm-import: expected 0 args")
      (match (wat->wasm (list code))
        ;; We expect only a single import.
-       (($ <wasm> () ((and import ($ <import> mod name kind id type)))
+       (($ <wasm> mod-id () ((and import ($ <import> mod name kind id type)))
            () () () () () #f () () () () ())
         (with-cps cps
                   (let$ k* (n-valued-continuation src 0 k))

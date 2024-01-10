@@ -1,5 +1,6 @@
 ;;; WebAssembly assembler
 ;;; Copyright (C) 2023 Igalia, S.L.
+;;; Copyright (C) 2024 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -824,6 +825,65 @@
        (emit-expr port offset)
        (emit-vec/u8 port init))))
 
+  (define (emit-custom port custom)
+    (match custom
+      (($ <custom> name bytes)
+       (emit-name port name)
+       (put-bytevector port bytes))
+      (($ <names> module function local label type table memory global elem
+                  data field tag)
+       (define (id->string id)
+         (substring (symbol->string id) 1))
+       (define (emit-name-map port name-map)
+         (emit-vec port name-map
+                   (lambda (port pair)
+                     (match pair
+                       ((id . name)
+                        (emit-u32 port id)
+                        (emit-name port (id->string name)))))))
+       (define (emit-indirect-name-map port iname-map)
+         (emit-vec port iname-map
+                   (lambda (port pair)
+                     (match pair
+                       ((id . name-map)
+                        (emit-u32 port id)
+                        (emit-name-map port name-map))))))
+       (define (emit-subsection port id subsection)
+         (emit-u8 port id)
+         (emit-vec/u8 port subsection))
+       (define (emit-names port id name-map)
+         (unless (null? name-map)
+           (emit-subsection port id
+                            (call-with-output-bytevector
+                             (lambda (port)
+                               (emit-name-map port name-map))))))
+       (define (emit-indirect-names port id iname-map)
+         (unless (null? iname-map)
+           (emit-subsection port id
+                            (call-with-output-bytevector
+                             (lambda (port)
+                               (emit-indirect-name-map port iname-map))))))
+       (let ((bytes
+              (call-with-output-bytevector
+               (lambda (port)
+                 (when module
+                   (emit-subsection port 0
+                                    (call-with-output-bytevector
+                                     (lambda (port)
+                                       (emit-name port (id->string module))))))
+                 (emit-names port 1 function)
+                 (emit-indirect-names port 2 local)
+                 (emit-indirect-names port 3 label)
+                 (emit-names port 4 type)
+                 (emit-names port 5 table)
+                 (emit-names port 6 memory)
+                 (emit-names port 7 global)
+                 (emit-names port 8 elem)
+                 (emit-names port 9 data)
+                 (emit-indirect-names port 10 field)
+                 (emit-names port 11 tag)))))
+         (emit-custom port (make-custom "name" bytes))))))
+
   (define (emit-tag port tag)
     (match tag
       (($ <tag> id ($ <type-use> idx _))
@@ -870,4 +930,11 @@
                                  (lambda (port)
                                    (emit-u32 port (length datas))))))
         (emit-vec-section port 10 funcs emit-func-def)
-        (emit-vec-section port 11 datas emit-data))))))
+        (emit-vec-section port 11 datas emit-data)
+        (unless (null? custom)
+          (for-each (lambda (custom)
+                      (emit-section port 0
+                                    (call-with-output-bytevector
+                                     (lambda (port)
+                                       (emit-custom port custom)))))
+                    custom)))))))

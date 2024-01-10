@@ -2,7 +2,7 @@
 ;;; Copyright (C) 2023 Igalia, S.L.
 ;;; Copyright (C) 2023 Christine Lemmer-Webber <christine@spritely.institute>
 ;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
-;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
+;;; Copyright (C) 2023, 2024 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -137,6 +137,12 @@
             <custom>
             make-custom custom?
             custom-name custom-bytes
+
+            <names>
+            make-names names?
+            names-module names-func names-local names-label names-type
+            names-table names-memory names-global names-elem names-data
+            names-field names-tag
 
             find-type))
 
@@ -329,6 +335,23 @@
   (id global-id)
   (type global-type)
   (init global-init))
+
+(define-record-type <names>
+ (make-names module func local label type table
+             memory global elem data field tag)
+ names?
+ (module names-module)
+ (func names-func)
+ (local names-local)
+ (label names-label)
+ (type names-type)
+ (table names-table)
+ (memory names-memory)
+ (global names-global)
+ (elem names-elem)
+ (data names-data)
+ (field names-field)
+ (tag names-tag))
 
 (define-record-type <custom>
   (make-custom name bytes)

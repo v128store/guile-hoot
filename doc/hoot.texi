@@ -2130,7 +2130,7 @@ Return the maximum value of @var{limits} or @code{#f} if there is no
 maximum.
 @end deffn
 
-@subsection Other
+@subsection Tags
 
 Tag segments specify types of runtime errors that may be raised.
 
@@ -2146,7 +2146,9 @@ Return the symbolic ID of @var{tag}.
 Return the type of @var{tag}.
 @end deffn
 
-Custom segments specify arbitrary data that is not covered by the Wasm
+@subsection Custom sections
+
+Custom sections specify arbitrary data that is not covered by the Wasm
 specification.
 
 @deffn {Procedure} custom? obj
@@ -2159,6 +2161,86 @@ Return the name of @var{custom}.
 
 @deffn {Procedure} custom-bytes custom
 Return the bytevector of @var{custom}.
+@end deffn
+
+There is, however, one custom section that @emph{is} specified: the
+name section.  This section contains various ``name maps'' that can be
+used to translate integer identifiers to (hopefully) human-readable
+names for the purposes of debugging.
+
+Hoot supports the name subsections described in the Wasm core
+specification, the Wasm GC specification, and the extended names
+proposal:
+
+@enumerate
+@item Module name
+@item Function name map
+@item Function local indirect name map
+@item Block label indirect name map
+@item Type name map
+@item Table name map
+@item Memory name map
+@item Global name map
+@item Element name map
+@item Data name map
+@item Struct field indirect name map
+@item Tag name map
+@end enumerate
+
+Name maps are represented as association lists mapping integers to
+strings.  Indirect name maps are represented as association lists
+mapping integers to name maps.
+
+@deffn {Procedure} names? obj
+Return @code{#t} if @var{obj} is a name section object.
+@end deffn
+
+@deffn {Procedure} names-module names
+Return the module name of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-func names
+Return the function name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-local names
+Return the function local indirect name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-label names
+Return the block label indirect name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-type names
+Return the type name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-table names
+Return the table name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-memory names
+Return the memory name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-global names
+Return the global name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-elem names
+Return the element name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-data names
+Return the data name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-fields names
+Return the struct field indirect name map of @var{names}.
+@end deffn
+
+@deffn {Procedure} names-tag names
+Return the tag name map of @var{names}.
 @end deffn
 
 @node GWAT

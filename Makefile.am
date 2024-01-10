@@ -66,6 +66,7 @@ SCM_TESTS = 					\
   test/test-disassemble.scm			\
   test/test-write.scm				\
   test/test-ffi.scm				\
+  test/test-round-trip.scm			\
   #
 
 JS_TESTS = 					\

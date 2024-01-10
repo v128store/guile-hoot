@@ -1,7 +1,7 @@
 ;;; WebAssembly resolver
 ;;; Copyright (C) 2023 Igalia, S.L.
 ;;; Copyright (C) 2023 Robin Templeton <robin@spritely.institute>
-;;; Copyright (C) 2023 David Thompson <dave@spritely.institute>
+;;; Copyright (C) 2023, 2024 David Thompson <dave@spritely.institute>
 ;;;
 ;;; Licensed under the Apache License, Version 2.0 (the "License");
 ;;; you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@
 
 (define-module (wasm resolve)
   #:use-module (ice-9 match)
-  #:use-module ((srfi srfi-1) #:select (list-index))
+  #:use-module ((srfi srfi-1) #:select (find list-index))
   #:use-module (srfi srfi-11)
   #:use-module (wasm types)
-  #:export (resolve-wasm))
+  #:export (resolve-wasm
+            unresolve-wasm))
 
 (define (fold1 f l s0)
   (let lp ((l l) (s0 s0))
@@ -656,3 +657,519 @@
        (define elems (add-declarative-segment %elems))
        (make-wasm #f types imports funcs tables memories globals exports start
                   elems datas tags strings custom)))))
+
+(define (unresolve-wasm mod)
+  (match mod
+    (($ <wasm> id types imports funcs tables memories globals exports start
+        elems datas tags strings custom)
+     (match (or (find names? custom)
+                (make-names #f '() '() '() '() '() '() '() '() '() '() '()))
+       (($ <names> mod-name func-names local-names label-names type-names
+           table-names memory-names global-names elem-names data-names
+           field-names tag-names)
+        (define (make-id prefix idx)
+          (string->symbol
+           (string-append "$" prefix (number->string idx))))
+        (define (name-generator prefix)
+          (lambda (idx)
+            (make-id prefix idx)))
+        (define (unresolver* name-map fallback)
+          (lambda (idx)
+            (or (assq-ref name-map idx)
+                (fallback idx))))
+        (define (unresolver name-map prefix)
+          (unresolver* name-map (name-generator prefix)))
+        (define (indirect-ref name-map parent-idx idx)
+          (assq-ref (or (assq-ref name-map parent-idx) '()) idx))
+        (define (indirect-unresolver* name-map fallback)
+          (lambda (parent-idx idx)
+            (or (indirect-ref name-map parent-idx idx)
+                (fallback idx))))
+        (define (indirect-unresolver name-map prefix)
+          (indirect-unresolver* name-map (name-generator prefix)))
+        (define unresolve-func (unresolver func-names "func"))
+        (define unresolve-local (indirect-unresolver local-names "var"))
+        (define unresolve-label (indirect-unresolver* label-names (const #f)))
+        (define unresolve-type (unresolver type-names "type"))
+        (define unresolve-table (unresolver table-names "table"))
+        (define unresolve-memory (unresolver memory-names "memory"))
+        (define unresolve-global (unresolver global-names "global"))
+        (define unresolve-elem (unresolver elem-names "elem"))
+        (define unresolve-data (unresolver data-names "data"))
+        (define unresolve-field (indirect-unresolver field-names "field"))
+        (define unresolve-tag (unresolver tag-names "tag"))
+
+        (define (mapi proc i lst)
+          (let loop ((lst lst) (i i))
+            (match lst
+              (() '())
+              ((x . rest)
+               (cons (proc i x) (loop rest (+ i 1)))))))
+
+        (define (unresolve-param param)
+          (match param
+            (($ <param> id type)
+             (make-param id (unresolve-val-type type)))))
+
+        (define (unresolve-instructions insts func-idx)
+          (define (unresolve-ref-type rt)
+            (match rt
+              (($ <ref-type> nullable? ht)
+               (make-ref-type nullable? (unresolve-heap-type ht)))))
+          (define (unresolve-block-type type)
+            (match type
+              (#f #f)
+              ((? type-use? type)
+               (unresolve-type-use func-idx type))
+              (_ (unresolve-val-type type))))
+          (define (unresolve-memarg memarg)
+            (match memarg
+              (($ <mem-arg> idx offset align)
+               (make-mem-arg (unresolve-memory idx) offset align))))
+          (define label-count 0)
+          (define (next-label)
+            (let ((l label-count))
+              (set! label-count (+ label-count 1))
+              l))
+          (define (unresolve-instructions* insts labels)
+            (define (unresolve-label/block idx)
+              (or (list-ref labels idx) idx))
+            (map
+             (match-lambda
+               (((and inst (or 'block 'loop)) label type body)
+                (let* ((label (unresolve-label func-idx (next-label)))
+                       (labels (cons label labels)))
+                  `(,inst ,label
+                          ,(unresolve-block-type type)
+                          ,(unresolve-instructions* body labels))))
+               (('if label type consequent alternate)
+                (let ((labels (cons label labels)))
+                  `(if ,label
+                       ,(unresolve-block-type type)
+                       ,(unresolve-instructions* consequent labels)
+                       ,(unresolve-instructions* alternate labels))))
+               (('try label type body catches catch-all)
+                (let* ((label (unresolve-label func-idx (next-label)))
+                       (labels (cons label labels)))
+                  `(try ,label
+                        ,(unresolve-block-type type)
+                        ,(unresolve-instructions* body labels)
+                        ,(map (lambda (body)
+                                (unresolve-instructions* body labels))
+                              catches)
+                        ,(and catch-all
+                              (unresolve-instructions* catch-all labels)))))
+               (('try_delegate label type body handler)
+                (let* ((label (unresolve-label func-idx (next-label)))
+                       (labels (cons label labels)))
+                  `(try_delegate ,label
+                                 ,(unresolve-block-type type)
+                                 ,(unresolve-instructions* body labels)
+                                 ,(unresolve-label func-idx handler))))
+               (((and inst (or 'throw 'rethrow)) tag)
+                `(,inst ,(unresolve-tag tag)))
+               (((and inst (or 'br 'br_if)) label)
+                `(,inst ,(unresolve-label/block label)))
+               (('br_table targets default)
+                `(br_table ,@(map unresolve-label/block targets)
+                           ,(unresolve-label/block default)))
+               (((and inst (or 'call 'return_call)) func)
+                `(,inst ,(unresolve-func func)))
+               (('call_indirect table type)
+                `(call_indirect ,(unresolve-table table) ,(unresolve-type-use #f type)))
+               (((and inst (or 'call_ref 'return_call_ref)) type)
+                `(,inst ,(unresolve-type type)))
+               (('select types) `(select ,(map unresolve-val-type types)))
+               (((and inst (or 'local.get 'local.set 'local.tee)) local)
+                `(,inst ,(unresolve-local func-idx local)))
+               (((and inst (or 'global.get 'global.set)) global)
+                `(,inst ,(unresolve-global global)))
+               (((and inst (or 'table.get 'table.set)) table)
+                `(,inst ,(unresolve-table table)))
+               (((and inst (or 'memory.size 'memory.grow)) mem)
+                `(,inst ,(unresolve-memory mem)))
+               (((and inst (or 'i32.load 'i64.load 'f32.load 'f64.load
+                               'i32.load8_s 'i32.load8_u 'i32.load16_s 'i32.load16_u
+                               'i64.load8_s 'i64.load8_u 'i64.load16_s 'i64.load16_u
+                               'i64.load32_s 'i64.load32_u
+                               'i32.store 'i64.store 'f32.store 'f64.store
+                               'i32.store8 'i32.store16
+                               'i64.store8 'i64.store16 'i64.store32))
+                 mem)
+                `(,inst ,(unresolve-memarg mem)))
+               (('ref.null ht) `(ref.null ,(unresolve-heap-type ht)))
+               (('ref.func f) `(ref.func ,(unresolve-func f)))
+
+               ;; GC instructions.
+               (((and inst (or 'ref.test 'ref.cast)) rt)
+                `(,inst ,(unresolve-ref-type rt)))
+               (((and inst (or 'br_on_cast 'br_on_cast_fail)) label rt1 rt2)
+                `(,inst ,(unresolve-label func-idx label)
+                        ,(unresolve-ref-type rt1) ,(unresolve-ref-type rt2)))
+               (((and inst (or 'struct.get 'struct.get_s 'struct.get_u 'struct.set))
+                 type field)
+                `(,inst ,(unresolve-type type) ,(unresolve-field type field)))
+               (((and inst (or 'struct.new 'struct.new_default)) type)
+                `(,inst ,(unresolve-type type)))
+               (((and inst (or 'array.get 'array.get_s 'array.get_u 'array.set)) type)
+                `(,inst ,(unresolve-type type)))
+               (('array.new_fixed type len)
+                `(array.new_fixed ,(unresolve-type type) ,len))
+               (((and inst (or 'array.new 'array.new_default)) type)
+                `(,inst ,(unresolve-type type)))
+               (((and inst (or 'array.new_data 'array.init_data)) type data)
+                `(,inst ,(unresolve-type type) ,(unresolve-data data)))
+               (((and inst (or 'array.new_elem 'array.init_elem)) type elem)
+                `(,inst ,(unresolve-type type) ,(unresolve-elem elem)))
+               (('array.fill type)
+                `(array.fill ,(unresolve-type type)))
+               (('array.copy dst src)
+                `(array.copy ,(unresolve-type dst) ,(unresolve-type src)))
+
+               ;; Stringref instructions.
+               (('string.const idx)
+                `(string.const (list-ref strings idx)))
+               (((and inst (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8
+                               'string.new_wtf16
+                               'string.encode_utf8 'string.encode_lossy_utf8
+                               'string.encode_wtf8 'string.encode_wtf16
+                               'stringview_wtf8.encode_utf8
+                               'stringview_wtf8.encode_lossy_utf8
+                               'stringview_wtf8.encode_wtf8
+                               'stringview_wtf16.encode))
+                 mem)
+                `(,inst ,(unresolve-memarg mem)))
+
+               ;; Misc instructions.
+               (('memory.init data mem)
+                `(memory.init ,(unresolve-data data) ,(unresolve-memory mem)))
+               (('data.drop data)
+                `(data.drop ,(unresolve-data data)))
+               (('memory.copy dst src)
+                `(memory.copy ,(unresolve-memory dst) ,(unresolve-memory src)))
+               (('memory.fill mem)
+                `(memory.fill ,(unresolve-memory mem)))
+               (('table.init table elem)
+                `(table.init ,(unresolve-table table) ,(unresolve-elem elem)))
+               (('elem.drop elem)
+                `(elem.drop ,(unresolve-elem elem)))
+               (('table.copy dst src)
+                `(table.copy ,(unresolve-table dst) ,(unresolve-table src)))
+               (((and inst (or 'table.grow 'table.size 'table.fill)) table)
+                `(,inst ,(unresolve-table table)))
+
+               ;; Not yet implemented: simd mem ops, atomic mem ops.
+
+               ((? symbol? op) `(,op))
+               (inst inst))
+             insts))
+          (unresolve-instructions* insts '()))
+
+        (define (unresolve-heap-type ht)
+          (match ht
+            ((or 'func 'extern
+                 'any 'eq 'i31 'noextern 'nofunc 'struct 'array 'none
+                 'string 'stringview_wtf8 'stringview_wtf16 'stringview_iter)
+             ht)
+            (_ (unresolve-type ht))))
+
+        (define (unresolve-val-type vt)
+          (match vt
+            ((or 'i32 'i64 'f32 'f64 'v128
+                 'funcref 'externref 'anyref 'eqref 'i31ref
+                 'nullexternref 'nullfuncref
+                 'structref 'arrayref 'nullref
+                 'stringref
+                 'stringview_wtf8ref 'stringview_wtf16ref 'stringview_iterref)
+             vt)
+            (($ <ref-type> nullable? ht)
+             (make-ref-type nullable? (unresolve-heap-type ht)))))
+
+        (define (unresolve-storage-type type)
+          (match type
+            ((or 'i8 'i16) type)
+            (_ (unresolve-val-type type))))
+
+        (define (unresolve-type-use func-idx type)
+          (match type
+            (($ <type-use> idx ($ <func-sig> params results))
+             (let ((params (mapi (lambda (idx param)
+                                   (match param
+                                     (($ <param> id type)
+                                      (make-param (unresolve-local func-idx idx)
+                                                  (unresolve-val-type type)))))
+                                 0 params))
+                   (results (map unresolve-val-type results)))
+               (make-type-use #f (make-func-sig params results))))))
+
+        ;; During resolution, all anonymous function signatures found
+        ;; in block types are added to the types section.  In the
+        ;; unresolved output we want to remove these, leaving only
+        ;; function types that are referenced by name.
+        (define referenced-types (make-hash-table))
+        (define (mark-type-reference! idx)
+          (hashq-set! referenced-types idx #t))
+        (define (type-referenced? idx)
+          (hashq-ref referenced-types idx))
+        (define (scan-heap-type ht)
+          (when (exact-integer? ht)
+            (mark-type-reference! ht)))
+        (define (scan-val-type vt)
+          (match vt
+            ((? exact-integer?) (mark-type-reference! vt))
+            ((? symbol?) #f)
+            (($ <ref-type> nullable? ht)
+             (scan-heap-type ht))))
+        (define (scan-param param)
+          (match param
+            (($ <param> id type)
+             (scan-val-type type))))
+        (define (scan-field field)
+          (match field
+            (($ <field> id mutable? type)
+             (scan-val-type type))))
+        (define (scan-type type)
+          (match type
+            (($ <func-sig> params results)
+             (for-each scan-param params)
+             (for-each scan-val-type results))
+            (($ <sub-type> final? supers type)
+             (scan-type type))
+            (($ <struct-type> fields)
+             (for-each scan-field fields))
+            (($ <array-type> mutable? type)
+             (scan-val-type type))))
+        (define (scan-type-def type)
+          (match type
+            (($ <type> id type)
+             (scan-type type))
+            (($ <rec-group> types)
+             (for-each (match-lambda
+                         (($ <type> id type)
+                          (scan-type type)))
+                       types))))
+        (define (scan-type-use type-use)
+          (match type-use
+            (($ <type-use> idx type)
+             (scan-type type))))
+        (define (scan-import import)
+          (match import
+            (($ <import> mod name 'func id type)
+             (scan-type-use type))
+            (($ <import> mod name 'table id ($ <table-type> limits type))
+             (scan-type type))
+            (($ <import> mod name 'memory id type)
+             #t)
+            (($ <import> mod name 'global id ($ <global-type> mutable? type))
+             (scan-type type))))
+        (define (scan-elem elem)
+          (match elem
+            (($ <elem> id mode table type offset inits)
+             (scan-val-type type))))
+        (define (scan-local local)
+          (match local
+            (($ <local> id type)
+             (scan-val-type type))))
+        (define (scan-inst inst)
+          (match inst
+            (((or 'block 'loop) label type body)
+             (scan-body body))
+            (('if label type consequent alternate)
+             (scan-body consequent)
+             (scan-body alternate))
+            (('try label type body catches catch-all)
+             (scan-body body))
+            (('try_delegate label type body handler)
+             (scan-body body))
+            (((or 'call_indirect 'return_call_indirect) table type)
+             (scan-type-use type))
+            (_ #t)))
+        (define (scan-body body)
+          (for-each scan-inst body))
+        (define (scan-func func)
+          (match func
+            (($ <func> id type locals body)
+             (scan-type-use type)
+             (for-each scan-local locals)
+             (scan-body body))))
+        (define (scan-table table)
+          (match table
+            (($ <table> id ($ <table-type> limits elem-type) init)
+             (scan-val-type elem-type)
+             (when init
+               (scan-body init)))))
+        (define (scan-global global)
+          (match global
+            (($ <global> id ($ <global-type> mutable? type) init)
+             (scan-val-type type)
+             (when init
+               (scan-body init)))))
+        (define (scan-tag idx tag)
+          (match tag
+            (($ <tag> id type)
+             (scan-type-use type))))
+        (for-each scan-type-def types)
+        (for-each scan-import imports)
+        (for-each scan-elem elems)
+        (for-each scan-func funcs)
+        (for-each scan-table tables)
+        (for-each scan-global globals)
+        (for-each scan-tag tags)
+
+        (define (visit-types types)
+          (define (unresolve-base idx type)
+            (match type
+              (($ <func-sig> params results)
+               (make-func-sig (map unresolve-param params)
+                              (map unresolve-val-type results)))
+              (($ <array-type> mutable? type)
+               (make-array-type mutable? (unresolve-storage-type type)))
+              (($ <struct-type> fields)
+               (make-struct-type
+                (mapi (lambda (field-idx field)
+                        (match field
+                          (($ <field> id mutable? type)
+                           (make-field (unresolve-field idx field-idx)
+                                       mutable?
+                                       (unresolve-storage-type type)))))
+                      0 fields)))))
+          (define (unresolve-sub idx type)
+            (match type
+              (($ <type> id type)
+               (make-type (unresolve-type idx)
+                          (match type
+                            (($ <sub-type> final? supers type)
+                             (make-sub-type final?
+                                            (map unresolve-heap-type supers)
+                                            (unresolve-base idx type)))
+                            (_ (unresolve-base idx type)))))))
+          (let loop ((types types) (idx 0))
+            (match types
+              (() '())
+              ((($ <rec-group> types) . rest)
+               (cons (make-rec-group (mapi unresolve-sub idx types))
+                     (loop rest (+ idx (length types)))))
+              (((and type ($ <type> id (? func-sig?))) . rest)
+               (if (type-referenced? idx)
+                   (cons (unresolve-sub idx type) (loop rest (+ idx 1)))
+                   (loop rest (+ idx 1))))
+              ((type . rest)
+               (cons (unresolve-sub idx type) (loop rest (+ idx 1)))))))
+
+        (define (select-imports kind)
+          (filter (lambda (import)
+                    (eq? (import-kind import) kind))
+                  imports))
+        (define func-imports (select-imports 'func))
+        (define table-imports (select-imports 'table))
+        (define memory-imports (select-imports 'memory))
+        (define global-imports (select-imports 'global))
+        (define (visit-imports imports)
+          (let loop ((imports imports) (func 0) (table 0) (memory 0) (global 0))
+            (match imports
+              (() '())
+              ((($ <import> mod name 'func id type) . rest)
+               (cons (make-import mod name 'func (unresolve-func func)
+                                  (unresolve-type-use #f type))
+                     (loop rest (+ func 1) table memory global)))
+              ((($ <import> mod name 'table id ($ <table-type> limits type)) . rest)
+               (cons (make-import mod name 'table (unresolve-table table)
+                                  (make-table-type limits (unresolve-val-type type)))
+                     (loop rest func (+ table 1) memory global)))
+              ((($ <import> mod name 'memory id type) . rest)
+               (cons (make-import mod name 'memory (unresolve-memory memory) type)
+                     (loop rest func table (+ memory 1) global)))
+              ((($ <import> mod name 'global id ($ <global-type> mutable? type))
+                . rest)
+               (cons (make-import mod name 'global (unresolve-global global)
+                                  (make-global-type mutable?
+                                                    (unresolve-val-type type)))
+                     (loop rest func table memory (+ global 1)))))))
+
+        (define (visit-export export)
+          (match export
+            (($ <export> name 'func idx)
+             (make-export name 'func (unresolve-func idx)))
+            (($ <export> name 'table idx)
+             (make-export name 'table (unresolve-table idx)))
+            (($ <export> name 'memory idx)
+             (make-export name 'memory (unresolve-memory idx)))
+            (($ <export> name 'global idx)
+             (make-export name 'global (unresolve-global idx)))))
+
+        (define (visit-elem idx elem)
+          (match elem
+            (($ <elem> id mode table type offset inits)
+             (make-elem (unresolve-elem idx)
+                        mode
+                        (and table (unresolve-table table))
+                        (unresolve-val-type type)
+                        (and offset (unresolve-instructions offset #f))
+                        (map (lambda (init)
+                               (unresolve-instructions init #f))
+                             inits)))))
+
+        (define (visit-data idx data)
+          (match data
+            (($ <data> id mode mem offset init)
+             (make-data (unresolve-data idx)
+                        mode
+                        (and mem (unresolve-memory mem))
+                        (and offset (unresolve-instructions offset #f))
+                        init))))
+
+        (define (visit-start start)
+          (and start (unresolve-func start)))
+
+        (define (visit-func idx func)
+          (match func
+            (($ <func> id (and type ($ <type-use> _ ($ <func-sig> params)))
+                locals body)
+             (make-func (unresolve-func idx)
+                        (unresolve-type-use idx type)
+                        (mapi (lambda (local-idx local)
+                                (match local
+                                  (($ <local> id type)
+                                   (make-local (unresolve-local idx local-idx)
+                                               (unresolve-val-type type)))))
+                              (length params)
+                              locals)
+                        (unresolve-instructions body idx)))))
+
+        (define (visit-table idx table)
+          (match table
+            (($ <table> id ($ <table-type> limits elem-type) init)
+             (make-table (unresolve-table idx)
+                         (make-table-type limits (unresolve-val-type elem-type))
+                         (and init (unresolve-instructions init #f))))))
+
+        (define (visit-memory idx memory)
+          (match memory
+            (($ <memory> id limits)
+             (make-memory (unresolve-memory idx) limits))))
+
+        (define (visit-global idx global)
+          (match global
+            (($ <global> id ($ <global-type> mutable? type) init)
+             (make-global (unresolve-global idx)
+                          (make-global-type mutable? (unresolve-val-type type))
+                          (unresolve-instructions init #f)))))
+
+        (define (visit-tag idx tag)
+          (match tag
+            (($ <tag> id type)
+             (make-tag (unresolve-tag idx) (unresolve-type-use #f type)))))
+
+        (let ((types (visit-types types))
+              (imports (visit-imports imports))
+              (exports (map visit-export exports))
+              (elems (mapi visit-elem 0 elems))
+              (datas (mapi visit-data 0 datas))
+              (start (visit-start start))
+              (funcs (mapi visit-func (length func-imports) funcs))
+              (tables (mapi visit-table (length table-imports) tables))
+              (memories (mapi visit-memory (length memory-imports) memories))
+              (globals (mapi visit-global (length global-imports) globals))
+              (tags (mapi visit-tag 0 tags)))
+          (make-wasm mod-name types imports funcs tables memories globals exports start
+                     elems datas tags strings custom)))))))

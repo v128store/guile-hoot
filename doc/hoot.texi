@@ -2323,6 +2323,18 @@ include a name map that maps the original, human-readable names to the
 resolved integer identifiers.
 @end deffn
 
+There is also the @code{unresolve-wasm} procedure which performs the
+reverse translation (though not all of what @code{resolve-wasm} does
+is reversible.)
+
+@deffn {Procedure} unresolve-wasm mod
+Lift the Wasm module @var{mod}, assumed to be in lowered form via
+@code{resolve-wasm}, into a form where integer identifiers are
+replaced with human-readable names.  If a name map is present, the
+original names are restored, otherwise unique names are
+auto-generated.
+@end deffn
+
 @node Linker
 @section Linker
 

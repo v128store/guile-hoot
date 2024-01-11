@@ -2546,6 +2546,7 @@
                                (warning-level #f)
                                (dump-cps? #f)
                                (dump-wasm? #f)
+                               (debug? #f)
                                (opts '()))
   (define (lower-and-tailify cps)
     (define lower-cps
@@ -2558,7 +2559,7 @@
     (let* ((wasm (lower-to-wasm cps #:import-abi? import-abi?))
            (wasm (if export-abi? (export-abi wasm) wasm))
            (wasm (add-stdlib wasm (compute-stdlib import-abi?)))
-           (wasm (lower-wasm wasm)))
+           (wasm (lower-wasm wasm #:debug? debug?)))
       (when dump-wasm?
         (format #t "\n\nThe wasm we are going to emit:\n")
         (dump-wasm wasm))
@@ -2654,6 +2655,7 @@
                   (warning-level (default-warning-level))
                   (dump-cps? #f)
                   (dump-wasm? #f)
+                  (debug? #f)
                   (opts '()))
   (unless (eq? from 'scheme)
     (error "Only the Scheme language front-end is currently supported"))
@@ -2671,6 +2673,7 @@
                          #:warning-level warning-level
                          #:dump-cps? dump-cps?
                          #:dump-wasm? dump-wasm?
+                         #:debug? debug?
                          #:opts opts)))
 
 (define* (read-and-compile port #:key
@@ -2682,6 +2685,7 @@
                            (warning-level (default-warning-level))
                            (dump-cps? #f)
                            (dump-wasm? #f)
+                           (debug? #f)
                            (opts '()))
   (unless (eq? from 'scheme)
     (error "Only the Scheme language front-end is currently supported"))
@@ -2699,6 +2703,7 @@
              #:warning-level warning-level
              #:dump-cps? dump-cps?
              #:dump-wasm? dump-wasm?
+             #:debug? debug?
              #:opts opts)))
 
 (define* (compile-file input-file #:key
@@ -2711,6 +2716,7 @@
                        (warning-level (default-warning-level))
                        (dump-cps? #f)
                        (dump-wasm? #f)
+                       (debug? #f)
                        (opts '()))
   (call-with-input-file input-file
     (lambda (in)
@@ -2724,6 +2730,7 @@
                                     #:warning-level warning-level
                                     #:dump-cps? dump-cps?
                                     #:dump-wasm? dump-wasm?
+                                    #:debug? debug?
                                     #:opts opts)))
         (let ((bytes (assemble-wasm wasm)))
           (call-with-output-file output-file

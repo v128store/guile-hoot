@@ -26,7 +26,9 @@
 
 (define stringref-lowering (make-parameter 'wtf8))
 
-(define* (lower-wasm wasm #:key (stringref-lowering (stringref-lowering)))
+(define* (lower-wasm wasm #:key (stringref-lowering (stringref-lowering))
+                     (debug? #f))
   (resolve-wasm
    (lower-globals
-    (lower-stringrefs wasm #:strategy stringref-lowering))))
+    (lower-stringrefs wasm #:strategy stringref-lowering))
+   #:name-section? debug?))

@@ -531,7 +531,8 @@ interface to the Wasm compiler backend.
                    [#:env (default-hoot-environment)] @
                    [#:optimization-level (default-optimization-level)] @
                    [#:warning-level (default-warning-level)] @
-                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:debug? #f] @
+                   [#:opts '()]
 
 Compile the Scheme expression @var{exp} to Wasm and return a Wasm
 module.  When @var{import-abi?} is @code{#t}, the Wasm module will be
@@ -540,6 +541,10 @@ built such that it needs to import its ABI from another module.  When
 that it exports its ABI functions.  A typical use of these flags is to
 export the ABI from one ``main'' module and then import that ABI into
 any additional modules that are being used.
+
+When @var{debug?} is @code{#t} then debugging information will be
+generated.  By default, this is turned off as it greatly increases
+binary size.
 
 @xref{Compiling Scheme Code,,,Guile Reference} for more information
 about invoking Guile's compiler.
@@ -550,7 +555,8 @@ about invoking Guile's compiler.
                    [#:env (default-hoot-environment)] @
                    [#:optimization-level (default-optimization-level)] @
                    [#:warning-level (default-warning-level)] @
-                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:debug? #f] @
+                   [#:opts '()]
 
 Like @code{compile}, but read the Scheme expression from @var{port}.
 @end deffn
@@ -561,7 +567,8 @@ Like @code{compile}, but read the Scheme expression from @var{port}.
                    [#:env (default-hoot-environment)] @
                    [#:optimization-level (default-optimization-level)] @
                    [#:warning-level (default-warning-level)] @
-                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:opts '()]
+                   [#:dump-cps? #f] [#:dump-wasm? #f] [#:debug? #f] @
+                   [#:opts '()]
 
 Like @code{compile}, but read the Scheme expression from
 @var{input-file}.

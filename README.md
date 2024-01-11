@@ -174,9 +174,8 @@ From the Guile prompt, enter the following to evaluate the program
 `42` in Hoot's built-in WASM interpreter:
 
 ```
-scheme@(guile-user)> ,use (hoot reflect) (wasm parse)
-scheme@(guile-user)> (define reflect-wasm (call-with-input-file "js-runtime/reflect.wasm" parse-wasm))
-scheme@(guile-user)> (compile-value reflect-wasm 42)
+scheme@(guile-user)> ,use (hoot reflect)
+scheme@(guile-user)> (compile-value 42)
 $5 = 42
 ```
 
@@ -184,7 +183,7 @@ More interestingly, Scheme procedures that live within the WASM guest
 module can be called from Scheme as if they were host procedures:
 
 ```
-scheme@(guile-user)> (define hello (compile-value reflect-wasm '(lambda (x) (list "hello" x))))
+scheme@(guile-user)> (define hello (compile-value '(lambda (x) (list "hello" x))))
 scheme@(guile-user)> hello
 $6 = #<hoot #<procedure>>
 scheme@(guile-user)> (hello "world")
@@ -211,7 +210,8 @@ bignum implementation and weak maps.  For web browsers, these
 facilities are provided by [`reflect.js`](./js-runtime/reflect.js).
 To help in adapting between JavaScript and the ABI of compiled Scheme
 code, there is an auxiliary WebAssembly module `reflect.wasm` that
-needs to be compiled from [`reflect.wat`](./js-runtime/reflect.wat).
+needs to be compiled from [`reflect.wat`](./js-runtime/reflect.wat),
+as well as string helper called `wtf8.wasm`.
 
 See the manual for a more in-depth tutorial and full API
 documentation!

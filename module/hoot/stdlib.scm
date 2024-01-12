@@ -1813,6 +1813,17 @@
      (global $abort-to-prompt-primitive (ref eq)
              (struct.new $proc (i32.const 0) (ref.func $abort-to-prompt)))
 
+     (func $maybe-grow-argv (param $size i32)
+           (local $diff i32)
+           (local.set $diff (i32.sub (local.get $size)
+                                     (table.size $argv)))
+           (if (i32.gt_s (local.get $diff) (i32.const 0))
+               (then
+                (table.grow $argv
+                            (ref.null eq)
+                            (local.get $diff))
+                (drop))))
+
      (func $arg-ref (param $n i32)
            (result (ref eq))
            (block
@@ -1977,10 +1988,19 @@
                                         (struct.get $pair $cdr
                                                     (ref.cast $pair (local.get $args)))))
                             (then
-                             (table.set $argv
-                                        (i32.sub (local.get $nargs) (i32.const 8))
-                                        (struct.get $pair $car
-                                                 (ref.cast $pair (local.get $args))))
+                             (if (i32.lt_u (table.size $argv)
+                                           (i32.sub (local.get $nargs) (i32.const 7)))
+                                 (then
+                                  (table.grow $argv
+                                              (struct.get $pair $car
+                                                          (ref.cast $pair (local.get $args)))
+                                              (i32.const 1))
+                                  (drop))
+                                 (else
+                                  (table.set $argv
+                                             (i32.sub (local.get $nargs) (i32.const 8))
+                                             (struct.get $pair $car
+                                                         (ref.cast $pair (local.get $args))))))
                              (local.set $nargs (i32.add (local.get $nargs) (i32.const 1)))
                              (br $lp)))))
                         (else (local.set $nargs (i32.const 7)))))

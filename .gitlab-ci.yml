@@ -1,10 +1,34 @@
 default:
   image: registry.gitlab.com/spritely/guile-hoot:latest
 
-test:
+stages:
+  - build
+  - test
+
+build:
+  stage: build
   tags:
     - saas-linux-medium-amd64
   script:
     - ./bootstrap.sh
     - ./configure
+    - make -j$(nproc)
+  artifacts:
+    untracked: true
+
+test:
+  stage: test
+  tags:
+    - saas-linux-medium-amd64
+  script:
     - make check -j$(nproc)
+
+size-metrics:
+  stage: test
+  tags:
+    - saas-linux-medium-amd64
+  script:
+    - ./pre-inst-env guile size-metrics.scm > metrics.txt
+  artifacts:
+    reports:
+      metrics: metrics.txt

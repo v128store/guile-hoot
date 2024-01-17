@@ -3992,7 +3992,7 @@ object @var{exception}."
                 (struct.get $hash-table $size (local.get $table))))
    hashtable))
 
-(define* (hashtable-ref hashtable key default)
+(define* (hashtable-ref hashtable key #:optional default)
   (check-type hashtable hashtable? 'hashtable-ref)
   (%inline-wasm
    '(func (param $table (ref $hash-table))

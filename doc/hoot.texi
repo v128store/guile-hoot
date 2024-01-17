@@ -1267,8 +1267,103 @@ Hoot includes some of its own Scheme extensions.  This chapter
 documents the APIs of these extensions.
 
 @menu
+* Hash tables::                   Mutable key/value data structures.
 * Foreign function interface::    Call host functions from Scheme.
 @end menu
+
+@node Hash tables
+@section Hash tables
+
+There are many mutable hashtable APIs amongst all the various Scheme
+implementations, standards, and SRFIs.  From our point of view, there
+is no clear ``best'' hashtable API that has emerged, but we think the
+R6RS interface is OK.  Guile's own hashtable API has design issues
+that are best left in the past.  So, the Hoot hashtable API is
+R6RS-like.
+
+Currently, this interface supports keys hashed by object identity
+(@code{eq?}) only.  The object equivalence (@code{eqv?}) and deep
+object equality (@code{equal?}) hashing strategies are not yet
+implemented.
+
+@deffn {Procedure} make-eq-hashtable
+Return a new, empty hash table.
+@end deffn
+
+@deffn {Procedure} hashtable? obj
+Return @code{#t} if @var{obj}
+@end deffn
+
+@deffn {Procedure} hashtable-size hashtable
+Return the number of key/value pairs in @var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-ref hashtable key default
+Return the value associated with @var{key} in @var{hashtable} or
+@var{default} if there is no such association.
+@end deffn
+
+@deffn {Procedure} hashtable-set! hashtable key value
+Modify @var{hashtable} to associate @var{key} with @var{value},
+overwriting any previous association that may have existed.
+@end deffn
+
+@deffn {Procedure} hashtable-delete! hashtable key
+Remove the association with @var{key} in @var{hashtable}, if one
+exists.
+@end deffn
+
+@deffn {Procedure} hashtable-clear! hashtable
+Remove all of the key/value associations in @var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-contains? hashtable key
+Return @code{#t} if @var{key} has an associated value in
+@var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-copy hashtable
+Return a copy of @var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-keys hashtable
+Return a vector of keys in @var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-entries hashtable
+Return a vector of values in @var{hashtable}.
+@end deffn
+
+@deffn {Procedure} hashtable-for-each proc hashtable
+For each key/value pair in @var{hashtable}, call @var{proc} with two
+arguments: the key and the value.
+@end deffn
+
+Hoot also includes weak key hash tables that wrap those of the Wasm
+host platform, such as the @code{WeakMap} JavaScript class on the web.
+
+@deffn {Procedure} make-weak-key-hashtable
+Return a new weak key hashtable.
+@end deffn
+
+@deffn {Procedure} weak-key-hashtable? obj
+Return @code{#t} if @var{obj} is a weak key hashtable.
+@end deffn
+
+@deffn {Procedure} weak-key-hashtable-ref hashtable key [default #f]
+Return the value associated with @var{key} in @var{hashtable} or
+@var{default} if there is no such association.
+@end deffn
+
+@deffn {Procedure} weak-key-hashtable-set! hashtable key value
+Modify @var{hashtable} to associate @var{key} with @var{value},
+overwriting any previous association that may have existed.
+@end deffn
+
+@deffn {Procedure} weak-key-hashtable-delete! hashtable key
+Remove the association with @var{key} in @var{hashtable}, if one
+exists.
+@end deffn
 
 @node Foreign function interface
 @section Foreign function interface

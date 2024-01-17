@@ -3532,7 +3532,6 @@
              `((call $fixnum? (local.get $a))
                ,(arith-cond
                  ;; Adapted from the `quo' fixnum fast path in (hoot compile).
-                 ;; TODO: implement for b = -1
                  '((call $fixnum? (local.get $b))
                    (local.set $a-i32 (call $fixnum->i32
                                            (ref.cast i31 (local.get $a))))
@@ -3542,9 +3541,12 @@
                        (then
                         (call $die0 (string.const "$quo"))
                         (unreachable)))
-                   (i32.div_s (local.get $a-i32) (local.get $b-i32))
-                   (i32.const 1) (i32.shl)
-                   (ref.i31))
+                   (if (i32.eq (local.get $b-i32) (i32.const -1))
+                       (then
+                        (return (call $mul (local.get $a) (local.get $b)))))
+                   (ref.i31 (i32.shl (i32.div_s (local.get $a-i32)
+                                                (local.get $b-i32))
+                                     (i32.const 1))))
                  '((ref.test $bignum (local.get $b))
                    (return (call $normalize-bignum
                                  (call $bignum-quo*

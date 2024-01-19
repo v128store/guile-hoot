@@ -982,6 +982,11 @@ Display information about @var{wasm}, or the current Wasm instance
 when debugging.
 @end deffn
 
+@deffn {REPL Command} wasm-disassemble [wasm]
+Display the disassembly of @var{wasm}, or the current Wasm instance
+when debugging, in WAT form.
+@end deffn
+
 @deffn {REPL Command} wasm-continue
 When in a debugger, exit and resume Wasm execution.  In the event that
 this is run after trapping a runtime error, your warranty is void and

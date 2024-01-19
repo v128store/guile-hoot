@@ -23,6 +23,7 @@
   #:use-module (hoot reflect)
   #:use-module (ice-9 control)
   #:use-module (ice-9 match)
+  #:use-module (ice-9 pretty-print)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
   #:use-module (system repl command)
@@ -30,8 +31,10 @@
   #:use-module (system repl debug)
   #:use-module (system repl repl)
   #:use-module (wasm dump)
+  #:use-module (wasm resolve)
   #:use-module (wasm types)
-  #:use-module (wasm vm))
+  #:use-module (wasm vm)
+  #:use-module (wasm wat))
 
 (define (make-id prefix idx)
   (string->symbol
@@ -485,6 +488,18 @@ Display information about WASM, or the current WASM instance when debugging."
                ((current-wasm-debug) => wasm-debug-instance)
                (else (error "no WASM object specified"))))
              #:dump-func-defs? #f))
+
+(define-meta-command ((wasm-disassemble wasm) repl #:optional exp)
+  "wasm-disassemble [WASM]
+Display the disassembly of WASM, or the current WASM instance when debugging."
+  (pretty-print
+   (wasm->wat
+    (unresolve-wasm
+     (->wasm
+      (cond
+       (exp (repl-eval repl exp))
+       ((current-wasm-debug) => wasm-debug-instance)
+       (else (error "no WASM object specified"))))))))
 
 (define-meta-command ((wasm-trace wasm) repl exp)
   "wasm-trace EXP

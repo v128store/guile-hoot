@@ -33,6 +33,174 @@
   #:use-module (wasm types)
   #:use-module (wasm vm))
 
+(define (make-id prefix idx)
+  (string->symbol
+   (string-append "$" prefix (number->string idx))))
+
+(define (name-ref name-map idx)
+  (and name-map (assq-ref name-map idx)))
+
+(define (indirect-name-ref iname-map parent-idx idx)
+  (and iname-map (name-ref (assq-ref iname-map parent-idx) idx)))
+
+(define-syntax-rule (define-name-ref name getter prefix)
+  (define (name names idx)
+    (or (and names (name-ref (getter names) idx))
+        (make-id prefix idx))))
+
+(define-syntax-rule (define-indirect-name-ref name getter prefix)
+  (define (name names parent-idx idx)
+    (or (and names (indirect-name-ref (getter names) parent-idx idx))
+        (make-id prefix idx))))
+
+(define-name-ref func-name names-func "func")
+(define-indirect-name-ref local-name names-local "var")
+(define-name-ref type-name names-type "type")
+(define-name-ref table-name names-table "table")
+(define-name-ref memory-name names-memory "memory")
+(define-name-ref global-name names-global "global")
+(define-name-ref elem-name names-elem "elem")
+(define-name-ref data-name names-data "data")
+(define-indirect-name-ref field-name names-field "field")
+(define-name-ref tag-name names-tag "tag")
+
+(define (heap-type-repr names ht)
+  (match ht
+    ((or 'func 'extern
+         'any 'eq 'i31 'noextern 'nofunc 'struct 'array 'none
+         'string 'stringview_wtf8 'stringview_wtf16 'stringview_iter)
+     ht)
+    (_ (type-name names ht))))
+
+(define (ref-type-repr names rt)
+  (match rt
+    (($ <ref-type> nullable? ht)
+     `(ref ,@(if nullable? '(null) '()) ,(heap-type-repr names ht)))))
+
+(define (val-type-repr names vt)
+  (match vt
+    ((or 'i32 'i64 'f32 'f64 'v128
+         'funcref 'externref 'anyref 'eqref 'i31ref
+         'nullexternref 'nullfuncref
+         'structref 'arrayref 'nullref
+         'stringref
+         'stringview_wtf8ref 'stringview_wtf16ref 'stringview_iterref)
+     vt)
+    ((? ref-type? rt)
+     (ref-type-repr names rt))))
+
+(define (memarg-repr names memarg)
+  (define (make-prefix-arg prefix x)
+    (if (zero? x)
+        '()
+        (list (string->symbol (string-append prefix (number->string x))))))
+  (match memarg
+    (($ <mem-arg> memory offset align)
+     `(,(memory-name names memory)
+       ,@(make-prefix-arg "offset=" offset)
+       ,@(make-prefix-arg "align=" align)))))
+
+(define (block-type-repr names bt)
+  (match bt
+    (#f
+     '())
+    ((? symbol?)
+     `(,bt))
+    (($ <type-use> _ ($ <func-sig> params results))
+     (append (map (match-lambda
+                    (($ <param> _ type)
+                     `(param ,(val-type-repr names type))))
+                  params)
+             (map (lambda (vt)
+                    `(result ,(val-type-repr names vt)))
+                  results)))
+    ((? ref-type? rt)
+     `(,(ref-type-repr names rt)))))
+
+;; TODO: Label names.  We don't have control stack info here.
+(define (instruction-repr instr names strings func-idx)
+  (match instr
+    (((and op (or 'local.get 'local.set 'local.tee)) local)
+     `(,op ,(local-name names func-idx local)))
+    (((and op (or 'global.get 'global.set)) global)
+     `(,op ,(global-name names global)))
+    (((and inst (or 'throw 'rethrow)) tag)
+     `(,inst ,(tag-name names tag)))
+    (((and inst (or 'call 'return_call)) func)
+     `(,inst ,(func-name names func)))
+    (('call_indirect table ($ <type-use> type))
+     `(call_indirect ,(table-name names table) ,(type-name names type)))
+    (((and inst (or 'call_ref 'return_call_ref)) type)
+     `(,inst ,(type-name names type)))
+    (('select types) `(select ,(map val-type-repr types)))
+    (('ref.null ht) `(ref.null ,(heap-type-repr names ht)))
+    (('ref.func f) `(ref.func ,(func-name names f)))
+    ;; Memories
+    (((and op (or 'i32.load 'i32.load16_s 'i32.load16_u 'i32.load8_s
+                  'i32.load8_u 'i32.store 'i32.store16 'i32.store8
+                  'i64.load 'i64.load32_s 'i64.load32_u 'i64.load16_s
+                  'i64.load16_u 'i64.load8_s 'i64.load8_u 'f32.load
+                  'f64.load 'i64.store 'i64.store32 'i64.store16
+                  'i64.store8 'f32.store 'f64.store))
+      memarg)
+     `(,op ,@(memarg-repr names memarg)))
+    (((and inst (or 'memory.size 'memory.grow)) mem)
+     `(,inst ,(memory-name names mem)))
+    (('memory.init data mem)
+     `(memory.init ,(data-name names data) ,(memory-name names mem)))
+    (('memory.copy dst src)
+     `(memory.copy ,(memory-name names dst) ,(memory-name names src)))
+    (('memory.fill mem)
+     `(memory.fill ,(memory-name names mem)))
+    (('data.drop data)
+     `(data.drop ,(data-name names data)))
+    ;; Tables
+    (((and op (or 'table.get 'table.set 'table.grow 'table.size 'table.fill)) table)
+     `(,op ,(table-name names table)))
+    (('table.init table elem)
+     `(table.init ,(table-name names table) ,(elem-name names elem)))
+    (('table.copy dst src)
+     `(table.copy ,(table-name names dst) ,(table-name names src)))
+    (('elem.drop elem)
+     `(elem.drop ,(elem-name names elem)))
+    ;; GC
+    (((and op (or 'ref.test 'ref.cast)) rt)
+     `(,op ,@(ref-type-repr names rt)))
+    (((and op (or 'br_on_cast 'br_on_cast_fail)) label rt1 rt2)
+     `(,op ,label ,@(ref-type-repr names rt1) ,@(ref-type-repr names rt2)))
+    (((and op (or 'struct.get 'struct.get_s 'struct.get_u 'struct.set)) type field)
+     `(,op ,(type-name names type) ,(field-name names type field)))
+    (((and op (or 'struct.new 'struct.new_default)) type)
+     `(,op ,(type-name names type)))
+    (((and op (or 'array.get 'array.get_s 'array.get_u 'array.set)) type)
+     `(,op ,(type-name names type)))
+    (('array.new_fixed type len)
+     `(array.new_fixed ,(type-name names type) ,len))
+    (((and op (or 'array.new 'array.new_default)) type)
+     `(,op ,(type-name names type)))
+    (((and op (or 'array.new_data 'array.init_data)) type data)
+     `(,op ,(type-name names type) ,(data-name names data)))
+    (((and op (or 'array.new_elem 'array.init_elem)) type elem)
+     `(,op ,(type-name names type) ,(elem-name names elem)))
+    (('array.fill type)
+     `(array.fill ,(type-name names type)))
+    (('array.copy dst src)
+     `(array.copy ,(type-name names dst) ,(type-name names src)))
+    ;; Stringref
+    (('string.const idx)
+     `(string.const (list-ref strings idx)))
+    (((and op (or 'string.new_utf8 'string.new_lossy_utf8 'string.new_wtf8
+                  'string.new_wtf16
+                  'string.encode_utf8 'string.encode_lossy_utf8
+                  'string.encode_wtf8 'string.encode_wtf16
+                  'stringview_wtf8.encode_utf8
+                  'stringview_wtf8.encode_lossy_utf8
+                  'stringview_wtf8.encode_wtf8
+                  'stringview_wtf16.encode))
+      mem)
+     `(,op ,@(memarg-repr names mem)))
+    (_ instr)))
+
 (define (for-each/index proc lst)
   (let loop ((lst lst) (i 0))
     (match lst
@@ -83,16 +251,6 @@
     #:unwind? #t
     #:unwind-for-type &wasm-runtime-error))
 
-(define (block-type-repr type)
-  (match type
-    ((? func-sig?)
-     (match (type-repr type)
-       (('func params+results ...)
-        params+results)))
-    ((? ref-type?)
-     `((param ,(val-type-repr type))))
-    (_ `((param ,type)))))
-
 (define (print-location wasm path)
   (define invalid-path '(-1))
   (define (path-remainder path i)
@@ -110,7 +268,7 @@
   (define (print-block-type type)
     (for-each (lambda (x)
                 (format #t " ~s" x))
-              (block-type-repr type)))
+              (block-type-repr #f type)))
   (define (print-instr level instr path)
     (match instr
       (((and op (or 'block 'loop)) _ (or ($ <type-use> _ sig) sig) body)
@@ -174,7 +332,7 @@
     (('global idx . path*)
      (match (list-ref (wasm-globals wasm) (- idx (count-imports 'global)))
        (($ <global> id ($ <global-type> mutable? type) init)
-        (let ((t (val-type-repr type)))
+        (let ((t (val-type-repr #f type)))
           (format #t "(global ~a " idx)
           (write (if mutable? `(mut ,t) t))
           (newline)
@@ -189,7 +347,7 @@
     (('elem idx j . path*)
      (match (list-ref (wasm-elems wasm) idx)
        (($ <elem> id mode table type offset inits)
-        (let ((t (val-type-repr type)))
+        (let ((t (val-type-repr #f type)))
           (format #t "(elem ~a ~a ~a ~a" idx mode table t)
           (when offset
             (newline)
@@ -205,16 +363,44 @@
   (newline))
 
 (define (wasm-trace path instr instance stack blocks locals)
-  (let ((instr (match instr ; abbreviate blocks
-                 (((and (or 'block 'loop) op) _ type . _)
-                  `(,op ,(block-type-repr type) ...))
-                 (('if _ type . _)
-                  `(if ,(block-type-repr type) ...))
-                 (_ instr))))
+  (define (obj-abbrev obj)
+    (match obj
+      ((? wasm-func?) 'func)
+      ((? wasm-null?) 'null)
+      ((? wasm-struct?) 'struct)
+      ((? wasm-array?) 'array)
+      (_ obj)))
+  (let* ((wasm (validated-wasm-ref (wasm-instance-module instance)))
+         (names (find names? (wasm-custom wasm)))
+         (strings (wasm-strings wasm))
+         (path (reverse path))
+         (where (match path
+                  (('func idx . _)
+                   (func-name names idx))
+                  (('global idx . _)
+                   (global-name names idx))
+                  (('data idx . _)
+                   (data-name names idx))
+                  (('elem idx . _)
+                   (elem-name names idx))))
+         (func-idx (match path
+                     (('func idx . _) idx)
+                     (_ #f)))
+         (instr (match instr
+                  ;; Abbreviate blocks.
+                  (((and (or 'block 'loop) op) label type body)
+                   `(,op ,@(block-type-repr names type) ...))
+                  (('if label type consequent alternate)
+                   `(if ,@(block-type-repr names type) ...))
+                  (('try label type body catches catch-all)
+                   `(try ,@(block-type-repr names type) ...))
+                  (('try_delegate label type body handler)
+                   `(try_delegate ,@(block-type-repr names type) ...))
+                  (_ (instruction-repr instr names strings func-idx)))))
     (format #t "⌄ instr:  ~a\n" instr)
-    (format #t "  loc:    ~a @ ~a\n" instance (reverse path))
-    (format #t "  stack:  ~s\n" (wasm-stack-items stack))
-    (format #t "  locals: ~a\n" (vector->list locals))))
+    (format #t "  where:  ~a @ ~a\n" instance where)
+    (format #t "  stack:  ~s\n" (map obj-abbrev (wasm-stack-items stack)))
+    (format #t "  locals: ~a\n" (map obj-abbrev (vector->list locals)))))
 
 (define (->wasm x)
   (match x

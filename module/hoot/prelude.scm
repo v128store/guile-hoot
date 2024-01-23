@@ -3101,6 +3101,9 @@
               (else (ref.i31 (i32.const 1)))))
    extern))
 
+(define (external-non-null? extern)
+  (not (external-null? extern)))
+
 (define (procedure->external proc)
   (check-type proc procedure? 'procedure->external)
   (%inline-wasm

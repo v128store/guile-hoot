@@ -106,6 +106,16 @@
  `(("host" . (("getNull" . ,(lambda () #f))))))
 
 (test-ffi
+ "external-non-null?"
+ #t
+ (let ()
+   (define-foreign get-non-null
+     "host" "getNonNull"
+     -> (ref extern))
+   (external-non-null? (get-non-null)))
+ `(("host" . (("getNonNull" . ,(lambda () #t))))))
+
+(test-ffi
  "procedure->extern"
  1
  (let ((counter 0))

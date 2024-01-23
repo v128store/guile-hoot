@@ -1488,6 +1488,10 @@ Return @code{#t} if @var{obj} is an external reference.
 Return @code{#t} if @var{extern} is null.
 @end deffn
 
+@deffn {Procedure} external-non-null? extern
+Return @code{#t} if @var{extern} is not null.
+@end deffn
+
 @node Toolchain reference
 @chapter Toolchain reference
 

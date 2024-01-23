@@ -24,7 +24,6 @@
 (test-begin "test-hash-tables")
 
 (test-call "#t" (lambda () (hashtable? (make-eq-hashtable))))
-(test-call "#t" (lambda () (hashtable? (make-eq-hashtable 42))))
 
 ;; Unimplemented:
 ;; - make-eqv-hashtable
@@ -143,9 +142,6 @@
 (test-call "#t" (lambda ()
                   (eq? %hashq (hashtable-hash-function
                                (make-eq-hashtable)))))
-
-(test-call "#t" (lambda ()
-                  (hashtable-mutable? (make-eq-hashtable))))
 
 ;; Unimplemented:
 ;; - equal-hash

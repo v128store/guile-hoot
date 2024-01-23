@@ -3962,15 +3962,15 @@ object @var{exception}."
 
 ;;;; (rnrs hashtables (6))
 ;;; Constructors
-(define* (make-eq-hashtable #:optional k)
+(define* (make-eq-hashtable)
   (%inline-wasm
    '(func (result (ref eq))
           (call $make-hash-table))))
 
-(define* (make-eqv-hashtable #:optional k)
+(define* (make-eqv-hashtable)
   (raise (%make-unimplemented-error 'make-eqv-hashtable)))
 
-(define* (make-hashtable hash-function equiv #:optional k)
+(define* (make-hashtable hash-function equiv)
   (raise (%make-unimplemented-error 'make-hashtable)))
 
 ;;; Procedures
@@ -4042,17 +4042,15 @@ object @var{exception}."
         (hashtable-set! hashtable key (proc default))))
   (values))
 
-(define* (hashtable-copy hashtable #:optional (mutable #t))
+(define* (hashtable-copy hashtable)
   (check-type hashtable hashtable? 'hashtable-copy)
-  (unless mutable
-    (raise (%make-unimplemented-error 'hashtable-copy)))
   (let ((hashtable* (make-eq-hashtable)))
     (hashtable-for-each (lambda (k v)
                           (hashtable-set! hashtable* k v))
                         hashtable)
     hashtable*))
 
-(define* (hashtable-clear! hashtable #:optional k)
+(define* (hashtable-clear! hashtable)
   (check-type hashtable hashtable? 'hashtable-clear!)
   (%inline-wasm
    '(func (param $table (ref $hash-table))
@@ -4094,11 +4092,6 @@ object @var{exception}."
 (define (hashtable-hash-function hashtable)
   (check-type hashtable hashtable? 'hashtable-hash-function)
   %hashq)
-
-;; TODO: implement immutable hashtables
-(define (hashtable-mutable? hashtable)
-  (check-type hashtable hashtable? 'hashtable-mutable?)
-  #t)
 
 ;;; Hash functions
 (define (equal-hash obj)

@@ -86,6 +86,17 @@
     (("hello" . ,(lambda (name) (string-append "Hello, " name "!")))))))
 
 (test-ffi
+ "eq param and result"
+ "hello"
+ (let ()
+   (define-foreign echo
+     "host" "echo"
+     (ref eq) -> (ref eq))
+   (echo "hello"))
+ `(("host" .
+    (("echo" . ,(lambda (x) x))))))
+
+(test-ffi
  "external?"
  #t
  (let ()

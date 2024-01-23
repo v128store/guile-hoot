@@ -1478,6 +1478,7 @@ Valid result types are:
 @item (ref string): a string
 @item (ref extern): a non-null external value
 @item (ref null extern): a possibly null external value
+@item (ref eq): a Scheme value
 @end itemize
 
 @end deffn

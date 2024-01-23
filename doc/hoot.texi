@@ -1462,7 +1462,8 @@ Valid parameter types are:
 @item f32: 32-bit float
 @item f64: 64-bit float
 @item (ref string): a string
-@item (ref null extern): an external reference
+@item (ref extern): a non-null external value
+@item (ref null extern): a possible null external value
 @item (ref eq): any Scheme value
 @end itemize
 
@@ -1475,7 +1476,8 @@ Valid result types are:
 @item f32: 32-bit float
 @item f64: 64-bit float
 @item (ref string): a string
-@item (ref null extern): an external reference
+@item (ref extern): a non-null external value
+@item (ref null extern): a possibly null external value
 @end itemize
 
 @end deffn
